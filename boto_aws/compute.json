@@ -1,0 +1,40 @@
+{
+    "computeEnvironmentName": "tlamadon-compute",
+    "type": "UNMANAGED",
+    "state": "ENABLED",
+    "unmanagedvCpus": 0,
+    "computeResources": {
+        "type": "SPOT",
+        "allocationStrategy": "BEST_FIT",
+        "minvCpus": 0,
+        "maxvCpus": 1,
+        "desiredvCpus": 0,
+        "instanceTypes": [
+            "m3.medium"
+        ],
+        "imageId": "ami-029536273cb04d4d9",
+        "subnets": [
+            "subnet-0ecaa08058826ec19"
+        ],
+        "securityGroupIds": [
+            ""
+        ],
+        "ec2KeyPair": "tibo2016",
+        "instanceRole": "",
+        "tags": {
+            "KeyName": ""
+        },
+        "placementGroup": "",
+        "bidPercentage": 0,
+        "spotIamFleetRole": "",
+        "launchTemplate": {
+            "launchTemplateId": "",
+            "launchTemplateName": "",
+            "version": ""
+        }
+    },
+    "serviceRole": "arn:aws:iam::870777542080:role/service-role/AWSBatchServiceRole",
+    "tags": {
+        "KeyName": "compute-tlamadon"
+    }
+}
