@@ -1,2 +1,4 @@
 .DS_Store
 aws-creds
+cloudrun.pem
+.venv
