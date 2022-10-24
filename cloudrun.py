@@ -1,5 +1,5 @@
 import boto3
-import sys , time
+import sys , time , os
 from botocore.exceptions import ClientError
 
 config = {
@@ -13,6 +13,7 @@ config = {
 cr_keypairName  = 'cloudrun-keypair'
 cr_secGroupName = 'cloudrun-sec-group-allow-ssh'
 cr_instanceName = 'cloudrun-instance'
+cr_bucketName   = 'cloudrun-bucket'
 
 def create_keypair():
     print("Creating KeyPair ...")
@@ -46,6 +47,7 @@ def create_keypair():
                 pemfile = open("cloudrun.pem", "w")
                 pemfile.write(keypair['KeyMaterial']) # save the private key in the directory (we will use it with paramiko)
                 pemfile.close()
+                os.chmod(path, 0o600) # change permission to use with ssh (for debugging)
                 print(keypair)
 
             except ClientError as e2: # the keypair probably exists already
@@ -171,6 +173,42 @@ def create_subnet(vpc):
         print(subnet)
         return subnet
     return None # todo: create a subnet
+
+def create_bucket():
+
+    print("Creating BUCKET ...")
+
+    s3_client = boto3.client('s3', region_name=config['region'])
+    s3 = boto3.resouce('s3')
+
+    try :
+
+        bucket = s3_client.create_bucket(
+            ACL='private',
+            Bucket=cr_bucketName,
+            CreateBucketConfiguration={
+                'LocationConstraint': config['region']
+            },
+
+        )
+
+    except ClientError as e:
+        errMsg = str(e)
+        if 'BucketAlreadyExists' in errMsg:
+            bucket = s3.Bucket(cr_bucketName)
+        elif 'BucketAlreadyOwnedByYou' in errMsg:
+            bucket = s3.Bucket(cr_bucketName)
+
+    print(bucket)
+
+    return bucket 
+
+
+def upload_file( bucket , file_path ):
+    print("Uploading FILE ...")
+    s3_client = boto3.client('s3', region_name=config['region'])
+    response = s3_client.upload_file( file_path, bucket['BucketName'], 'cr-run-script' )
+    print(response)
 
 def create_instance(vpc,subnet,secGroup):
 
@@ -304,8 +342,14 @@ if 1==1:
     print(update_instance_info(instance))
 
     # create S3 bucket for file exchange
+    bucket = create_bucket()
+    
+    # upload the script file
+    upload_file( bucket, config['script_file'] )
 
     # ssh into instance and run the script from S3/local? (or sftp)
+
+    # run
 
 # OPTION 2: "execute and kill" mode
 else:
