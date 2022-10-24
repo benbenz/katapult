@@ -7,6 +7,7 @@ config = {
     'region'       : 'eu-west-3' ,             # has to be valid
     'ami_id'       : 'ami-077fd75cd229c811b' , # has to be valid and available for the profile (user/region)
     'username'     : 'ubuntu' ,
+    'script_file'  : 'run_remote.py'
 }
 
 cr_keypairName  = 'cloudrun-keypair'
@@ -234,6 +235,39 @@ def create_instance(vpc,subnet,secGroup):
 
     return instances["Instances"][0]
 
+def run_instance_script(vpc,subnet,secGroup,script):
+
+    print("Creating INSTANCE ...")
+
+    ec2_client = boto3.client("ec2", region_name=config['region'])
+
+    instances = ec2_client.run_instances(
+            ImageId = config['ami_id'],
+            MinCount = 1,
+            MaxCount = 1,
+            InstanceType = 't2.micro',
+            KeyName = cr_keypairName,
+            SecurityGroupIds=[secGroup['GroupId']],
+            SubnetId = subnet['SubnetId'],
+            TagSpecifications=[
+                {
+                    'ResourceType': 'instance',
+                    'Tags': [
+                        {
+                            'Key': 'Name',
+                            'Value': cr_instanceName
+                        },
+                    ]
+                },
+            ],
+            InstanceInitiatedShutdownBehavior='terminate',
+            UserData=script
+    )    
+
+    print(instances["Instances"][0])
+
+    return instances["Instances"][0]    
+
 def update_instance_info(instance):
     ec2_client   = boto3.client("ec2", region_name=config['region'])
     instances    = ec2_client.describe_instances( InstanceIds=[instance['InstanceId']] )
@@ -260,8 +294,23 @@ keypair  = create_keypair()
 vpc      = create_vpc() 
 secGroup = create_security_group(vpc)
 subnet   = create_subnet(vpc) 
-instance = create_instance(vpc,subnet,secGroup)
 
-# get the public DNS info when instance actually started (todo: check actual state)
-time.sleep(10)
-print(update_instance_info(instance))
+# OPTION 1: with separate SSH command
+if 1==1:
+    instance = create_instance(vpc,subnet,secGroup)
+
+    # get the public DNS info when instance actually started (todo: check actual state)
+    time.sleep(10)
+    print(update_instance_info(instance))
+
+    # create S3 bucket for file exchange
+
+    # ssh into instance and run the script from S3/local? (or sftp)
+
+# OPTION 2: "execute and kill" mode
+else:
+    with open(config['script_file'], 'r') as f:
+        script = '\n'.join(f)    
+        #TODO: add install scripts if needed (Julia etc)
+        instance = run_instance_script(vpc,subnet,secGroup,script)
+    
