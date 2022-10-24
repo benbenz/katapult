@@ -192,6 +192,12 @@ def create_instance(vpc,subnet,secGroup):
                     cr_instanceName
                 ]
             },
+            {
+                'Name': 'instance-state-name' ,
+                'Values' : [ # everything but 'terminated' and 'shutting down' ?
+                    'pending' , 'running' , 'stopping' , 'stopped'
+                ]
+            }
         ]
     )
 
@@ -256,7 +262,6 @@ secGroup = create_security_group(vpc)
 subnet   = create_subnet(vpc) 
 instance = create_instance(vpc,subnet,secGroup)
 
-time.sleep(10)
-print(update_instance_info(instance))
+# get the public DNS info when instance actually started (todo: check actual state)
 time.sleep(10)
 print(update_instance_info(instance))
