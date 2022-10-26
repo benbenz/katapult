@@ -1,19 +1,36 @@
 import boto3
-import sys , time , os
+import sys , time , os , json
+import cloudrunutils
 from botocore.exceptions import ClientError
 
 config = {
+    'project'      : 'test' ,                  # this will be concatenated in the hash (if not None) 
+    'dev'          : False ,                    # When True, this will ensure the same instance and dev environement are being used (while working on building up the project) 
+
+    # "instance" section
     'vpc_id'       : 'vpc-0babc28485f6730bc' , # can be None, or even wrong/non-existing - then the default one is used
     'region'       : 'eu-west-3' ,             # has to be valid
     'ami_id'       : 'ami-077fd75cd229c811b' , # has to be valid and available for the profile (user/region)
-    'username'     : 'ubuntu' ,
-    'script_file'  : 'run_remote.py'
+    'min_cpu'      : None ,                    # number of min CPUs (not used yet)
+    'max_cpu'      : None ,                    # number of max CPUs (not used yet)
+    'max_bid'      : None ,                    # max bid ($) (not used yet)
+    'size'         : None ,                    # size (ECO = SPOT , SMALL , MEDIUM , LARGE) (not used yet)
+    'username'     : 'ubuntu' ,                # the SSH use for the image
+
+    # "environment" section
+    'env_apt-get'  : None ,                    # None, an array of librarires/binaries for apt-get
+    'env_conda'    : None ,                    # None, an array of libraries, a path to environment.yml  file, or a path to the root of a conda environment
+    'env_pypi'     : None ,                    # None, an array of libraries, a path to requirements.txt file, or a path to the root of a venv environment 
+    
+    # "script" section
+    'script_file'  : 'run_remote.py' ,         # the script to run (Python (.py) or Julia (.jl) for now)
 }
 
-cr_keypairName  = 'cloudrun-keypair'
-cr_secGroupName = 'cloudrun-sec-group-allow-ssh'
-cr_instanceName = 'cloudrun-instance'
-cr_bucketName   = 'cloudrun-bucket'
+cr_keypairName         = 'cloudrun-keypair'
+cr_secGroupName        = 'cloudrun-sec-group-allow-ssh'
+cr_bucketName          = 'cloudrun-bucket'
+cr_instanceNameRoot    = 'cloudrun-instance'
+cr_environmentNameRoot = 'cloudrun-env'
 
 def create_keypair():
     print("Creating KeyPair ...")
@@ -179,7 +196,7 @@ def create_bucket():
     print("Creating BUCKET ...")
 
     s3_client = boto3.client('s3', region_name=config['region'])
-    s3 = boto3.resouce('s3')
+    s3 = boto3.resource('s3')
 
     try :
 
@@ -210,9 +227,22 @@ def upload_file( bucket , file_path ):
     response = s3_client.upload_file( file_path, bucket['BucketName'], 'cr-run-script' )
     print(response)
 
+def init_instance_name():
+    if ('dev' in config) and (config['dev'] == True):
+        return cr_instanceNameRoot
+    else:
+        instance_hash = cloudrunutils.compute_instance_hash(config)
+
+        if 'project' in config:
+            return cr_instanceNameRoot + '-' + config['project'] + '-' + instance_hash
+        else:
+            return cr_instanceNameRoot + '-' + instance_hash    
+
 def create_instance(vpc,subnet,secGroup):
 
     print("Creating INSTANCE ...")
+
+    instanceName = init_instance_name()
 
     ec2_client = boto3.client("ec2", region_name=config['region'])
     # instances = ec2_client.run_instances(
@@ -228,7 +258,7 @@ def create_instance(vpc,subnet,secGroup):
             {
                 'Name': 'tag:Name',
                 'Values': [
-                    cr_instanceName
+                    instanceName
                 ]
             },
             {
@@ -262,7 +292,7 @@ def create_instance(vpc,subnet,secGroup):
                     'Tags': [
                         {
                             'Key': 'Name',
-                            'Value': cr_instanceName
+                            'Value': instanceName
                         },
                     ]
                 },
@@ -279,6 +309,8 @@ def run_instance_script(vpc,subnet,secGroup,script):
 
     ec2_client = boto3.client("ec2", region_name=config['region'])
 
+    instanceName = cr_instanceNameRoot
+
     instances = ec2_client.run_instances(
             ImageId = config['ami_id'],
             MinCount = 1,
@@ -293,7 +325,7 @@ def run_instance_script(vpc,subnet,secGroup,script):
                     'Tags': [
                         {
                             'Key': 'Name',
-                            'Value': cr_instanceName
+                            'Value': instanceName
                         },
                     ]
                 },
@@ -351,7 +383,7 @@ if 1==1:
 
     # run
 
-# OPTION 2: "execute and kill" mode
+# OPTION 2: "execute and kill" mode 
 else:
     with open(config['script_file'], 'r') as f:
         script = '\n'.join(f)    

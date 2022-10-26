@@ -2,3 +2,4 @@
 aws-creds
 cloudrun.pem
 .venv
+*.pyc
