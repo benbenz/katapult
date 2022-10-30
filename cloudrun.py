@@ -1,6 +1,7 @@
 import boto3
-import sys , time , os , json
+import time , os , json
 import cloudrunutils
+import paramiko
 from botocore.exceptions import ClientError
 
 config = {
@@ -310,6 +311,23 @@ def create_instance(vpc,subnet,secGroup):
 
     return instances["Instances"][0]
 
+def init_environment(conf):
+    env_obj  = cloudrunutils.compute_environment_object(conf)
+    env_hash = cloudrunutils.compute_environment_hash(env_obj)
+
+    if 'project' in config:
+        env_name = cr_environmentNameRoot + '-' + config['project'] + '-' + env_hash
+    else:
+        env_name = cr_environmentNameRoot + '-' + env_hash    
+
+    # overwrite name in conda config as well
+    if env_obj['env_conda'] is not None:
+        env_obj['env_conda']['name'] = env_name 
+    env_obj['name'] = env_name 
+
+    return env_obj 
+
+
 def run_instance_script(vpc,subnet,secGroup,script):
 
     print("Creating INSTANCE ...")
@@ -374,35 +392,59 @@ def list_amis():
 #
 #######
 
-print(json.dumps(cloudrunutils.compute_environment_object(config)))
+#print(json.dumps(cloudrunutils.compute_environment_object(config)))
 
-# keypair  = create_keypair()
-# vpc      = create_vpc() 
-# secGroup = create_security_group(vpc)
-# subnet   = create_subnet(vpc) 
+keypair  = create_keypair()
+vpc      = create_vpc() 
+secGroup = create_security_group(vpc)
+subnet   = create_subnet(vpc) 
 
-# # OPTION 1: with separate SSH command
-# if 1==1:
-#     instance = create_instance(vpc,subnet,secGroup)
+# OPTION 1: with separate SSH command
+if 1==1:
+    instance = create_instance(vpc,subnet,secGroup)
 
-#     # get the public DNS info when instance actually started (todo: check actual state)
-#     time.sleep(10)
-#     print(update_instance_info(instance))
-
-#     # create S3 bucket for file exchange
-#     bucket = create_bucket()
+    # get the public DNS info when instance actually started (todo: check actual state)
+    lookForDNS = True
+    while lookForDNS:
+        time.sleep(10)
+        updated_instance_info = update_instance_info(instance)
+        lookForDNS = not 'PublicDnsName' in updated_instance_info or updated_instance_info['PublicDnsName'] is None
     
-#     # upload the script file
-#     upload_file( bucket, config['script_file'] )
+    print(updated_instance_info)
 
-#     # ssh into instance and run the script from S3/local? (or sftp)
+    # init environment object
+    env_obj = init_environment(config)
+    print(json.dumps(env_obj))
+    
+    # ssh into instance and run the script from S3/local? (or sftp)
+    k = paramiko.RSAKey.from_private_key_file('cloudrun.pem')
+    ssh_client = paramiko.SSHClient()
+    ssh_client.set_missing_host_key_policy(paramiko.AutoAddPolicy())
+    print("connecting")
+    ssh_client.connect(hostname=updated_instance_info['PublicDnsName'],username=config['username'],pkey=k) #,password=’mypassword’)
+    print("connected")
 
-#     # run
+    # upload the install file, the env file and the script file
+    ftp_client = ssh_client.open_sftp()
+    #ftp_client.put(‘localfilepath’,remotefilepath’)
+    #ftp_client.put(‘localfilepath’,remotefilepath’)
+    ftp_client.put('run_remote.py','run_remote.py’)
+    ftp_client.close()
 
-# # OPTION 2: "execute and kill" mode 
-# else:
-#     with open(config['script_file'], 'r') as f:
-#         script = '\n'.join(f)    
-#         #TODO: add install scripts if needed (Julia etc)
-#         instance = run_instance_script(vpc,subnet,secGroup,script)
+    # run
+    commands = [ "python3 /home/ubuntu/runremote.py" ]
+    for command in commands:
+        print "Executing {}".format( command )
+        stdin , stdout, stderr = ssh_client.exec_command(command)
+        print stdout.read()
+        print( "Errors")
+        print stderr.read()
+    ssh_client.close()
+
+# OPTION 2: "execute and kill" mode (dont use)
+else:
+    with open(config['script_file'], 'r') as f:
+        script = '\n'.join(f)    
+        #TODO: add install scripts if needed (Julia etc)
+        instance = run_instance_script(vpc,subnet,secGroup,script)
     

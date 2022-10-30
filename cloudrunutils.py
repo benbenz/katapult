@@ -137,7 +137,7 @@ def compute_environment_object(config):
     return environment_obj      
 
 def compute_environment_hash(env_obj):
-    onv_obj_canon  = yaml.load(yaml.dump(en_json_canon, sort_keys=True),Loader=yaml.FullLoader)
+    onv_obj_canon  = yaml.load(yaml.dump(env_obj, sort_keys=True),Loader=yaml.FullLoader)
     env_json_canon = jcs.canonicalize(onv_obj_canon)
     hash = hashlib.md5(env_json_canon).hexdigest()
     return hash[0:12]
