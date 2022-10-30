@@ -1,5 +1,7 @@
-import hashlib 
+import hashlib , os , subprocess , json
 import jcs , yaml
+from os import path
+
 
 cr_instance_keys       = [ 'vpc_id' , 'region'  , 'ami_id' , 'min_cpu' , 'max_cpu' , 'size' ] 
 cr_environment_keys    = [ 'env_pypi' , 'env_conda' , 'env_apt-get' ]
@@ -8,7 +10,38 @@ def compute_instance_hash(config):
     instance_config = { your_key: config[your_key] for your_key in cr_instance_keys }
     instance_config_canon = jcs.canonicalize(instance_config)
     #instance_hash = str(hash(instance_config_canon))
-    return hashlib.md5(instance_config_canon).hexdigest()
+    hash = hashlib.md5(instance_config_canon).hexdigest()
+    return hash[0:12]
+
+
+def add_pip_dependency_to_conda(env_obj):
+    if not 'dependencies' in env_obj['env_conda']:
+        env_obj['env_conda']['dependencies'] = [] 
+    added = False
+    pipIndex = -1 
+    for i,dep in enumerate(env_obj['env_conda']['dependencies']):
+        if dep == 'pip':
+            env_obj['env_conda']['dependencies'][i] = { 'pip' : ['-r file:requirements.txt'] }
+            added = True
+            pipIndex = i 
+            break
+        elif isinstance(dep,dict) and 'pip' in dep and isinstance(dep['pip'],list):
+            pipIndex = i 
+            doBreak = False
+            for pipdep in dep['pip']:
+                if 'requirements.txt' in pipdep:
+                    doBreak = True
+                    added   = True 
+                    break
+            if doBreak:
+                break 
+    # add the requirements dependecy (it was not found)
+    if added is False:
+        if pipIndex != -1:
+            env_obj['env_conda']['dependencies'][pipIndex]['pip'].append('-r file:requirements.txt')
+        else:
+            env_obj['env_conda']['dependencies'].append({'pip':['-r file:requirements.txt']})
+
 
 # returns a JSON object that represents lists as in requirements.txt as well as YAML format (can be parsed by YAML module)
 # this object will be serialized and sent to remote host
@@ -23,14 +56,15 @@ def compute_environment_object(config):
     
     # conda+pip: https://stackoverflow.com/questions/35245401/combining-conda-environment-yml-with-pip-requirements-txt
     
-    if 'env_apt-get' in config and config['env_apt-get'] is not None:
+    if 'env_aptget' in config and config['env_aptget'] is not None:
 
-        env_apt_get = config['env_apt-get']
+        env_apt_get = config['env_aptget']
 
         if isinstance(env_apt_get,list):
 
-            # sort the array and set dependencies as this
-            environment_obj['env_apt-get'] = env_apt_get.sort()
+            # set dependencies as this
+            env_apt_get = list(map(str.strip,env_apt_get)) # strip the strings
+            environment_obj['env_aptget'] = env_apt_get
 
 
     if 'env_conda' in config and config['env_conda'] is not None:
@@ -40,29 +74,70 @@ def compute_environment_object(config):
         if isinstance(env_conda,list):
         
             # sort the array and set dependencies as this
-            environment_obj['env_conda']['dependencies'] = env_conda.sort()
+            env_conda = list(map(str.strip,env_conda)) # strip the strings
+            environment_obj['env_conda']['dependencies'] = env_conda
         
-        elif 
+        elif isinstance(env_conda,str) and path.isfile(env_conda):
+
+            with open(env_conda, "r") as ymlData:
+                try:
+                    ymlConda = yaml.load(ymlData,Loader=yaml.FullLoader)
+                    environment_obj['env_conda'] = ymlConda
+                except yaml.YAMLError as exc:
+                    print(exc)
+        
+        elif isinstance(env_conda,str) and path.isdir(env_conda):
+
+            cmd    = ['source activate "'+env_conda+'" && conda env export']
+            try:
+                result = subprocess.run(cmd, stdout=subprocess.PIPE,shell=True)
+                try:
+                    ymlConda = yaml.load(result.stdout,Loader=yaml.FullLoader)
+                    environment_obj['env_conda'] = ymlConda
+                except yaml.YAMLError as exc:
+                    print(exc)
+            except subprocess.CalledProcessError as pex:
+                print(pex)
+
 
     if 'env_pypi' in config and config['env_pypi'] is not None:
 
         env_pypi = config['env_pypi']
 
-        #TODO: make sure we have the extra ref in the conda env, if conda env exists ...
+        #make sure we have the extra ref in the conda env, if conda env exists ...
+        if environment_obj['env_conda'] is not None:
+            add_pip_dependency_to_conda( environment_obj )
 
         if isinstance(env_pypi,list):
 
-            # sort the array and set dependencies as this
-            environment_obj['env_conda']['dependencies'] = env_conda.sort()
+            # set dependencies as this
+            env_pypi = list(map(str.strip,env_pypi)) # strip the strings
+            environment_obj['env_pypi'] = env_pypi
 
+        elif isinstance(env_pypi,str) and path.isfile(env_pypi):
 
+            with open(env_pypi, "r") as txtFile:
+                pipDeps = txtFile.read().split('\n')
+                environment_obj['env_pypi'] = pipDeps
+            
+        elif isinstance(env_pypi,str) and path.isdir(env_pypi):
 
-    # finally, update the name in the conda_obj 
+            #cmd    = "source " + path.realpath(env_pypi) + path.sep + 'bin' + path.sep + 'activate && pip freeze'
+            cmd = [
+                path.realpath(env_pypi) + path.sep + 'bin' + path.sep + 'pip' ,
+                'freeze'
+            ]
+            try:
+                result = subprocess.run(cmd, stdout=subprocess.PIPE)
+                pipDeps = result.stdout.decode("utf-8").strip().split('\n')
+                environment_obj['env_pypi'] = pipDeps
+            except subprocess.CalledProcessError as pex:
+                print(pex)
 
-    # resort all keys etc
-    environment_obj = yaml.load(yaml.dump(environment_obj, sort_keys=False))
+    return environment_obj      
 
-    # this is the canonical version at this point ...
-
-
-    
+def compute_environment_hash(env_obj):
+    onv_obj_canon  = yaml.load(yaml.dump(en_json_canon, sort_keys=True),Loader=yaml.FullLoader)
+    env_json_canon = jcs.canonicalize(onv_obj_canon)
+    hash = hashlib.md5(env_json_canon).hexdigest()
+    return hash[0:12]

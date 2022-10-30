@@ -18,10 +18,10 @@ config = {
     'username'     : 'ubuntu' ,                # the SSH use for the image
 
     # "environment" section
-    'env_apt-get'  : None ,                    # None, an array of librarires/binaries for apt-get
+    'env_aptget'   : None ,                    # None, an array of librarires/binaries for apt-get
     'env_conda'    : None ,                    # None, an array of libraries, a path to environment.yml  file, or a path to the root of a conda environment
     'env_pypi'     : None ,                    # None, an array of libraries, a path to requirements.txt file, or a path to the root of a venv environment 
-    
+
     # "script" section
     'script_file'  : 'run_remote.py' ,         # the script to run (Python (.py) or Julia (.jl) for now)
 }
@@ -31,6 +31,9 @@ cr_secGroupName        = 'cloudrun-sec-group-allow-ssh'
 cr_bucketName          = 'cloudrun-bucket'
 cr_instanceNameRoot    = 'cloudrun-instance'
 cr_environmentNameRoot = 'cloudrun-env'
+
+class CloudRunError(Exception):
+    pass
 
 def create_keypair():
     print("Creating KeyPair ...")
@@ -51,7 +54,8 @@ def create_keypair():
         if 'UnauthorizedOperation' in errmsg:
             print("The account is not authorized to create a keypair, please specify an existing keypair in the configuration or add Administrator privileges to the account")
             keypair = None
-            sys.exit()
+            #sys.exit()
+            raise CloudRunError()
 
         elif 'DryRunOperation' in errmsg: # we are good with credentials
             try :
@@ -77,13 +81,15 @@ def create_keypair():
                 else:
                     print("An unknown error occured while retrieving the KeyPair")
                     print(errmsg2)
-                    sys.exit()
+                    #sys.exit()
+                    raise CloudRunError()
 
         
         else:
             print("An unknown error occured while creating the KeyPair")
             print(errmsg)
-            sys.exit()
+            #sys.exit()
+            raise CloudRunError()
     
     return keypair 
 
@@ -172,7 +178,8 @@ def create_security_group(vpc):
     
     if secGroup is None:
         print("An unknown error occured while creating the security group")
-        sys.exit()
+        #sys.exit()
+        raise CloudRunError()
     
     print(secGroup) 
 
@@ -360,33 +367,42 @@ def list_amis():
         for instance in reservation["Instances"]:
             print(instance["ImageId"])
 
-keypair  = create_keypair()
-vpc      = create_vpc() 
-secGroup = create_security_group(vpc)
-subnet   = create_subnet(vpc) 
 
-# OPTION 1: with separate SSH command
-if 1==1:
-    instance = create_instance(vpc,subnet,secGroup)
+#######
+#
+# MAIN
+#
+#######
 
-    # get the public DNS info when instance actually started (todo: check actual state)
-    time.sleep(10)
-    print(update_instance_info(instance))
+print(json.dumps(cloudrunutils.compute_environment_object(config)))
 
-    # create S3 bucket for file exchange
-    bucket = create_bucket()
+# keypair  = create_keypair()
+# vpc      = create_vpc() 
+# secGroup = create_security_group(vpc)
+# subnet   = create_subnet(vpc) 
+
+# # OPTION 1: with separate SSH command
+# if 1==1:
+#     instance = create_instance(vpc,subnet,secGroup)
+
+#     # get the public DNS info when instance actually started (todo: check actual state)
+#     time.sleep(10)
+#     print(update_instance_info(instance))
+
+#     # create S3 bucket for file exchange
+#     bucket = create_bucket()
     
-    # upload the script file
-    upload_file( bucket, config['script_file'] )
+#     # upload the script file
+#     upload_file( bucket, config['script_file'] )
 
-    # ssh into instance and run the script from S3/local? (or sftp)
+#     # ssh into instance and run the script from S3/local? (or sftp)
 
-    # run
+#     # run
 
-# OPTION 2: "execute and kill" mode 
-else:
-    with open(config['script_file'], 'r') as f:
-        script = '\n'.join(f)    
-        #TODO: add install scripts if needed (Julia etc)
-        instance = run_instance_script(vpc,subnet,secGroup,script)
+# # OPTION 2: "execute and kill" mode 
+# else:
+#     with open(config['script_file'], 'r') as f:
+#         script = '\n'.join(f)    
+#         #TODO: add install scripts if needed (Julia etc)
+#         instance = run_instance_script(vpc,subnet,secGroup,script)
     
