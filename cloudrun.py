@@ -408,10 +408,13 @@ def list_amis():
 def line_buffered(f):
     line_buf = ""
     while not f.channel.exit_status_ready():
-        line_buf += f.read(1).decode("utf-8")
-        if line_buf.endswith('\n'):
-            yield line_buf
-            line_buf = ''
+        try:
+            line_buf += f.read(1).decode("utf-8")
+            if line_buf.endswith('\n'):
+                yield line_buf
+                line_buf = ''
+        except:
+            pass
 
 #######
 #
