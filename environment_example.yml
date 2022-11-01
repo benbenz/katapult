@@ -1,9 +1,7 @@
 name: econ21340-env
 channels:
-  - defaults
+#  - defaults
   - conda-forge
 dependencies:
   - python>=3.7 
   - numpy
-  - matplotlib
-  - pandas

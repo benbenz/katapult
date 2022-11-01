@@ -278,7 +278,7 @@ def create_instance(vpc,subnet,secGroup):
         ]
     )
 
-    print(existing)
+    #print(existing)
 
     created = False
 
@@ -470,14 +470,14 @@ if 1==1:
     k = paramiko.RSAKey.from_private_key_file('cloudrun.pem')
     ssh_client = paramiko.SSHClient()
     ssh_client.set_missing_host_key_policy(paramiko.AutoAddPolicy())
-    print("connecting to ",updated_instance_info['PublicDnsName'])
+    print("connecting to ",updated_instance_info['PublicDnsName'],updated_instance_info['PublicIpAddress'])
     while True:
         try:
             ssh_client.connect(hostname=updated_instance_info['PublicDnsName'],username=config['username'],pkey=k) #,password=’mypassword’)
             break
         except paramiko.ssh_exception.NoValidConnectionsError as cexc:
             print(cexc)
-            time.sleep(1)
+            time.sleep(2)
             print("Retrying ...")
 
     print("connected")
@@ -506,7 +506,7 @@ if 1==1:
         "python3 $HOME/config.py",                                    # recreate pip+conda files according to config
 #        "bash -l -c /home/ubuntu/bootstrap.sh " + env_obj['name'],
         "$HOME/bootstrap.sh " + env_obj['name'],                      # setup envs according to current config files state
-        "python3 $HOME/run_remote.py"                                 # execute main script
+#        "python3 $HOME/run_remote.py"                                 # execute main script
     ]
     for command in commands:
         print("Executing ",format( command ) )

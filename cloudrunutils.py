@@ -21,7 +21,7 @@ def add_pip_dependency_to_conda(env_obj):
     pipIndex = -1 
     for i,dep in enumerate(env_obj['env_conda']['dependencies']):
         if dep == 'pip':
-            env_obj['env_conda']['dependencies'][i] = { 'pip' : ['-r file:requirements.txt'] }
+            env_obj['env_conda']['dependencies'][i] = { 'pip' : ['-r file:/home/ubuntu/requirements.txt'] }
             added = True
             pipIndex = i 
             break
@@ -38,9 +38,9 @@ def add_pip_dependency_to_conda(env_obj):
     # add the requirements dependecy (it was not found)
     if added is False:
         if pipIndex != -1:
-            env_obj['env_conda']['dependencies'][pipIndex]['pip'].append('-r file:requirements.txt')
+            env_obj['env_conda']['dependencies'][pipIndex]['pip'].append('-r file:/home/ubuntu/requirements.txt')
         else:
-            env_obj['env_conda']['dependencies'].append({'pip':['-r file:requirements.txt']})
+            env_obj['env_conda']['dependencies'].append({'pip':['-r file:/home/ubuntu/requirements.txt']})
 
 
 # returns a JSON object that represents lists as in requirements.txt as well as YAML format (can be parsed by YAML module)
