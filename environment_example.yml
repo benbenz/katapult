@@ -7,9 +7,3 @@ dependencies:
   - numpy
   - matplotlib
   - pandas
-  - seaborn
-  - tqdm
-  - tensorflow
-  - keras
-  - jupyter
-  - nb_conda_kernels

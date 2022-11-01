@@ -42,7 +42,7 @@ if [ -f "$FILE_CONDA" ]; then
   #   $HOME/miniconda/bin/conda create -y -n $env_name 
   #   echo "environment created"
   # fi
-  $HOME/miniconda/bin/activate $ENV >/dev/null
+  $HOME/miniconda/bin/activate $env_name >/dev/null
   if [ $? -eq 0 ]; then
     echo "conda environment exists"
   else
@@ -54,7 +54,7 @@ if [ -f "$FILE_CONDA" ]; then
 
   # 3. activate the environment
 
-  $HOME/miniconda/bin/activate $ENV >/dev/null
+  $HOME/miniconda/bin/activate $env_name >/dev/null
 
 fi # FILE_CONDA
 
