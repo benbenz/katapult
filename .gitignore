@@ -1,5 +1,6 @@
 .DS_Store
 aws-creds
-cloudrun.pem
 .venv
 *.pyc
+cloudrun.pem
+remote_config.json

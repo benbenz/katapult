@@ -20,8 +20,8 @@ config = {
 
     # "environment" section
     'env_aptget'   : None ,                    # None, an array of librarires/binaries for apt-get
-    'env_conda'    : None ,                    # None, an array of libraries, a path to environment.yml  file, or a path to the root of a conda environment
-    'env_pypi'     : None ,                    # None, an array of libraries, a path to requirements.txt file, or a path to the root of a venv environment 
+    'env_conda'    : "environment_example.yml" ,                    # None, an array of libraries, a path to environment.yml  file, or a path to the root of a conda environment
+    'env_pypi'     : "requirements.txt" ,      # None, an array of libraries, a path to requirements.txt file, or a path to the root of a venv environment 
 
     # "script" section
     'script_file'  : 'run_remote.py' ,         # the script to run (Python (.py) or Julia (.jl) for now)
@@ -280,11 +280,13 @@ def create_instance(vpc,subnet,secGroup):
 
     print(existing)
 
+    created = False
+
     if len(existing['Reservations']) > 0 and len(existing['Reservations'][0]['Instances']) >0 :
         instance = existing['Reservations'][0]['Instances'][0]
         print("Found EXISTING !")
         print(instance)
-        return instance
+        return instance , created
 
     instances = ec2_client.run_instances(
             ImageId = config['ami_id'],
@@ -307,23 +309,41 @@ def create_instance(vpc,subnet,secGroup):
             ],
     )    
 
+    created = True
+
     print(instances["Instances"][0])
 
-    return instances["Instances"][0]
+    return instances["Instances"][0] , created
+
+def start_instance(instance):
+    ec2_client = boto3.client("ec2", region_name=config['region'])
+
+    ec2_client.start_instances(InstanceIds=[instance['InstanceId']])
+
+def stop_instance(instance):
+    ec2_client = boto3.client("ec2", region_name=config['region'])
+
+    ec2_client.stop_instances(InstanceIds=[instance['InstanceId']])
 
 def init_environment(conf):
     env_obj  = cloudrunutils.compute_environment_object(conf)
     env_hash = cloudrunutils.compute_environment_hash(env_obj)
 
-    if 'project' in config:
-        env_name = cr_environmentNameRoot + '-' + config['project'] + '-' + env_hash
+    env_name = cr_instanceNameRoot
+
+    if ('dev' in config) and (config['dev'] == True):
+        env_name = cr_instanceNameRoot
     else:
-        env_name = cr_environmentNameRoot + '-' + env_hash    
+        if 'project' in config:
+            env_name = cr_environmentNameRoot + '-' + config['project'] + '-' + env_hash
+        else:
+            env_name = cr_environmentNameRoot + '-' + env_hash    
 
     # overwrite name in conda config as well
     if env_obj['env_conda'] is not None:
         env_obj['env_conda']['name'] = env_name 
-    env_obj['name'] = env_name 
+    env_obj['name'] = env_name
+    env_obj['hash'] = env_hash
 
     return env_obj 
 
@@ -385,6 +405,13 @@ def list_amis():
         for instance in reservation["Instances"]:
             print(instance["ImageId"])
 
+def line_buffered(f):
+    line_buf = ""
+    while not f.channel.exit_status_ready():
+        line_buf += f.read(1).decode("utf-8")
+        if line_buf.endswith('\n'):
+            yield line_buf
+            line_buf = ''
 
 #######
 #
@@ -401,14 +428,34 @@ subnet   = create_subnet(vpc)
 
 # OPTION 1: with separate SSH command
 if 1==1:
-    instance = create_instance(vpc,subnet,secGroup)
+    instance , created = create_instance(vpc,subnet,secGroup)
 
     # get the public DNS info when instance actually started (todo: check actual state)
-    lookForDNS = True
-    while lookForDNS:
-        time.sleep(10)
+    waitFor = True
+    while waitFor:
         updated_instance_info = update_instance_info(instance)
-        lookForDNS = not 'PublicDnsName' in updated_instance_info or updated_instance_info['PublicDnsName'] is None
+        lookForDNS   = not 'PublicDnsName' in updated_instance_info or updated_instance_info['PublicDnsName'] is None
+        instanceState =  updated_instance_info['State']['Name']
+
+        lookForState = True
+        # 'pending'|'running'|'shutting-down'|'terminated'|'stopping'|'stopped'
+        if instanceState == 'stopped' or instanceState == 'stopping':
+            # restart the instance
+            start_instance(instance)
+
+        elif instanceState == 'running':
+            lookForState = False
+
+        waitFor = lookForDNS or lookForState  
+        if waitFor:
+            if lookForDNS:
+                print("waiting for DNS address + State ...",instanceState)
+            else:
+                print("waiting for State ...",instanceState)
+            
+            time.sleep(10)
+    
+    time.sleep(5) # avoids SSH connection error ?
     
     print(updated_instance_info)
 
@@ -420,26 +467,57 @@ if 1==1:
     k = paramiko.RSAKey.from_private_key_file('cloudrun.pem')
     ssh_client = paramiko.SSHClient()
     ssh_client.set_missing_host_key_policy(paramiko.AutoAddPolicy())
-    print("connecting")
-    ssh_client.connect(hostname=updated_instance_info['PublicDnsName'],username=config['username'],pkey=k) #,password=’mypassword’)
+    print("connecting to ",updated_instance_info['PublicDnsName'])
+    while True:
+        try:
+            ssh_client.connect(hostname=updated_instance_info['PublicDnsName'],username=config['username'],pkey=k) #,password=’mypassword’)
+            break
+        except paramiko.ssh_exception.NoValidConnectionsError as cexc:
+            print(cexc)
+            time.sleep(1)
+            print("Retrying ...")
+
     print("connected")
 
     # upload the install file, the env file and the script file
     ftp_client = ssh_client.open_sftp()
-    #ftp_client.put(‘localfilepath’,remotefilepath’)
-    #ftp_client.put(‘localfilepath’,remotefilepath’)
-    ftp_client.put('run_remote.py','run_remote.py’)
+    with open('remote_config.json','w') as cfg_file:
+        cfg_file.write(json.dumps(env_obj))
+        cfg_file.close()
+        ftp_client.put('remote_config.json','config.json')
+    ftp_client.put('bootstrap.sh','bootstrap.sh')
+    ftp_client.put('config.py','config.py')
+    ftp_client.put('run_remote.py','run_remote.py')
     ftp_client.close()
 
-    # run
-    commands = [ "python3 /home/ubuntu/runremote.py" ]
-    for command in commands:
-        print "Executing {}".format( command )
-        stdin , stdout, stderr = ssh_client.exec_command(command)
-        print stdout.read()
+    if created:
+        print("Installing PyYAML for newly created instance ...")
+        stdin , stdout, stderr = ssh_client.exec_command("pip install pyyaml")
+        print(stdout.read())
         print( "Errors")
-        print stderr.read()
+        print(stderr.read())
+
+    # run
+    commands = [ 
+        "chmod +x $HOME/bootstrap.sh" ,                               # make bootstrap executable
+        "python3 $HOME/config.py",                                    # recreate pip+conda files according to config
+#        "bash -l -c /home/ubuntu/bootstrap.sh " + env_obj['name'],
+        "$HOME/bootstrap.sh " + env_obj['name'],                      # setup envs according to current config files state
+        "python3 $HOME/run_remote.py"                                 # execute main script
+    ]
+    for command in commands:
+        print("Executing ",format( command ) )
+        stdin , stdout, stderr = ssh_client.exec_command(command)
+        #print(stdout.read())
+        for l in line_buffered(stdout):
+            print(l)
+        print( "Errors")
+        print(stderr.read())
+    
     ssh_client.close()
+
+    # make sure we stop the instance to avoid charges !
+    # stop_instance(instance)
 
 # OPTION 2: "execute and kill" mode (dont use)
 else:
