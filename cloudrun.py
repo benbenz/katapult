@@ -218,7 +218,7 @@ def create_bucket():
 
 
 def upload_file( bucket , file_path ):
-    debug(1,"Uploading FILE ...")
+    debug(1,"uploading FILE ...")
     s3_client = boto3.client('s3', region_name=config['region'])
     response = s3_client.upload_file( file_path, bucket['BucketName'], 'cr-run-script' )
     debug(2,response)
@@ -468,6 +468,8 @@ if 1==1:
 
     debug(1,"connected")
 
+    debug(1,"uploading files ... ")
+
     # upload the install file, the env file and the script file
     ftp_client = ssh_client.open_sftp()
     with open('remote_files/config.json','w') as cfg_file:
@@ -477,8 +479,36 @@ if 1==1:
     ftp_client.put('remote_files/config.py','config.py')
     ftp_client.put('remote_files/bootstrap.sh','bootstrap.sh')
     ftp_client.put('remote_files/run.sh','run.sh')
-    ftp_client.put('run_remote.py','run_remote.py')
+    if 'upload_files' in config and config['upload_files'] is not None:
+        if isinstance( config['upload_files'],str):
+            config['upload_files'] = [ config['upload_files']  ]
+        for upfile in config['upload_files']:
+            try:
+                ftp_client.put(upfile,os.path.basename(upfile))
+            except Exception as e:
+                print("Error while uploading file",upfile)
+                print(e)
+
+    script_type = 0 # 0 = None, 1 = Python , 2 = Julia , 10 = command line
+    script_command = ''
+    if 'run_script' in config and config['run_script'] is not None:
+        filename = os.path.basename(config['run_script'])
+        file_ext = os.path.splitext(filename)[1]
+        if file_ext == '.py' or file_ext == '.PY':
+            script_command = "python3 $HOME/" + filename
+        elif file_ext == '.jl' or file_ext == '.JL':
+            script_command = "julia $HOME/" + filename 
+        else:
+            script_command = "echo 'SCRIPT NOT HANDLED'"
+        ftp_client.put(config['run_script'],filename)
+    elif 'run_command' in config and config['run_command']:
+        script_command = config['run_command']
+    else:
+        script_command = "echo 'NO SCRIPT DEFINED'"
+    
     ftp_client.close()
+
+    debug(1,"uploaded.")
 
     if created:
         debug(1,"Installing PyYAML for newly created instance ...")
@@ -493,7 +523,7 @@ if 1==1:
         "python3 $HOME/config.py",                                                             # recreate pip+conda files according to config
 #        "bash -l -c /home/ubuntu/bootstrap.sh " + env_obj['name'],
         "$HOME/bootstrap.sh \"" + env_obj['name'] + "\" " + ("1" if config['dev'] else "0") ,  # setup envs according to current config files state
-        "$HOME/run.sh \"" + env_obj['name'] + "\" \"python3 $HOME/run_remote.py\""             # execute main script
+        "$HOME/run.sh \"" + env_obj['name'] + "\" \""+script_command+"\""             # execute main script
     ]
     for command in commands:
         debug(1,"Executing ",format( command ) )
@@ -513,7 +543,7 @@ if 1==1:
 
 # OPTION 2: "execute and kill" mode (dont use)
 else:
-    with open(config['script_file'], 'r') as f:
+    with open(config['run_script'], 'r') as f:
         script = '\n'.join(f)    
         #TODO: add install scripts if needed (Julia etc)
         instance = run_instance_script(vpc,subnet,secGroup,script)

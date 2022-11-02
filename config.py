@@ -20,5 +20,6 @@ config = {
 
     # "script"/"command" section
     'run_script'   : 'run_remote.py' ,         # the script to run (Python (.py) or Julia (.jl) for now)
-    'run_command'  : None,                     # the command to run (either script_file or command will be used)
+    'run_command'  : None ,                    # the command to run (either script_file or command will be used)
+    'upload_files' : [ "INSTALL.sh"] ,         # any file to upload (array or string) - will be put in the same (home) directory
 }
