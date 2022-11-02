@@ -12,8 +12,13 @@ else
   dev=$2; shift
 fi
 
-FILE_CONDA="environment.yml"
-FILE_PYPI="requirements.txt"
+FILE_CONDA="$HOME/run/$env_name/environment.yml"
+FILE_PYPI="$HOME/run/$env_name/requirements.txt"
+FILE_APTGET="$HOME/run/$env_name/aptget.sh"
+
+if [ -f "$FILE_APTGET" ]; then
+  $FILE_APTGET
+fi
 
 if [ -f "$FILE_CONDA" ]; then
 

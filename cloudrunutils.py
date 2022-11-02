@@ -21,7 +21,7 @@ def add_pip_dependency_to_conda(env_obj):
     pipIndex = -1 
     for i,dep in enumerate(env_obj['env_conda']['dependencies']):
         if dep == 'pip':
-            env_obj['env_conda']['dependencies'][i] = { 'pip' : ['-r file:/home/ubuntu/requirements.txt'] }
+            env_obj['env_conda']['dependencies'][i] = { 'pip' : ['-r __REQUIREMENTS_TXT_LINK__'] }
             added = True
             pipIndex = i 
             break
@@ -38,10 +38,25 @@ def add_pip_dependency_to_conda(env_obj):
     # add the requirements dependecy (it was not found)
     if added is False:
         if pipIndex != -1:
-            env_obj['env_conda']['dependencies'][pipIndex]['pip'].append('-r file:/home/ubuntu/requirements.txt')
+            env_obj['env_conda']['dependencies'][pipIndex]['pip'].append('-r __REQUIREMENTS_TXT_LINK__')
         else:
-            env_obj['env_conda']['dependencies'].append({'pip':['-r file:/home/ubuntu/requirements.txt']})
+            env_obj['env_conda']['dependencies'].append({'pip':['-r __REQUIREMENTS_TXT_LINK__']})
 
+def update_requirements_path(envobj,path):
+    if isinstance(envobj,dict):
+        for k,v in envobj.items():
+            envobj[k] = update_requirements_path(v,path)
+        
+
+    elif isinstance(envobj,list):
+        for i,v in enumerate(envobj):
+            envobj[i] = update_requirements_path(v,path)
+    
+    elif isinstance(envobj,str):
+        if '__REQUIREMENTS_TXT_LINK__' in envobj:
+            envobj = envobj.replace('__REQUIREMENTS_TXT_LINK__',path+'/requirements.txt')
+        
+    return envobj
 
 # returns a JSON object that represents lists as in requirements.txt as well as YAML format (can be parsed by YAML module)
 # this object will be serialized and sent to remote host

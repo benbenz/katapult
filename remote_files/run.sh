@@ -8,8 +8,8 @@ else
   thecommand="$1"; shift
 fi
 
-FILE_CONDA="environment.yml"
-FILE_PYPI="requirements.txt"
+FILE_CONDA="$HOME/run/$env_name/environment.yml"
+FILE_PYPI="$HOME/run/$env_name/requirements.txt"
 
 if [ -f "$FILE_CONDA" ]; then
 
@@ -24,6 +24,13 @@ if ([ -f "$FILE_PYPI" ] && ! [ -f "$FILE_CONDA" ]); then
     source ".$env_name/bin/activate"
 fi
 
+cd "$HOME/run/$env_name"
+
 eval "$thecommand"
 
 #$HOME/.local/bin/micromamba run -a stdout,stderr -n "$env_name" $thecommand
+
+# stop the instance if no other scripts are running 
+#if ! [ ps aux | grep "$HOME/run.sh" | grep -v 'grep' ]; then
+#  aws ec2 stop-instances --instance-ids $(ec2metadata --instance-id) --region $(ec2metadata --availability-zone | sed 's/.$//')
+#fi

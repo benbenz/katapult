@@ -313,29 +313,6 @@ def stop_instance(instance):
 
     ec2_client.stop_instances(InstanceIds=[instance['InstanceId']])
 
-def init_environment(conf):
-    env_obj  = cloudrunutils.compute_environment_object(conf)
-    env_hash = cloudrunutils.compute_environment_hash(env_obj)
-
-    env_name = cr_instanceNameRoot
-
-    if ('dev' in config) and (config['dev'] == True):
-        env_name = cr_instanceNameRoot
-    else:
-        if 'project' in config:
-            env_name = cr_environmentNameRoot + '-' + config['project'] + '-' + env_hash
-        else:
-            env_name = cr_environmentNameRoot + '-' + env_hash    
-
-    # overwrite name in conda config as well
-    if env_obj['env_conda'] is not None:
-        env_obj['env_conda']['name'] = env_name 
-    env_obj['name'] = env_name
-    env_obj['hash'] = env_hash
-
-    return env_obj 
-
-
 def run_instance_script(vpc,subnet,secGroup,script):
 
     debug(1,"Creating INSTANCE ...")
@@ -393,11 +370,39 @@ def list_amis():
         for instance in reservation["Instances"]:
             print(instance["ImageId"])
 
+def init_environment(conf):
+    env_obj  = cloudrunutils.compute_environment_object(conf)
+    env_hash = cloudrunutils.compute_environment_hash(env_obj)
+
+    env_name = cr_environmentNameRoot
+
+    if ('dev' in conf) and (conf['dev'] == True):
+        env_name = cr_environmentNameRoot
+    else:
+        if 'project' in conf:
+            env_name = cr_environmentNameRoot + '-' + conf['project'] + '-' + env_hash
+        else:
+            env_name = cr_environmentNameRoot + '-' + env_hash    
+
+    # overwrite name in conda config as well
+    if env_obj['env_conda'] is not None:
+        env_obj['env_conda']['name'] = env_name 
+    env_obj['name'] = env_name
+    env_obj['hash'] = env_hash
+    env_obj['path'] = "$HOME/run/" + env_name
+    env_obj['path_abs'] = "/home/" + conf['img_username'] + '/run/' + env_name
+
+    # replace __REQUIREMENTS_TXT_LINK__ with the actual requirements.txt path (dependent of config and env hash)
+    # the file needs to be absolute
+    env_obj = cloudrunutils.update_requirements_path(env_obj,env_obj['path_abs'])
+
+    return env_obj             
+
 def line_buffered(f):
     line_buf = ""
     while not f.channel.exit_status_ready():
         try:
-            line_buf += f.read(1).decode("utf-8")
+            line_buf += f.read(8).decode("utf-8")
             if line_buf.endswith('\n'):
                 yield line_buf
                 line_buf = ''
@@ -468,10 +473,18 @@ if 1==1:
 
     debug(1,"connected")
 
+    files_path = env_obj['path']
+
+    debug(1,"creating directories ...")
+    stdin0, stdout0, stderr0 = ssh_client.exec_command("mkdir -p "+files_path)
+    debug(1,"directories created")
+
+
     debug(1,"uploading files ... ")
 
     # upload the install file, the env file and the script file
     ftp_client = ssh_client.open_sftp()
+    ftp_client.chdir(env_obj['path_abs'])
     with open('remote_files/config.json','w') as cfg_file:
         cfg_file.write(json.dumps(env_obj))
         cfg_file.close()
@@ -495,9 +508,9 @@ if 1==1:
         filename = os.path.basename(config['run_script'])
         file_ext = os.path.splitext(filename)[1]
         if file_ext == '.py' or file_ext == '.PY':
-            script_command = "python3 $HOME/" + filename
+            script_command = "python3 " + files_path + '/' + filename
         elif file_ext == '.jl' or file_ext == '.JL':
-            script_command = "julia $HOME/" + filename 
+            script_command = "julia " + files_path + '/' + filename 
         else:
             script_command = "echo 'SCRIPT NOT HANDLED'"
         ftp_client.put(config['run_script'],filename)
@@ -519,11 +532,11 @@ if 1==1:
 
     # run
     commands = [ 
-        "chmod +x $HOME/bootstrap.sh $HOME/run.sh" ,                                           # make bootstrap executable
-        "python3 $HOME/config.py",                                                             # recreate pip+conda files according to config
+        "chmod +x "+files_path+"/bootstrap.sh"+ " "+files_path+"/run.sh" ,                     # make bootstrap executable
+        "cd " + files_path + " && python3 "+files_path+"/config.py",                                                    # recreate pip+conda files according to config
 #        "bash -l -c /home/ubuntu/bootstrap.sh " + env_obj['name'],
-        "$HOME/bootstrap.sh \"" + env_obj['name'] + "\" " + ("1" if config['dev'] else "0") ,  # setup envs according to current config files state
-        "$HOME/run.sh \"" + env_obj['name'] + "\" \""+script_command+"\""             # execute main script
+        files_path+"/bootstrap.sh \"" + env_obj['name'] + "\" " + ("1" if config['dev'] else "0") ,  # setup envs according to current config files state
+        files_path+"/run.sh \"" + env_obj['name'] + "\" \""+script_command+"\""                      # execute main script (spawn)
     ]
     for command in commands:
         debug(1,"Executing ",format( command ) )
@@ -539,7 +552,7 @@ if 1==1:
     ssh_client.close()
 
     # make sure we stop the instance to avoid charges !
-    # stop_instance(instance)
+    #stop_instance(instance)
 
 # OPTION 2: "execute and kill" mode (dont use)
 else:

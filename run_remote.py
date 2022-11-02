@@ -1,4 +1,4 @@
-import numpy
+import numpy , time
 
 a = numpy.arange(15).reshape(3, 5)
 
@@ -8,3 +8,9 @@ file.write(str(a.shape))
 file.close()
 
 print(a)
+
+c=1
+while c<10:
+    time.sleep(2)
+    print("sleep")
+    c=c+1
