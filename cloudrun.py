@@ -17,6 +17,7 @@ except ModuleNotFoundError as mnfe:
 cr_keypairName         = 'cloudrun-keypair'
 cr_secGroupName        = 'cloudrun-sec-group-allow-ssh'
 cr_bucketName          = 'cloudrun-bucket'
+cr_vpcName             = 'cloudrun-vpc'
 cr_instanceNameRoot    = 'cloudrun-instance'
 cr_environmentNameRoot = 'cloudrun-env'
 
@@ -523,10 +524,12 @@ debug(1,"uploading files ... ")
 # upload the install file, the env file and the script file
 ftp_client = ssh_client.open_sftp()
 ftp_client.chdir(env_obj['path_abs'])
-with open('remote_files/config.json','w') as cfg_file:
+remote_config = 'config-'+env_obj['name']+'.json'
+with open(remote_config,'w') as cfg_file:
     cfg_file.write(json.dumps(env_obj))
     cfg_file.close()
-    ftp_client.put('remote_files/config.json','config.json')
+    ftp_client.put(remote_config,'config.json')
+    os.remove(remote_config)
 ftp_client.put('remote_files/config.py','config.py')
 ftp_client.put('remote_files/bootstrap.sh','bootstrap.sh')
 ftp_client.put('remote_files/run.sh','run.sh')
