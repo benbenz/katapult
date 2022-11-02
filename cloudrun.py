@@ -234,6 +234,42 @@ def init_instance_name():
         else:
             return cr_instanceNameRoot + '-' + instance_hash    
 
+def find_instance():
+
+    debug(1,"Searching INSTANCE ...")
+
+    instanceName = init_instance_name()
+
+    ec2_client = boto3.client("ec2", region_name=config['region'])
+
+    existing = ec2_client.describe_instances(
+        Filters = [
+            {
+                'Name': 'tag:Name',
+                'Values': [
+                    instanceName
+                ]
+            },
+            {
+                'Name': 'instance-state-name' ,
+                'Values' : [ # everything but 'terminated' and 'shutting down' ?
+                    'pending' , 'running' , 'stopping' , 'stopped'
+                ]
+            }
+        ]
+    )
+
+    if len(existing['Reservations']) > 0 and len(existing['Reservations'][0]['Instances']) >0 :
+        instance = existing['Reservations'][0]['Instances'][0]
+        debug(1,"Found exisiting instance !")
+        debug(2,instance)
+        return instance 
+    
+    else:
+
+        return None 
+
+
 def create_instance(vpc,subnet,secGroup):
 
     debug(1,"Creating INSTANCE ...")
@@ -417,150 +453,144 @@ def line_buffered(f):
 
 #print(json.dumps(cloudrunutils.compute_environment_object(config)))
 
-keypair  = create_keypair()
-vpc      = create_vpc() 
-secGroup = create_security_group(vpc)
-subnet   = create_subnet(vpc) 
+instance = find_instance()
 
-# OPTION 1: with separate SSH command
-if 1==1:
+if instance is None:
+    keypair  = create_keypair()
+    vpc      = create_vpc() 
+    secGroup = create_security_group(vpc)
+    subnet   = create_subnet(vpc) 
     instance , created = create_instance(vpc,subnet,secGroup)
-
-    # get the public DNS info when instance actually started (todo: check actual state)
-    waitFor = True
-    while waitFor:
-        updated_instance_info = update_instance_info(instance)
-        lookForDNS   = not 'PublicDnsName' in updated_instance_info or updated_instance_info['PublicDnsName'] is None
-        instanceState =  updated_instance_info['State']['Name']
-
-        lookForState = True
-        # 'pending'|'running'|'shutting-down'|'terminated'|'stopping'|'stopped'
-        if instanceState == 'stopped' or instanceState == 'stopping':
-            # restart the instance
-            start_instance(instance)
-
-        elif instanceState == 'running':
-            lookForState = False
-
-        waitFor = lookForDNS or lookForState  
-        if waitFor:
-            if lookForDNS:
-                debug(1,"waiting for DNS address and  state ...",instanceState)
-            else:
-                debug(1,"waiting for state ...",instanceState)
-            
-            time.sleep(10)
-    
-    debug(2,updated_instance_info)
-
-    # init environment object
-    env_obj = init_environment(config)
-    debug(2,json.dumps(env_obj))
-    
-    # ssh into instance and run the script from S3/local? (or sftp)
-    k = paramiko.RSAKey.from_private_key_file('cloudrun.pem')
-    ssh_client = paramiko.SSHClient()
-    ssh_client.set_missing_host_key_policy(paramiko.AutoAddPolicy())
-    debug(1,"connecting to ",updated_instance_info['PublicDnsName'],"/",updated_instance_info['PublicIpAddress'])
-    while True:
-        try:
-            ssh_client.connect(hostname=updated_instance_info['PublicDnsName'],username=config['img_username'],pkey=k) #,password=’mypassword’)
-            break
-        except paramiko.ssh_exception.NoValidConnectionsError as cexc:
-            print(cexc)
-            time.sleep(4)
-            debug(1,"Retrying ...")
-
-    debug(1,"connected")
-
-    files_path = env_obj['path']
-
-    debug(1,"creating directories ...")
-    stdin0, stdout0, stderr0 = ssh_client.exec_command("mkdir -p "+files_path)
-    debug(1,"directories created")
-
-
-    debug(1,"uploading files ... ")
-
-    # upload the install file, the env file and the script file
-    ftp_client = ssh_client.open_sftp()
-    ftp_client.chdir(env_obj['path_abs'])
-    with open('remote_files/config.json','w') as cfg_file:
-        cfg_file.write(json.dumps(env_obj))
-        cfg_file.close()
-        ftp_client.put('remote_files/config.json','config.json')
-    ftp_client.put('remote_files/config.py','config.py')
-    ftp_client.put('remote_files/bootstrap.sh','bootstrap.sh')
-    ftp_client.put('remote_files/run.sh','run.sh')
-    if 'upload_files' in config and config['upload_files'] is not None:
-        if isinstance( config['upload_files'],str):
-            config['upload_files'] = [ config['upload_files']  ]
-        for upfile in config['upload_files']:
-            try:
-                ftp_client.put(upfile,os.path.basename(upfile))
-            except Exception as e:
-                print("Error while uploading file",upfile)
-                print(e)
-
-    script_type = 0 # 0 = None, 1 = Python , 2 = Julia , 10 = command line
-    script_command = ''
-    if 'run_script' in config and config['run_script'] is not None:
-        filename = os.path.basename(config['run_script'])
-        file_ext = os.path.splitext(filename)[1]
-        if file_ext == '.py' or file_ext == '.PY':
-            script_command = "python3 " + files_path + '/' + filename
-        elif file_ext == '.jl' or file_ext == '.JL':
-            script_command = "julia " + files_path + '/' + filename 
-        else:
-            script_command = "echo 'SCRIPT NOT HANDLED'"
-        ftp_client.put(config['run_script'],filename)
-    elif 'run_command' in config and config['run_command']:
-        script_command = config['run_command']
-    else:
-        script_command = "echo 'NO SCRIPT DEFINED'"
-    
-    ftp_client.close()
-
-    debug(1,"uploaded.")
-
-    if created:
-        debug(1,"Installing PyYAML for newly created instance ...")
-        stdin , stdout, stderr = ssh_client.exec_command("pip install pyyaml")
-        debug(2,stdout.read())
-        debug(2, "Errors")
-        debug(2,stderr.read())
-
-    # run
-    commands = [ 
-        # make bootstrap executable
-        "chmod +x "+files_path+"/bootstrap.sh"+" "+files_path+"/run.sh" ,                              
-        # recreate pip+conda files according to config
-        "cd " + files_path + " && python3 "+files_path+"/config.py",
-        # setup envs according to current config files state
-        files_path+"/bootstrap.sh \"" + env_obj['name'] + "\" " + ("1" if config['dev'] else "0") ,  
-        # execute main script (spawn)
-        files_path+"/run.sh \"" + env_obj['name'] + "\" \""+script_command+"\""                      
-    ]
-    for command in commands:
-        debug(1,"Executing ",format( command ) )
-        stdin , stdout, stderr = ssh_client.exec_command(command)
-        #print(stdout.read())
-        for l in line_buffered(stdout):
-            debug(1,l)
-        errmsg = stderr.read()
-        dbglvl = 1 if errmsg else 2
-        debug(dbglvl,"Errors")
-        debug(dbglvl,errmsg)
-    
-    ssh_client.close()
-
-    # make sure we stop the instance to avoid charges !
-    #stop_instance(instance)
-
-# OPTION 2: "execute and kill" mode (dont use)
 else:
-    with open(config['run_script'], 'r') as f:
-        script = '\n'.join(f)    
-        #TODO: add install scripts if needed (Julia etc)
-        instance = run_instance_script(vpc,subnet,secGroup,script)
-    
+    created = False
+
+# get the public DNS info when instance actually started (todo: check actual state)
+waitFor = True
+while waitFor:
+    updated_instance_info = update_instance_info(instance)
+    lookForDNS   = not 'PublicDnsName' in updated_instance_info or updated_instance_info['PublicDnsName'] is None
+    instanceState =  updated_instance_info['State']['Name']
+
+    lookForState = True
+    # 'pending'|'running'|'shutting-down'|'terminated'|'stopping'|'stopped'
+    if instanceState == 'stopped' or instanceState == 'stopping':
+        # restart the instance
+        start_instance(instance)
+
+    elif instanceState == 'running':
+        lookForState = False
+
+    waitFor = lookForDNS or lookForState  
+    if waitFor:
+        if lookForDNS:
+            debug(1,"waiting for DNS address and  state ...",instanceState)
+        else:
+            debug(1,"waiting for state ...",instanceState)
+        
+        time.sleep(10)
+
+debug(2,updated_instance_info)
+
+# init environment object
+env_obj = init_environment(config)
+debug(2,json.dumps(env_obj))
+
+# ssh into instance and run the script from S3/local? (or sftp)
+k = paramiko.RSAKey.from_private_key_file('cloudrun.pem')
+ssh_client = paramiko.SSHClient()
+ssh_client.set_missing_host_key_policy(paramiko.AutoAddPolicy())
+debug(1,"connecting to ",updated_instance_info['PublicDnsName'],"/",updated_instance_info['PublicIpAddress'])
+while True:
+    try:
+        ssh_client.connect(hostname=updated_instance_info['PublicDnsName'],username=config['img_username'],pkey=k) #,password=’mypassword’)
+        break
+    except paramiko.ssh_exception.NoValidConnectionsError as cexc:
+        print(cexc)
+        time.sleep(4)
+        debug(1,"Retrying ...")
+
+debug(1,"connected")
+
+files_path = env_obj['path']
+
+debug(1,"creating directories ...")
+stdin0, stdout0, stderr0 = ssh_client.exec_command("mkdir -p "+files_path)
+debug(1,"directories created")
+
+
+debug(1,"uploading files ... ")
+
+# upload the install file, the env file and the script file
+ftp_client = ssh_client.open_sftp()
+ftp_client.chdir(env_obj['path_abs'])
+with open('remote_files/config.json','w') as cfg_file:
+    cfg_file.write(json.dumps(env_obj))
+    cfg_file.close()
+    ftp_client.put('remote_files/config.json','config.json')
+ftp_client.put('remote_files/config.py','config.py')
+ftp_client.put('remote_files/bootstrap.sh','bootstrap.sh')
+ftp_client.put('remote_files/run.sh','run.sh')
+if 'upload_files' in config and config['upload_files'] is not None:
+    if isinstance( config['upload_files'],str):
+        config['upload_files'] = [ config['upload_files']  ]
+    for upfile in config['upload_files']:
+        try:
+            ftp_client.put(upfile,os.path.basename(upfile))
+        except Exception as e:
+            print("Error while uploading file",upfile)
+            print(e)
+
+script_type = 0 # 0 = None, 1 = Python , 2 = Julia , 10 = command line
+script_command = ''
+if 'run_script' in config and config['run_script'] is not None:
+    filename = os.path.basename(config['run_script'])
+    file_ext = os.path.splitext(filename)[1]
+    if file_ext == '.py' or file_ext == '.PY':
+        script_command = "python3 " + files_path + '/' + filename
+    elif file_ext == '.jl' or file_ext == '.JL':
+        script_command = "julia " + files_path + '/' + filename 
+    else:
+        script_command = "echo 'SCRIPT NOT HANDLED'"
+    ftp_client.put(config['run_script'],filename)
+elif 'run_command' in config and config['run_command']:
+    script_command = config['run_command']
+else:
+    script_command = "echo 'NO SCRIPT DEFINED'"
+
+ftp_client.close()
+
+debug(1,"uploaded.")
+
+if created:
+    debug(1,"Installing PyYAML for newly created instance ...")
+    stdin , stdout, stderr = ssh_client.exec_command("pip install pyyaml")
+    debug(2,stdout.read())
+    debug(2, "Errors")
+    debug(2,stderr.read())
+
+# run
+commands = [ 
+    # make bootstrap executable
+    "chmod +x "+files_path+"/bootstrap.sh"+" "+files_path+"/run.sh" ,                              
+    # recreate pip+conda files according to config
+    "cd " + files_path + " && python3 "+files_path+"/config.py",
+    # setup envs according to current config files state
+    files_path+"/bootstrap.sh \"" + env_obj['name'] + "\" " + ("1" if config['dev'] else "0") ,  
+    # execute main script (spawn)
+    files_path+"/run.sh \"" + env_obj['name'] + "\" \""+script_command+"\""                      
+]
+for command in commands:
+    debug(1,"Executing ",format( command ) )
+    stdin , stdout, stderr = ssh_client.exec_command(command)
+    #print(stdout.read())
+    for l in line_buffered(stdout):
+        debug(1,l)
+    errmsg = stderr.read()
+    dbglvl = 1 if errmsg else 2
+    debug(dbglvl,"Errors")
+    debug(dbglvl,errmsg)
+
+ssh_client.close()
+
+# make sure we stop the instance to avoid charges !
+#stop_instance(instance)
