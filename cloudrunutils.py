@@ -98,6 +98,9 @@ def compute_environment_object(config):
                     print(exc)
             except subprocess.CalledProcessError as pex:
                 print(pex)
+        
+        else:
+            print("env_conda is specified but the file or directory doesnt exists")
 
 
     if 'env_pypi' in config and config['env_pypi'] is not None:
@@ -133,6 +136,10 @@ def compute_environment_object(config):
                 environment_obj['env_pypi'] = pipDeps
             except subprocess.CalledProcessError as pex:
                 print(pex)
+
+        else:
+            print("env_pypi is specified but the file or directory doesnt exists")
+
 
     return environment_obj      
 
