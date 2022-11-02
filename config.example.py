@@ -18,11 +18,11 @@ config = {
     # env_conda (only)       >> mamba is used to setup the env
     # env_pypi  (only)       >> venv + pip is used to setup the env 
     'env_aptget'   : [ "openssh-client"] ,        # None, an array of librarires/binaries for apt-get
-    'env_conda'    : "environment_example.yml",   # None, an array of libraries, a path to environment.yml  file, or a path to the root of a conda environment
-    'env_pypi'     : "requirements_example.txt" , # None, an array of libraries, a path to requirements.txt file, or a path to the root of a venv environment 
+    'env_conda'    : "example/environment.yml",   # None, an array of libraries, a path to environment.yml  file, or a path to the root of a conda environment
+    'env_pypi'     : "example/requirements.txt" , # None, an array of libraries, a path to requirements.txt file, or a path to the root of a venv environment 
 
     # "script"/"command" section
-    'run_script'   : 'run_remote.py' ,            # the script to run (Python (.py) or Julia (.jl) for now)
+    'run_script'   : 'example/run_remote.py' ,    # the script to run (Python (.py) or Julia (.jl) for now)
     'run_command'  : None ,                       # the command to run (either script_file or command will be used)
-    'upload_files' : [ "INSTALL.sh"] ,            # any file to upload (array or string) - will be put in the same (home) directory
+    'upload_files' : [ "example/uploaded.txt"] ,  # any file to upload (array or string) - will be put in the same (home) directory
 }
