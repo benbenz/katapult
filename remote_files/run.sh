@@ -1,5 +1,7 @@
 #!/usr/bin/bash
 
+echo $$
+
 if (( $# < 2 )); then
   echo "$0 ENV_NAME CMD"
   exit 0
@@ -27,7 +29,9 @@ fi
 cd "$HOME/run/$env_name"
 #eval "nohup $thecommand >/dev/null 2>&1 &"
 #eval "$thecommand >/dev/null 2>&1 &"
-eval "$thecommand"
+#eval "$thecommand"
+#exec $thecommand
+exec nohup $thecommand >run.log 2>&1 
 #cmd_pid=$!
 #echo "__PID_RUN__($$)"
 #echo "__PID_CMD__($cmd_pid)"
