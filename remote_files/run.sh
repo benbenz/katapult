@@ -25,8 +25,12 @@ if ([ -f "$FILE_PYPI" ] && ! [ -f "$FILE_CONDA" ]); then
 fi
 
 cd "$HOME/run/$env_name"
-
+#eval "nohup $thecommand >/dev/null 2>&1 &"
+#eval "$thecommand >/dev/null 2>&1 &"
 eval "$thecommand"
+#cmd_pid=$!
+#echo "__PID_RUN__($$)"
+#echo "__PID_CMD__($cmd_pid)"
 
 #$HOME/.local/bin/micromamba run -a stdout,stderr -n "$env_name" $thecommand
 

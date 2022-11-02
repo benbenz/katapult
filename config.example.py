@@ -1,5 +1,5 @@
 config = {
-    'project'      : 'test' ,                     # this will be concatenated with the hash (if not None) 
+    'project'      : 'test' ,                     # this will be concatenated with the instance & env hashes (if not None) 
     'dev'          : False ,                      # When True, this will ensure the same instance and dev environement are being used (while working on building up the project) 
     'debug'        : 1 ,                          # debug level (0...3)
 
@@ -22,7 +22,7 @@ config = {
     'env_pypi'     : "example/requirements.txt" , # None, an array of libraries, a path to requirements.txt file, or a path to the root of a venv environment 
 
     # "script"/"command" section
-    'run_script'   : 'example/run_remote.py' ,    # the script to run (Python (.py) or Julia (.jl) for now)
-    'run_command'  : None ,                       # the command to run (either script_file or command will be used)
-    'upload_files' : [ "example/uploaded.txt"] ,  # any file to upload (array or string) - will be put in the same (home) directory
+    'run_script'   : 'example/run_remote.py' ,    # the script to run (Python (.py) or Julia (.jl) for now) (prioritised vs 'run_command')
+    'run_command'  : None ,                       # the command to run
+    'upload_files' : [ "example/uploaded.txt"] ,  # any file to upload (array or string) - will be put in the same directory
 }
