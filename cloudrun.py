@@ -5,26 +5,28 @@ import paramiko
 from botocore.exceptions import ClientError
 
 config = {
-    'project'      : 'test' ,                  # this will be concatenated in the hash (if not None) 
-    'dev'          : False ,                    # When True, this will ensure the same instance and dev environement are being used (while working on building up the project) 
+    'project'      : 'test' ,                  # this will be concatenated with the hash (if not None) 
+    'dev'          : False ,                   # When True, this will ensure the same instance and dev environement are being used (while working on building up the project) 
+    'debug'        : 1 ,                       # debug level (0...3)
 
     # "instance" section
     'vpc_id'       : 'vpc-0babc28485f6730bc' , # can be None, or even wrong/non-existing - then the default one is used
     'region'       : 'eu-west-3' ,             # has to be valid
-    'ami_id'       : 'ami-077fd75cd229c811b' , # has to be valid and available for the profile (user/region)
+    'img_id'       : 'ami-077fd75cd229c811b' , # OS image: has to be valid and available for the profile (user/region)
+    'img_username' : 'ubuntu' ,                # the SSH user for the image
     'min_cpu'      : None ,                    # number of min CPUs (not used yet)
     'max_cpu'      : None ,                    # number of max CPUs (not used yet)
     'max_bid'      : None ,                    # max bid ($) (not used yet)
     'size'         : None ,                    # size (ECO = SPOT , SMALL , MEDIUM , LARGE) (not used yet)
-    'username'     : 'ubuntu' ,                # the SSH use for the image
 
     # "environment" section
     'env_aptget'   : None ,                    # None, an array of librarires/binaries for apt-get
     'env_conda'    : "environment_example.yml" ,                    # None, an array of libraries, a path to environment.yml  file, or a path to the root of a conda environment
     'env_pypi'     : "requirements.txt" ,      # None, an array of libraries, a path to requirements.txt file, or a path to the root of a venv environment 
 
-    # "script" section
-    'script_file'  : 'run_remote.py' ,         # the script to run (Python (.py) or Julia (.jl) for now)
+    # "script"/"command" section
+    'run_script'   : 'run_remote.py' ,         # the script to run (Python (.py) or Julia (.jl) for now)
+    'runcommand'   : None,                     # the command to run (either script_file or command will be used)
 }
 
 cr_keypairName         = 'cloudrun-keypair'
@@ -36,8 +38,12 @@ cr_environmentNameRoot = 'cloudrun-env'
 class CloudRunError(Exception):
     pass
 
+def debug(level,*args):
+    if level <= config['debug']:
+        print(*args)
+
 def create_keypair():
-    print("Creating KeyPair ...")
+    debug(1,"Creating KEYPAIR ...")
     ec2_client = boto3.client("ec2", region_name=config['region'])
     ec2 = boto3.resource('ec2')
 
@@ -53,7 +59,7 @@ def create_keypair():
         errmsg = str(e)
         
         if 'UnauthorizedOperation' in errmsg:
-            print("The account is not authorized to create a keypair, please specify an existing keypair in the configuration or add Administrator privileges to the account")
+            debug(1,"The account is not authorized to create a keypair, please specify an existing keypair in the configuration or add Administrator privileges to the account")
             keypair = None
             #sys.exit()
             raise CloudRunError()
@@ -70,7 +76,7 @@ def create_keypair():
                 pemfile.write(keypair['KeyMaterial']) # save the private key in the directory (we will use it with paramiko)
                 pemfile.close()
                 os.chmod(path, 0o600) # change permission to use with ssh (for debugging)
-                print(keypair)
+                debug(2,keypair)
 
             except ClientError as e2: # the keypair probably exists already
                 errmsg2 = str(e2)
@@ -78,17 +84,17 @@ def create_keypair():
                     #keypair = ec2.KeyPair(cr_keypairName)
                     keypairs = ec2_client.describe_key_pairs( KeyNames= [cr_keypairName] )
                     keypair  = keypairs['KeyPairs'][0] 
-                    print(keypair)
+                    debug(2,keypair)
                 else:
-                    print("An unknown error occured while retrieving the KeyPair")
-                    print(errmsg2)
+                    debug(1,"An unknown error occured while retrieving the KeyPair")
+                    debug(2,errmsg2)
                     #sys.exit()
                     raise CloudRunError()
 
         
         else:
-            print("An unknown error occured while creating the KeyPair")
-            print(errmsg)
+            debug(1,"An unknown error occured while creating the KeyPair")
+            debug(2,errmsg)
             #sys.exit()
             raise CloudRunError()
     
@@ -110,7 +116,7 @@ def find_or_create_default_vpc():
     return defaultvpc
 
 def create_vpc():
-    print("Creating VPC ...")
+    debug(1,"Creating VPC ...")
     vpc = None
     ec2_client = boto3.client("ec2", region_name=config['region'])
 
@@ -126,21 +132,21 @@ def create_vpc():
         except ClientError as ce:
             ceMsg = str(ce)
             if 'InvalidVpcID.NotFound' in ceMsg:
-                print("WARNING: using default VPC. "+vpcID+" is unavailable")
+                debug(1,"WARNING: using default VPC. "+vpcID+" is unavailable")
                 vpc = find_or_create_default_vpc() 
             else:
-                print("WARNING: using default VPC. Unknown error")
+                debug(1,"WARNING: using default VPC. Unknown error")
                 vpc = find_or_create_default_vpc() 
 
     else:
-        print("using default VPC (no VPC ID specified in config)")
+        debug(1,"using default VPC (no VPC ID specified in config)")
         vpc = find_or_create_default_vpc()
-    print(vpc)
+    debug(2,vpc)
 
     return vpc 
 
 def create_security_group(vpc):
-    print("Creating SECURITY GROUP ...")
+    debug(1,"Creating SECURITY GROUP ...")
     secGroup = None
     ec2_client = boto3.client("ec2", region_name=config['region'])
 
@@ -153,7 +159,7 @@ def create_security_group(vpc):
         },
     ])
     if len(secgroups['SecurityGroups']) == 0: # we have no security group, lets create one
-        print("Creating new security group")
+        debug(1,"Creating new security group")
         secGroup = ec2_client.create_security_group(
             VpcId = vpc['VpcId'] ,
             Description = 'Allow SSH connection' ,
@@ -172,36 +178,36 @@ def create_security_group(vpc):
                 'ToPort': 22,
                 'IpRanges': [{'CidrIp': '0.0.0.0/0'}]}
             ])
-        print('Ingress Successfully Set %s' % data)
+        debug(1,'Ingress Successfully Set %s' % data)
 
     else:
         secGroup = secgroups['SecurityGroups'][0]
     
     if secGroup is None:
-        print("An unknown error occured while creating the security group")
+        debug(1,"An unknown error occured while creating the security group")
         #sys.exit()
         raise CloudRunError()
     
-    print(secGroup) 
+    debug(2,secGroup) 
 
     return secGroup
 
 # for now just return the first subnet present in the Vpc ...
 def create_subnet(vpc):
-    print("Creating SUBNET ...")
+    debug(1,"Creating SUBNET ...")
     ec2 = boto3.resource('ec2')
     ec2_client = boto3.client("ec2", region_name=config['region'])
     vpc_obj = ec2.Vpc(vpc['VpcId'])
     for subnet in vpc_obj.subnets.all():
         subnets = ec2_client.describe_subnets(SubnetIds=[subnet.id])
         subnet = subnets['Subnets'][0]
-        print(subnet)
+        debug(2,subnet)
         return subnet
     return None # todo: create a subnet
 
 def create_bucket():
 
-    print("Creating BUCKET ...")
+    debug(1,"Creating BUCKET ...")
 
     s3_client = boto3.client('s3', region_name=config['region'])
     s3 = boto3.resource('s3')
@@ -224,16 +230,16 @@ def create_bucket():
         elif 'BucketAlreadyOwnedByYou' in errMsg:
             bucket = s3.Bucket(cr_bucketName)
 
-    print(bucket)
+    debug(2,bucket)
 
     return bucket 
 
 
 def upload_file( bucket , file_path ):
-    print("Uploading FILE ...")
+    debug(1,"Uploading FILE ...")
     s3_client = boto3.client('s3', region_name=config['region'])
     response = s3_client.upload_file( file_path, bucket['BucketName'], 'cr-run-script' )
-    print(response)
+    debug(2,response)
 
 def init_instance_name():
     if ('dev' in config) and (config['dev'] == True):
@@ -248,7 +254,7 @@ def init_instance_name():
 
 def create_instance(vpc,subnet,secGroup):
 
-    print("Creating INSTANCE ...")
+    debug(1,"Creating INSTANCE ...")
 
     instanceName = init_instance_name()
 
@@ -284,12 +290,12 @@ def create_instance(vpc,subnet,secGroup):
 
     if len(existing['Reservations']) > 0 and len(existing['Reservations'][0]['Instances']) >0 :
         instance = existing['Reservations'][0]['Instances'][0]
-        print("Found EXISTING !")
-        print(instance)
+        debug(1,"Found exisiting instance !")
+        debug(2,instance)
         return instance , created
 
     instances = ec2_client.run_instances(
-            ImageId = config['ami_id'],
+            ImageId = config['img_id'],
             MinCount = 1,
             MaxCount = 1,
             InstanceType = 't2.micro',
@@ -311,7 +317,7 @@ def create_instance(vpc,subnet,secGroup):
 
     created = True
 
-    print(instances["Instances"][0])
+    debug(2,instances["Instances"][0])
 
     return instances["Instances"][0] , created
 
@@ -350,14 +356,14 @@ def init_environment(conf):
 
 def run_instance_script(vpc,subnet,secGroup,script):
 
-    print("Creating INSTANCE ...")
+    debug(1,"Creating INSTANCE ...")
 
     ec2_client = boto3.client("ec2", region_name=config['region'])
 
     instanceName = cr_instanceNameRoot
 
     instances = ec2_client.run_instances(
-            ImageId = config['ami_id'],
+            ImageId = config['img_id'],
             MinCount = 1,
             MaxCount = 1,
             InstanceType = 't2.micro',
@@ -379,7 +385,7 @@ def run_instance_script(vpc,subnet,secGroup,script):
             UserData=script
     )    
 
-    print(instances["Instances"][0])
+    debug(2,instances["Instances"][0])
 
     return instances["Instances"][0]    
 
@@ -452,35 +458,33 @@ if 1==1:
         waitFor = lookForDNS or lookForState  
         if waitFor:
             if lookForDNS:
-                print("waiting for DNS address + State ...",instanceState)
+                debug(1,"waiting for DNS address and  state ...",instanceState)
             else:
-                print("waiting for State ...",instanceState)
+                debug(1,"waiting for state ...",instanceState)
             
             time.sleep(10)
     
-    time.sleep(5) # avoids SSH connection error ?
-    
-    print(updated_instance_info)
+    debug(2,updated_instance_info)
 
     # init environment object
     env_obj = init_environment(config)
-    print(json.dumps(env_obj))
+    debug(2,json.dumps(env_obj))
     
     # ssh into instance and run the script from S3/local? (or sftp)
     k = paramiko.RSAKey.from_private_key_file('cloudrun.pem')
     ssh_client = paramiko.SSHClient()
     ssh_client.set_missing_host_key_policy(paramiko.AutoAddPolicy())
-    print("connecting to ",updated_instance_info['PublicDnsName'],updated_instance_info['PublicIpAddress'])
+    debug(1,"connecting to ",updated_instance_info['PublicDnsName'],"/",updated_instance_info['PublicIpAddress'])
     while True:
         try:
-            ssh_client.connect(hostname=updated_instance_info['PublicDnsName'],username=config['username'],pkey=k) #,password=’mypassword’)
+            ssh_client.connect(hostname=updated_instance_info['PublicDnsName'],username=config['img_username'],pkey=k) #,password=’mypassword’)
             break
         except paramiko.ssh_exception.NoValidConnectionsError as cexc:
             print(cexc)
-            time.sleep(2)
-            print("Retrying ...")
+            time.sleep(4)
+            debug(1,"Retrying ...")
 
-    print("connected")
+    debug(1,"connected")
 
     # upload the install file, the env file and the script file
     ftp_client = ssh_client.open_sftp()
@@ -488,34 +492,37 @@ if 1==1:
         cfg_file.write(json.dumps(env_obj))
         cfg_file.close()
         ftp_client.put('remote_config.json','config.json')
-    ftp_client.put('bootstrap.sh','bootstrap.sh')
     ftp_client.put('config.py','config.py')
+    ftp_client.put('bootstrap.sh','bootstrap.sh')
+    ftp_client.put('run.sh','run.sh')
     ftp_client.put('run_remote.py','run_remote.py')
     ftp_client.close()
 
     if created:
-        print("Installing PyYAML for newly created instance ...")
+        debug(1,"Installing PyYAML for newly created instance ...")
         stdin , stdout, stderr = ssh_client.exec_command("pip install pyyaml")
-        print(stdout.read())
-        print( "Errors")
-        print(stderr.read())
+        debug(2,stdout.read())
+        debug(2, "Errors")
+        debug(2,stderr.read())
 
     # run
     commands = [ 
-        "chmod +x $HOME/bootstrap.sh" ,                               # make bootstrap executable
-        "python3 $HOME/config.py",                                    # recreate pip+conda files according to config
+        "chmod +x $HOME/bootstrap.sh $HOME/run.sh" ,                                           # make bootstrap executable
+        "python3 $HOME/config.py",                                                             # recreate pip+conda files according to config
 #        "bash -l -c /home/ubuntu/bootstrap.sh " + env_obj['name'],
-        "$HOME/bootstrap.sh " + env_obj['name'],                      # setup envs according to current config files state
-#        "python3 $HOME/run_remote.py"                                 # execute main script
+        "$HOME/bootstrap.sh \"" + env_obj['name'] + "\" " + ("1" if config['dev'] else "0") ,  # setup envs according to current config files state
+        "$HOME/run.sh \"" + env_obj['name'] + "\" \"python3 $HOME/run_remote.py\""             # execute main script
     ]
     for command in commands:
-        print("Executing ",format( command ) )
+        debug(1,"Executing ",format( command ) )
         stdin , stdout, stderr = ssh_client.exec_command(command)
         #print(stdout.read())
         for l in line_buffered(stdout):
-            print(l)
-        print( "Errors")
-        print(stderr.read())
+            debug(1,l)
+        errmsg = stderr.read()
+        dbglvl = 1 if errmsg else 2
+        debug(dbglvl,"Errors")
+        debug(dbglvl,errmsg)
     
     ssh_client.close()
 

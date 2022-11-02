@@ -3,7 +3,7 @@ import jcs , yaml
 from os import path
 
 
-cr_instance_keys       = [ 'vpc_id' , 'region'  , 'ami_id' , 'min_cpu' , 'max_cpu' , 'size' ] 
+cr_instance_keys       = [ 'vpc_id' , 'region'  , 'img_id' , 'min_cpu' , 'max_cpu' , 'size' ] 
 cr_environment_keys    = [ 'env_pypi' , 'env_conda' , 'env_apt-get' ]
 
 def compute_instance_hash(config):

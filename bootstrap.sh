@@ -4,11 +4,12 @@
 #source $HOME/.bashrc
 #exit
 
-if (( $# < 1 )); then
-  echo "$0 ENV_NAME"
+if (( $# < 2 )); then
+  echo "$0 ENV_NAME DEV"
   exit 0
 else
   env_name="$1"; shift
+  dev=$2; shift
 fi
 
 FILE_CONDA="environment.yml"
@@ -35,23 +36,18 @@ if [ -f "$FILE_CONDA" ]; then
   #   #$HOME/miniconda/bin/conda init >/dev/null
   # fi
 
+  export MAMBA_ROOT_PREFIX=/home/ubuntu/micromamba
+  export MAMBA_EXE=/home/ubuntu/.local/bin/micromamba
+  
   if ! [ -x "$(command -v $HOME/.local/bin/micromamba)" ]; then
     echo "installing mamba ..."
     curl micro.mamba.pm/install.sh | bash
-    export MAMBA_ROOT_PREFIX=/home/ubuntu/micromamba
-    export MAMBA_EXE=/home/ubuntu/.local/bin/micromamba
     #eval "$($HOME/.local/bin/micromamba shell hook -s posix)"
     eval "$($HOME/.local/bin/micromamba shell hook --shell=bash)"
   else
-    echo "mambda has been found"
-    # somehow we cant activate the bashrc ... >> init conda everytime ...
-    # source $HOME/miniconda/bin/activate >/dev/null
-    #$HOME/miniconda/bin/conda init >/dev/null
-    export MAMBA_ROOT_PREFIX=/home/ubuntu/micromamba
-    export MAMBA_EXE=/home/ubuntu/.local/bin/micromamba
+    echo "mamba has been found"
     #eval "$($HOME/.local/bin/micromamba shell hook -s posix)"
     eval "$($HOME/.local/bin/micromamba shell hook --shell=bash)"
-    #source /home/ubuntu/.bashrc    
   fi  
 
   # 2. check if we need to create the environment
@@ -63,25 +59,30 @@ if [ -f "$FILE_CONDA" ]; then
   #   echo "environment created"
   # fi
   #$HOME/miniconda/bin/activate $env_name >/dev/null
-  micromamba activate $env_name
-  if [ $? -eq 0 ]; then
-    echo "conda environment exists"
-  else
-    echo "conda environment not found"
-    # $HOME/miniconda/bin/conda create -y -n "$env_name"
-    # use mambda instead
+  if [[ "$dev" -eq 1 ]]; then
+    echo "overwriting mamba environment"
     micromamba create -y -f "$FILE_CONDA" -n "$env_name"
+    echo "mamba environment created"
+  else
+    micromamba activate $env_name
+    if [[ $? -eq 0 ]]; then
+      echo "mamba environment exists"
+    else
+      echo "mamba environment not found"
+      # $HOME/miniconda/bin/conda create -y -n "$env_name"
+      # use mambda instead
+      micromamba create -y -f "$FILE_CONDA" -n "$env_name"
 
-    echo "conda environment created"
+      echo "mamba environment created"
+    fi
   fi
 
   # 3. activate the environment
   
 
+  # we activate in run.sh now
   #$HOME/miniconda/bin/activate $env_name >/dev/null
-  # or using micromamba
-  #$HOME/.local/bin/micromamba activate $env_name
-  micromamba activate $env_name
+  #micromamba activate $env_name
 
 fi # FILE_CONDA
 
@@ -100,9 +101,10 @@ if ([ -f "$FILE_PYPI" ] && ! [ -f "$FILE_CONDA" ]); then
     .$env_name/bin/pip install -r requirements.txt
   else
     echo "virtual environment exists"
-    source ".$env_name/bin/activate"
+    # we activate in run.sh now
+    #source ".$env_name/bin/activate"
   fi
   
 fi # FILE_PYPI
 
-python3 $HOME/run_remote.py
+#python3 $HOME/run_remote.py
