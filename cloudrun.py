@@ -4,39 +4,21 @@ import cloudrunutils
 import paramiko
 from botocore.exceptions import ClientError
 
-config = {
-    'project'      : 'test' ,                  # this will be concatenated with the hash (if not None) 
-    'dev'          : False ,                   # When True, this will ensure the same instance and dev environement are being used (while working on building up the project) 
-    'debug'        : 1 ,                       # debug level (0...3)
+class CloudRunError(Exception):
+    pass
 
-    # "instance" section
-    'vpc_id'       : 'vpc-0babc28485f6730bc' , # can be None, or even wrong/non-existing - then the default one is used
-    'region'       : 'eu-west-3' ,             # has to be valid
-    'img_id'       : 'ami-077fd75cd229c811b' , # OS image: has to be valid and available for the profile (user/region)
-    'img_username' : 'ubuntu' ,                # the SSH user for the image
-    'min_cpu'      : None ,                    # number of min CPUs (not used yet)
-    'max_cpu'      : None ,                    # number of max CPUs (not used yet)
-    'max_bid'      : None ,                    # max bid ($) (not used yet)
-    'size'         : None ,                    # size (ECO = SPOT , SMALL , MEDIUM , LARGE) (not used yet)
-
-    # "environment" section
-    'env_aptget'   : None ,                    # None, an array of librarires/binaries for apt-get
-    'env_conda'    : "environment_example.yml" ,                    # None, an array of libraries, a path to environment.yml  file, or a path to the root of a conda environment
-    'env_pypi'     : "requirements.txt" ,      # None, an array of libraries, a path to requirements.txt file, or a path to the root of a venv environment 
-
-    # "script"/"command" section
-    'run_script'   : 'run_remote.py' ,         # the script to run (Python (.py) or Julia (.jl) for now)
-    'runcommand'   : None,                     # the command to run (either script_file or command will be used)
-}
+try:
+    configModule = __import__("config")
+    config = configModule.config
+except ModuleNotFoundError as mnfe:
+    print("\n\033[91mYou need to create a config.py file (see 'config.example.py')\033[0m\n")
+    raise CloudRunError() 
 
 cr_keypairName         = 'cloudrun-keypair'
 cr_secGroupName        = 'cloudrun-sec-group-allow-ssh'
 cr_bucketName          = 'cloudrun-bucket'
 cr_instanceNameRoot    = 'cloudrun-instance'
 cr_environmentNameRoot = 'cloudrun-env'
-
-class CloudRunError(Exception):
-    pass
 
 def debug(level,*args):
     if level <= config['debug']:
@@ -488,13 +470,13 @@ if 1==1:
 
     # upload the install file, the env file and the script file
     ftp_client = ssh_client.open_sftp()
-    with open('remote_config.json','w') as cfg_file:
+    with open('remote_files/config.json','w') as cfg_file:
         cfg_file.write(json.dumps(env_obj))
         cfg_file.close()
-        ftp_client.put('remote_config.json','config.json')
-    ftp_client.put('config.py','config.py')
-    ftp_client.put('bootstrap.sh','bootstrap.sh')
-    ftp_client.put('run.sh','run.sh')
+        ftp_client.put('remote_files/config.json','config.json')
+    ftp_client.put('remote_files/config.py','config.py')
+    ftp_client.put('remote_files/bootstrap.sh','bootstrap.sh')
+    ftp_client.put('remote_files/run.sh','run.sh')
     ftp_client.put('run_remote.py','run_remote.py')
     ftp_client.close()
 
