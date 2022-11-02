@@ -4,4 +4,4 @@ aws-creds
 *.pyc
 cloudrun.pem
 remote_files/config.json
-./config.py
+/config.py
