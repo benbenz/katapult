@@ -115,7 +115,7 @@ def compute_environment_object(config):
                 print(pex)
         
         else:
-            print("env_conda is specified but the file or directory doesnt exists")
+            print("\033[93menv_conda is specified but the file or directory doesn't exist\033[0m")
 
 
     if 'env_pypi' in config and config['env_pypi'] is not None:
@@ -153,7 +153,7 @@ def compute_environment_object(config):
                 print(pex)
 
         else:
-            print("env_pypi is specified but the file or directory doesnt exists")
+            print("\033[93menv_pypi is specified but the file or directory doesn't exist\033[0m")
 
 
     return environment_obj      
