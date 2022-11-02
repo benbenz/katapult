@@ -532,11 +532,14 @@ if 1==1:
 
     # run
     commands = [ 
-        "chmod +x "+files_path+"/bootstrap.sh"+ " "+files_path+"/run.sh" ,                     # make bootstrap executable
-        "cd " + files_path + " && python3 "+files_path+"/config.py",                                                    # recreate pip+conda files according to config
-#        "bash -l -c /home/ubuntu/bootstrap.sh " + env_obj['name'],
-        files_path+"/bootstrap.sh \"" + env_obj['name'] + "\" " + ("1" if config['dev'] else "0") ,  # setup envs according to current config files state
-        files_path+"/run.sh \"" + env_obj['name'] + "\" \""+script_command+"\""                      # execute main script (spawn)
+        # make bootstrap executable
+        "chmod +x "+files_path+"/bootstrap.sh"+" "+files_path+"/run.sh" ,                              
+        # recreate pip+conda files according to config
+        "cd " + files_path + " && python3 "+files_path+"/config.py",
+        # setup envs according to current config files state
+        files_path+"/bootstrap.sh \"" + env_obj['name'] + "\" " + ("1" if config['dev'] else "0") ,  
+        # execute main script (spawn)
+        files_path+"/run.sh \"" + env_obj['name'] + "\" \""+script_command+"\""                      
     ]
     for command in commands:
         debug(1,"Executing ",format( command ) )
