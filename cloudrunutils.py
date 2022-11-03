@@ -2,8 +2,10 @@ import hashlib , os , subprocess , json
 import jcs , yaml
 from os import path
 
-
-cr_instance_keys       = [ 'vpc_id' , 'region'  , 'img_id' , 'min_cpu' , 'max_cpu' , 'size' ] 
+# keys used for hash computation
+# Note: we include market options (SPOT ON/OFF e.g.) for the instance because it defines how the 'hardware' will run 
+#       so it's considered part of the intrinsic characteristics of the machine
+cr_instance_keys       = [ 'cloud_id' , 'region'  , 'img_id' , 'size' , 'cpus' , 'gpu' , 'eco' , 'max_bid' ] 
 cr_environment_keys    = [ 'env_pypi' , 'env_conda' , 'env_apt-get' ]
 
 def compute_instance_hash(config):
@@ -163,3 +165,34 @@ def compute_environment_hash(env_obj):
     env_json_canon = jcs.canonicalize(onv_obj_canon)
     hash = hashlib.md5(env_json_canon).hexdigest()
     return hash[0:12]
+
+def compute_script_hash(config):
+    script_to_hash = ''
+    if 'run_script' in config and config['run_script'] is not None:
+        script_to_hash = 'script:' + config['run_script']
+    elif 'run_command' in config and config['run_command']:
+        script_to_hash = 'command:' + config['run_command']
+    else:
+        script_to_hash = 'unknown'
+
+    hash = hashlib.md5(script_to_hash.encode()).hexdigest()
+    return hash[0:12]
+
+def compute_script_command(run_dir,config):
+    script_command = ''
+    if 'run_script' in config and config['run_script'] is not None:
+        filename = os.path.basename(config['run_script'])
+        file_ext = os.path.splitext(filename)[1]
+        if file_ext == '.py' or file_ext == '.PY':
+            script_command = "python3 " + run_dir + '/' + filename
+        elif file_ext == '.jl' or file_ext == '.JL':
+            script_command = "julia " + run_dir + '/' + filename 
+        else:
+            script_command = "echo 'SCRIPT NOT HANDLED'"
+    elif 'run_command' in config and config['run_command']:
+        script_command = './' + run_dir + '/' + config['run_command']
+    else:
+        script_command = "echo 'NO SCRIPT DEFINED'" 
+
+    return script_command 
+

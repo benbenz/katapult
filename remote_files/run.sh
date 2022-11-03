@@ -8,6 +8,9 @@ if (( $# < 2 )); then
 else
   env_name="$1"; shift
   thecommand="$1"; shift
+  input_file="$1"; shift
+  output_file="$1"; shift
+  run_hash="$1"; shift
 fi
 
 FILE_CONDA="$HOME/run/$env_name/environment.yml"
@@ -26,7 +29,7 @@ if ([ -f "$FILE_PYPI" ] && ! [ -f "$FILE_CONDA" ]); then
     source ".$env_name/bin/activate"
 fi
 
-cd "$HOME/run/$env_name"
+cd "$HOME/run/$env_name/$run_hash"
 #eval "nohup $thecommand >/dev/null 2>&1 &"
 #eval "$thecommand >/dev/null 2>&1 &"
 #eval "$thecommand"
