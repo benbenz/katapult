@@ -1,38 +1,20 @@
 import cloudrun_aws as craws
-import asyncio
 
 class CloudRunError(Exception):
     pass
 
-try:
-    configModule = __import__("config")
-    config = configModule.config
-except ModuleNotFoundError as mnfe:
-    print("\n\033[91mYou need to create a config.py file (see 'config.example.py')\033[0m\n")
-    raise mfe
 
-config['service'] = 'aws'
+def get_client(provider):
 
-async def mainloop(config):
+    if provider == 'aws':
 
-    if config['service'] == 'aws':
-        # set the debug level for AWS module
-        craws.set_debug_level(config['debug'])
+        return craws
 
-        print("\n== START ==\n")
+    else:
 
-        # create the instance
-        craws.start(config)
-
-        print("\n== RUN ==\n")
-        
-        # run the script
-        await craws.run(config) 
-
-    elif config['service'] == 'azure':
-        # not implemented yet
-        print("\n\nAZURE implementation not done yet\n\n")
+        print(config['service'], " not implemented yet")
         raise CloudRunError()
 
-# run main loop
-asyncio.run( mainloop(config) )
+
+def set_debug_level(value):
+    craws.set_debug_level(value)

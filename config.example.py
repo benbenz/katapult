@@ -5,6 +5,9 @@ config = {
     'dev'          : False ,                      # When True, this will ensure the same instance and dev environement are being used (while working on building up the project) 
     'debug'        : 1 ,                          # debug level (0...3)
 
+    # "provider"
+    'provider'     : 'aws' ,                      # the provider name ('aws' | 'azure' | ...)
+
     # "instance" section
     'cloud_id'     : 'vpc-0babc28485f6730bc' ,    # can be None, or even wrong/non-existing - then the default one is used
     'region'       : 'eu-west-3' ,                # has to be valid
