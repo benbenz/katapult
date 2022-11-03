@@ -1,5 +1,6 @@
 import hashlib , os , subprocess , json
 import jcs , yaml
+import uuid
 from os import path
 
 # keys used for hash computation
@@ -177,6 +178,9 @@ def compute_script_hash(config):
 
     hash = hashlib.md5(script_to_hash.encode()).hexdigest()
     return hash[0:12]
+
+def generate_unique_filename():
+    return str(uuid.uuid4())
 
 def compute_script_command(run_dir,config):
     script_command = ''

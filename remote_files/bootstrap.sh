@@ -16,6 +16,8 @@ FILE_CONDA="$HOME/run/$env_name/environment.yml"
 FILE_PYPI="$HOME/run/$env_name/requirements.txt"
 FILE_APTGET="$HOME/run/$env_name/aptget.sh"
 
+echo "bootstraping" > "$HOME/run/$env_name/state"
+
 if [ -f "$FILE_APTGET" ]; then
   $FILE_APTGET
 fi
@@ -111,5 +113,7 @@ if ([ -f "$FILE_PYPI" ] && ! [ -f "$FILE_CONDA" ]); then
   fi
   
 fi # FILE_PYPI
+
+echo "bootstraped" > "$HOME/run/$env_name/state"
 
 #python3 $HOME/run_remote.py

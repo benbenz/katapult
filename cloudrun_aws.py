@@ -1,6 +1,7 @@
 import boto3
 import os , json
 import cloudrunutils
+from cloudruncore import CloudRunError , CloudRunCommandState
 import paramiko
 from botocore.exceptions import ClientError
 from datetime import datetime , timedelta
@@ -14,9 +15,6 @@ cr_instanceNameRoot    = 'cloudrun-instance'
 cr_environmentNameRoot = 'cloudrun-env'
 
 DBG_LVL = 1
-
-class CloudRunAWSError(Exception):
-    pass
 
 def debug(level,*args):
     if level <= DBG_LVL:
@@ -42,7 +40,7 @@ def create_keypair(config):
             debug(1,"The account is not authorized to create a keypair, please specify an existing keypair in the configuration or add Administrator privileges to the account")
             keypair = None
             #sys.exit()
-            raise CloudRunAWSError()
+            raise CloudRunError()
 
         elif 'DryRunOperation' in errmsg: # we are good with credentials
             try :
@@ -69,14 +67,14 @@ def create_keypair(config):
                     debug(1,"An unknown error occured while retrieving the KeyPair")
                     debug(2,errmsg2)
                     #sys.exit()
-                    raise CloudRunAWSError()
+                    raise CloudRunError()
 
         
         else:
             debug(1,"An unknown error occured while creating the KeyPair")
             debug(2,errmsg)
             #sys.exit()
-            raise CloudRunAWSError()
+            raise CloudRunError()
     
     return keypair 
 
@@ -166,7 +164,7 @@ def create_security_group(config,vpc):
     if secGroup is None:
         debug(1,"An unknown error occured while creating the security group")
         #sys.exit()
-        raise CloudRunAWSError()
+        raise CloudRunError()
     
     debug(2,secGroup) 
 
@@ -365,17 +363,26 @@ def create_instance(config,vpc,subnet,secGroup):
 
     return instances["Instances"][0] , created
 
-def start_instance(instance):
+def start_instance(config,instance):
     ec2_client = boto3.client("ec2", region_name=config['region'])
 
-    ec2_client.start_instances(InstanceIds=[instance['InstanceId']])
+    try:
+        ec2_client.start_instances(InstanceIds=[instance['InstanceId']])
+    except botocore.exceptions.ClientError as botoerr:
+        errmsg = str(botoerr)
+        if 'IncorrectSpotRequestState' in errmsg:
+            print("Could not start because it is a SPOT instance, waiting on SPOT Request")
+            pass # I guess SPOT Will start it ? 
+        else:
+            print(botoerr)
+            raise CloudRunError()
 
-def stop_instance(instance):
+def stop_instance(config,instance):
     ec2_client = boto3.client("ec2", region_name=config['region'])
 
     ec2_client.stop_instances(InstanceIds=[instance['InstanceId']])
 
-def terminate_instance(instance):
+def terminate_instance(config,instance):
 
     ec2_client = boto3.client("ec2", region_name=config['region'])
 
@@ -468,7 +475,59 @@ def init_environment(conf):
     # the file needs to be absolute
     env_obj = cloudrunutils.update_requirements_path(env_obj,env_obj['path_abs'])
 
-    return env_obj             
+    return env_obj  
+
+async def wait_for_instance(config,instance):
+    # get the public DNS info when instance actually started (todo: check actual state)
+    waitFor = True
+    while waitFor:
+        updated_instance_info = get_instance_info(config,instance)
+        lookForDNS   = not 'PublicDnsName' in updated_instance_info or updated_instance_info['PublicDnsName'] is None
+        instanceState =  updated_instance_info['State']['Name']
+
+        lookForState = True
+        # 'pending'|'running'|'shutting-down'|'terminated'|'stopping'|'stopped'
+        if instanceState == 'stopped' or instanceState == 'stopping':
+            # restart the instance
+            start_instance(config,instance)
+
+        elif instanceState == 'running':
+            lookForState = False
+
+        waitFor = lookForDNS or lookForState  
+        if waitFor:
+            if lookForDNS:
+                debug(1,"waiting for DNS address and  state ...",instanceState)
+            else:
+                debug(1,"waiting for state ...",instanceState)
+            
+            await asyncio.sleep(10)
+
+    return updated_instance_info
+
+async def connect_to_instance(config,instance):
+    # ssh into instance and run the script from S3/local? (or sftp)
+    k = paramiko.RSAKey.from_private_key_file('cloudrun.pem')
+    ssh_client = paramiko.SSHClient()
+    ssh_client.set_missing_host_key_policy(paramiko.AutoAddPolicy())
+    debug(1,"connecting to ",instance['PublicDnsName'],"/",instance['PublicIpAddress'])
+    while True:
+        try:
+            ssh_client.connect(hostname=instance['PublicDnsName'],username=config['img_username'],pkey=k) #,password=’mypassword’)
+            break
+        except paramiko.ssh_exception.NoValidConnectionsError as cexc:
+            print(cexc)
+            await asyncio.sleep(4)
+            debug(1,"Retrying ...")
+        except OSError as ose:
+            print(ose)
+            await asyncio.sleep(4)
+            debug(1,"Retrying ...")
+
+    debug(1,"connected")    
+
+    return ssh_client
+
 
 def line_buffered(f):
     line_buf = ""
@@ -492,6 +551,10 @@ def line_buffered(f):
 
 def set_debug_level(value):
     DBG_LVL = value
+
+def get_instance(config):
+
+    return find_instance(config)
 
 def start(config):
 
@@ -518,35 +581,12 @@ async def run(config):
 
     if (not 'input_file' in config) or (not 'output_file' in config) or not isinstance(config['input_file'],str) or not isinstance(config['output_file'],str):
         print("\n\nConfiguration requires an input and output file names\n\n")
-        raise CloudRunAWSError() 
+        raise CloudRunError() 
 
     # CHECK EVERY TIME !
     instance , created = start(config)
 
-    # get the public DNS info when instance actually started (todo: check actual state)
-    waitFor = True
-    while waitFor:
-        updated_instance_info = get_instance_info(config,instance)
-        lookForDNS   = not 'PublicDnsName' in updated_instance_info or updated_instance_info['PublicDnsName'] is None
-        instanceState =  updated_instance_info['State']['Name']
-
-        lookForState = True
-        # 'pending'|'running'|'shutting-down'|'terminated'|'stopping'|'stopped'
-        if instanceState == 'stopped' or instanceState == 'stopping':
-            # restart the instance
-            start_instance(instance)
-
-        elif instanceState == 'running':
-            lookForState = False
-
-        waitFor = lookForDNS or lookForState  
-        if waitFor:
-            if lookForDNS:
-                debug(1,"waiting for DNS address and  state ...",instanceState)
-            else:
-                debug(1,"waiting for state ...",instanceState)
-            
-            await asyncio.sleep(10)
+    updated_instance_info = await wait_for_instance(config,instance)
 
     debug(2,updated_instance_info)    
 
@@ -554,25 +594,7 @@ async def run(config):
     env_obj = init_environment(config)
     debug(2,json.dumps(env_obj))
 
-    # ssh into instance and run the script from S3/local? (or sftp)
-    k = paramiko.RSAKey.from_private_key_file('cloudrun.pem')
-    ssh_client = paramiko.SSHClient()
-    ssh_client.set_missing_host_key_policy(paramiko.AutoAddPolicy())
-    debug(1,"connecting to ",updated_instance_info['PublicDnsName'],"/",updated_instance_info['PublicIpAddress'])
-    while True:
-        try:
-            ssh_client.connect(hostname=updated_instance_info['PublicDnsName'],username=config['img_username'],pkey=k) #,password=’mypassword’)
-            break
-        except paramiko.ssh_exception.NoValidConnectionsError as cexc:
-            print(cexc)
-            await asyncio.sleep(4)
-            debug(1,"Retrying ...")
-        except OSError as ose:
-            print(ose)
-            await asyncio.sleep(4)
-            debug(1,"Retrying ...")
-
-    debug(1,"connected")
+    ssh_client = await connect_to_instance(config,updated_instance_info)
 
     files_path = env_obj['path']
 
@@ -603,6 +625,8 @@ async def run(config):
     ftp_client.put('remote_files/config.py','config.py')
     ftp_client.put('remote_files/bootstrap.sh','bootstrap.sh')
     ftp_client.put('remote_files/run.sh','run.sh')
+    ftp_client.put('remote_files/microrun.sh','microrun.sh')
+    ftp_client.put('remote_files/state.sh','state.sh')
     
     # change to run dir
     ftp_client.chdir(run_path)
@@ -630,16 +654,19 @@ async def run(config):
         debug(2, "Errors")
         debug(2,stderr.read())
 
+    # generate unique PID file
+    uid = cloudrunutils.generate_unique_filename() + ".pid"
+    pid_file = run_path + "/" + uid
     # run
     commands = [ 
         # make bootstrap executable
-        { 'cmd': "chmod +x "+files_path+"/bootstrap.sh"+" "+files_path+"/run.sh" , 'out' : True },  
+        { 'cmd': "chmod +x "+files_path+"/bootstrap.sh "+files_path+"/run.sh " +files_path+"/microrun.sh "+files_path+"/state.sh" , 'out' : True },  
         # recreate pip+conda files according to config
         { 'cmd': "cd " + files_path + " && python3 "+files_path+"/config.py" , 'out' : True },
         # setup envs according to current config files state
         { 'cmd': files_path+"/bootstrap.sh \"" + env_obj['name'] + "\" " + ("1" if config['dev'] else "0") , 'out': True },  
         # execute main script (spawn)
-        { 'cmd': files_path+"/run.sh \"" + env_obj['name'] + "\" \""+script_command+"\" " + config['input_file'] + " " + config['output_file']+" "+run_hash, 'out' : False }                    
+        { 'cmd': files_path+"/run.sh \"" + env_obj['name'] + "\" \""+script_command+"\" " + config['input_file'] + " " + config['output_file']+" "+run_hash+" "+pid_file, 'out' : False }
     ]
     for command in commands:
         debug(1,"Executing ",format( command['cmd'] ) )
@@ -654,16 +681,74 @@ async def run(config):
                 debug(dbglvl,"Errors")
                 debug(dbglvl,errmsg)
             else:
-                pid = int(stdout.read().strip().decode("utf-8"))
-                print("PID =",pid)
+                pass
+                #stdout.read()
+                #pid = int(stdout.read().strip().decode("utf-8"))
         except paramiko.ssh_exception.SSHException as sshe:
             print("The SSH Client has been disconnected!")
             print(sshe)
-            # TODO: handle re-trys etc.... 
+            raise CloudRunError()
+
+    # retrieve PID
+    # TODO: fix this - it could cause issues with concurrent calls on same run_hash ... ?
+    # it was better to get the stdout (see line above)
+    await asyncio.sleep(0.5)
+
+    getpid_cmd = "tail "+pid_file #+" && cp "+pid_file+ " "+run_path+"/pid && rm -f "+pid_file
+    debug(1,"Executing ",format( getpid_cmd ) )
+    stdin , stdout, stderr = ssh_client.exec_command(getpid_cmd)
+    pid = int(stdout.readline().strip())
+
+    try:
+        getpid_cmd = "tail "+pid_file + "2" #+" && cp "+pid_file+ " "+run_path+"/pid && rm -f "+pid_file
+        debug(1,"Executing ",format( getpid_cmd ) )
+        stdin , stdout, stderr = ssh_client.exec_command(getpid_cmd)
+        pid2 = int(stdout.readline().strip())
+    except:
+        pid2 = 0 
 
     ssh_client.close()
+
+    print("RUN_HASH =",run_hash,", PID =",pid, ", PID2 =",pid2)
 
     # make sure we stop the instance to avoid charges !
     #stop_instance(instance)
 
     return instance , run_hash , pid    
+
+
+# this allow any external process to wait for a specific job
+async def get_command_state( config , run_hash , pid ):
+
+    instance = cr_client.get_instance(config)
+
+    if instance is None:
+        print("get_command_state: instance is not available!")
+        return CloudRunCommandState.UNKNOWN
+
+    updated_instance_info = await wait_for_instance(config,instance)
+
+    env_obj    = init_environment(config)
+    files_path = env_obj['path']
+
+    ssh_client = await connect_to_instance(config,updated_instance_info)
+
+    stdin, stdout, stderr = ssh_client.exec_command(files_path + "/state.sh " + env_obj['name'] + " " + run_hash + " " + pid + " " + config['output_file'])
+
+    statestr = stdout.read().decode("utf-8").strip()
+
+    try:
+        state = CloudRunCommandState[statestr.upper()]
+    except:
+        print("\nUnhandled state received by state.sh!!!\n")
+        state = CloudRunCommandState.UNKNOWN
+
+    ssh_client.close()
+
+    return state
+
+
+async def tail( instance , run_hash ):
+
+    pass
+
