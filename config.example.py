@@ -13,7 +13,7 @@ config = {
     'size'         : 't2.micro' ,                 # proprietary size spec (has to be valid)
     'cpus'         : None ,                       # number of CPU cores
     'gpu'          : None ,                       # the proprietary type of the GPU 
-    'eco'          : True ,                      # eco == True >> SPOT e.g.
+    'eco'          : True ,                       # eco == True >> SPOT e.g.
     'eco_life'     : timedelta(days=30) ,         # lifecycle of the machine in ECO mode (timedelta) (can be None with eco = True)
     'max_bid'      : None ,                       # max bid ($/hour) (can be None with eco = True)
 
