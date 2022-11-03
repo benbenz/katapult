@@ -669,7 +669,7 @@ async def run(config):
         { 'cmd': files_path+"/run.sh \"" + env_obj['name'] + "\" \""+script_command+"\" " + config['input_file'] + " " + config['output_file']+" "+run_hash+" "+pid_file, 'out' : False }
     ]
     for command in commands:
-        debug(1,"Executing ",format( command['cmd'] ) )
+        debug(1,"Executing ",format( command['cmd'] ),"output",command['out'])
         try:
             stdin , stdout, stderr = ssh_client.exec_command(command['cmd'])
             #print(stdout.read())
@@ -692,24 +692,24 @@ async def run(config):
     # retrieve PID
     # TODO: fix this - it could cause issues with concurrent calls on same run_hash ... ?
     # it was better to get the stdout (see line above)
-    await asyncio.sleep(0.5)
+    #await asyncio.sleep(0.5)
 
-    getpid_cmd = "tail "+pid_file #+" && cp "+pid_file+ " "+run_path+"/pid && rm -f "+pid_file
+    getpid_cmd = "tail "+pid_file +" && cp "+pid_file+ " "+run_path+"/pid" # && rm -f "+pid_file
     debug(1,"Executing ",format( getpid_cmd ) )
     stdin , stdout, stderr = ssh_client.exec_command(getpid_cmd)
     pid = int(stdout.readline().strip())
 
-    try:
-        getpid_cmd = "tail "+pid_file + "2" #+" && cp "+pid_file+ " "+run_path+"/pid && rm -f "+pid_file
-        debug(1,"Executing ",format( getpid_cmd ) )
-        stdin , stdout, stderr = ssh_client.exec_command(getpid_cmd)
-        pid2 = int(stdout.readline().strip())
-    except:
-        pid2 = 0 
+    # try:
+    #     getpid_cmd = "tail "+pid_file + "2" #+" && cp "+pid_file+ " "+run_path+"/pid && rm -f "+pid_file
+    #     debug(1,"Executing ",format( getpid_cmd ) )
+    #     stdin , stdout, stderr = ssh_client.exec_command(getpid_cmd)
+    #     pid2 = int(stdout.readline().strip())
+    # except:
+    #     pid2 = 0 
 
     ssh_client.close()
 
-    print("RUN_HASH =",run_hash,", PID =",pid, ", PID2 =",pid2)
+    print("RUN_HASH =",run_hash,", PID =",pid) #, ", PID2 =",pid2)
 
     # make sure we stop the instance to avoid charges !
     #stop_instance(instance)
