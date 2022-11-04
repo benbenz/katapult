@@ -12,9 +12,13 @@ python -m pip install -r requirements.txt
 
 ## Usage / Test runs
 
-First, write your config file (see exmaple/config.example.py)
-
 ```bash
+# copy the example file
+cp example/config.example.py config.py
+#
+# EDIT THE FILE
+#
+
 # to run
 python3 app.py
 
