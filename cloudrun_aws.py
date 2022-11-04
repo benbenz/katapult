@@ -360,6 +360,15 @@ def create_instance(config,vpc,subnet,secGroup):
 
     return instances["Instances"][0] , created
 
+def create_instance_objects(config):
+    keypair  = create_keypair(config)
+    vpc      = create_vpc(config) 
+    secGroup = create_security_group(config,vpc)
+    subnet   = create_subnet(config,vpc) 
+    instance , created = create_instance(config,vpc,subnet,secGroup)
+    return instance , created 
+
+
 def start_instance(config,instance):
     ec2_client = boto3.client("ec2", region_name=config['region'])
 
@@ -368,11 +377,19 @@ def start_instance(config,instance):
     except ClientError as botoerr:
         errmsg = str(botoerr)
         if 'IncorrectSpotRequestState' in errmsg:
-            print("Could not start because it is a SPOT instance, waiting on SPOT ...")
+            debug(1,"Could not start because it is a SPOT instance, waiting on SPOT ...",errmsg)
             # try reboot
-            # ec2_client.reboot_instances(InstanceIds=[instance['InstanceId']])
+            try:
+                ec2_client.reboot_instances(InstanceIds=[instance['InstanceId']])
+            except ClientError as botoerr2:
+                errmsg2 = str(botoerr2)
+                if 'IncorrectSpotRequestState' in errmsg2:
+                    debug(1,"Could not reboot instance because of SPOT ... ",errmsg2)
+                    raise CloudRunError()
+                    # terminate_instance(config,instance)
+                
         else:
-            print(botoerr)
+            debug(2,botoerr)
             raise CloudRunError()
 
 def stop_instance(config,instance):
@@ -458,8 +475,12 @@ async def wait_for_instance(config,instance):
         lookForState = True
         # 'pending'|'running'|'shutting-down'|'terminated'|'stopping'|'stopped'
         if instanceState == 'stopped' or instanceState == 'stopping':
-            # restart the instance
-            start_instance(config,instance)
+            try:
+                # restart the instance
+                start_instance(config,instance)
+            except CloudRunError:
+                terminate_instance(config,instance)
+                create_instance_objects(config)
 
         elif instanceState == 'running':
             lookForState = False
@@ -501,17 +522,21 @@ async def connect_to_instance(config,instance):
 
 def line_buffered(f):
     line_buf = ""
+    doContinue = True
     try :
-        while not f.channel.exit_status_ready():
+        while doContinue and not f.channel.exit_status_ready():
             try:
                 line_buf += f.read(16).decode("utf-8")
                 if line_buf.endswith('\n'):
                     yield line_buf
                     line_buf = ''
-            except:
-                pass
-    except:
-        pass
+            except Exception as e:
+                errmsg = str(e)
+                debug(1,"error (1) while buffering line",errmsg)
+                #doContinue = False
+    except Exception as e0:
+        debug(1,"error (2) while buffering line",str(e0))
+        #doContinue = False
 
 ##########
 # PUBLIC #
@@ -533,11 +558,7 @@ class AWSCloudRunProvider(CloudRunProvider):
         instance = find_instance(self.config)
 
         if instance is None:
-            keypair  = create_keypair(self.config)
-            vpc      = create_vpc(self.config) 
-            secGroup = create_security_group(self.config,vpc)
-            subnet   = create_subnet(self.config,vpc) 
-            instance , created = create_instance(self.config,vpc,subnet,secGroup)
+            instance , created = create_instance_objects(self.config)
         else:
             created = False
 
@@ -599,6 +620,7 @@ class AWSCloudRunProvider(CloudRunProvider):
         ftp_client.put('remote_files/run.sh','run.sh')
         ftp_client.put('remote_files/microrun.sh','microrun.sh')
         ftp_client.put('remote_files/state.sh','state.sh')
+        ftp_client.put('remote_files/tail.sh','tail.sh')
         
         # change to run dir
         ftp_client.chdir(run_path)
@@ -631,7 +653,7 @@ class AWSCloudRunProvider(CloudRunProvider):
         # run
         commands = [ 
             # make bootstrap executable
-            { 'cmd': "chmod +x "+files_path+"/bootstrap.sh "+files_path+"/run.sh " +files_path+"/microrun.sh "+files_path+"/state.sh" , 'out' : True },  
+            { 'cmd': "chmod +x "+files_path+"/bootstrap.sh "+files_path+"/run.sh " +files_path+"/microrun.sh "+files_path+"/state.sh "+files_path+"/tail.sh " , 'out' : True },  
             # recreate pip+conda files according to config
             { 'cmd': "cd " + files_path + " && python3 "+files_path+"/config.py" , 'out' : True },
             # setup envs according to current config files state
@@ -647,6 +669,7 @@ class AWSCloudRunProvider(CloudRunProvider):
                 if command['out']:
                     for l in line_buffered(stdout):
                         debug(1,l)
+
                     errmsg = stderr.read()
                     dbglvl = 1 if errmsg else 2
                     debug(dbglvl,"Errors")
@@ -756,7 +779,45 @@ class AWSCloudRunProvider(CloudRunProvider):
 
         return state
 
+    def _tail_execute_command(self,ssh,files_path,uid,line_num):
+        run_log = files_path + '/' + uid + '-run.log'
+        command = "cat -n %s | tail --lines=+%d" % (run_log, line_num)
+        stdin, stdout_i, stderr = ssh.exec_command(command)
+        #stderr = stderr.read()
+        #if stderr:
+        #    print(stderr)
+        return stdout_i.readlines()    
+
+    def _tail_get_last_line_number(self,lines_i, line_num):
+        return int(lines_i[-1].split('\t')[0]) + 1 if lines_i else line_num            
+
 
     async def tail( self, script_hash , uid , pid = None ):    
-        pass
+        instance = self.get_instance()
 
+        if instance is None:
+            print("tail: instance is not available!")
+
+        updated_instance_info = await wait_for_instance(self.config,instance)
+
+        env_obj    = self.init_environment()
+        files_path = env_obj['path']
+
+        ssh_client = await connect_to_instance(self.config,updated_instance_info)
+
+        cmd = files_path + "/tail.sh " + env_obj['name'] + " " + str(script_hash) + " " + str(uid) 
+        debug(1,"Executing command",cmd)
+        stdin, stdout, stderr = ssh_client.exec_command(cmd)
+        return line_buffered(stdout) 
+
+        # https://stackoverflow.com/questions/17137859/paramiko-read-from-standard-output-of-remotely-executed-command
+        # https://stackoverflow.com/questions/7680055/python-to-emulate-remote-tail-f
+
+        # lines = self._tail_execute_command(ssh_client,files_path,uid,0)
+        # last_line_num = self._tail_get_last_line_number(lines, 0)
+        # while True:
+        #     for l in lines:
+        #         yield l #'\t'.join(t.replace('\n', '') for t in l.split('\t')[1:]) 
+        #     last_line_num = self._tail_get_last_line_number(lines, last_line_num)
+        #     lines = self._tail_execute_command(ssh_client,files_path,uid,last_line_num)
+        #     await asyncio.sleep(1)

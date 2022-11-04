@@ -15,6 +15,9 @@ if command=="wait" and len(sys.argv)<4:
 elif command=="getstate" and len(sys.argv)<4:
     print("USAGE: python3 cli.py getstate SCRIPT_HASH UID")
     sys.exit()
+elif command=="getstate" and len(sys.argv)<4:
+    print("USAGE: python3 cli.py tail SCRIPT_HASH UID")
+    sys.exit()
 
 try:
     configModule = __import__("config")
@@ -26,9 +29,17 @@ except ModuleNotFoundError as mnfe:
 # get client 
 cr_client = cr.get_client(config)
 
+async def tail_loop(script_hash,uid):
+
+    generator = await cr_client.tail(script_hash,uid) 
+    for line in generator:
+        print(line)
+
 if command=="wait":
     # run main loop
     asyncio.run( cr_client.wait_for_script_state(CloudRunCommandState.DONE|CloudRunCommandState.ABORTED,sys.argv[2],sys.argv[3]))
 elif command=="getstate":
     asyncio.run( cr_client.get_script_state(sys.argv[2],sys.argv[3]) )
+elif command=="tail":
+    asyncio.run( tail_loop(sys.argv[2],sys.argv[3]) )
 

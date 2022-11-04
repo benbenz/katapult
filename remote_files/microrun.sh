@@ -15,4 +15,6 @@ cd $run_path
 
 echo 'running' > $run_path/$uid-state
 
-{ $thecommand >run.log && echo "done" > $run_path/$uid-state && cp "$out_file" "$uid-$out_file" 2>/dev/null; }
+# { $thecommand >$uid-run.log && echo "done" > $run_path/$uid-state && cp "$out_file" "$uid-$out_file" 2>/dev/null; }
+
+{ $thecommand >$uid-run.log && echo "done" > $run_path/$uid-state && cp "$out_file" "$uid-$out_file" 2>/dev/null; }

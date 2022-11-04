@@ -11,6 +11,14 @@ except ModuleNotFoundError as mnfe:
 
 cr_client = cr.get_client(config)
 
+async def tail_loop(script_hash,uid):
+
+    generator = await cr_client.tail(script_hash,uid) 
+    #print('\n\n\nwe are here\n\n\n')
+    for line in generator:
+        print(line)
+
+
 async def mainloop():
 
     print("\n== START ==\n")
@@ -27,6 +35,12 @@ async def mainloop():
 
     print("Waiting for DONE or ABORTED ...")
     await cr_client.wait_for_script_state(CloudRunCommandState.DONE|CloudRunCommandState.ABORTED,script_hash,uid)
+
+    # print("\n== WAIT and TAIL ==\n")
+
+    # task1 = asyncio.create_task(cr_client.wait_for_script_state(CloudRunCommandState.DONE|CloudRunCommandState.ABORTED,script_hash,uid))
+    # task2 = asyncio.create_task(tail_loop(script_hash,uid))
+    # await asyncio.gather(task1,task2)
 
     print("\n== DONE ==\n")
 

@@ -1,7 +1,7 @@
 #!/usr/bin/bash
 
 if (( $# < 4 )); then
-    echo "$0 ENV_NAME UID PID script_hash OUT_FILE"
+    echo "$0 ENV_NAME SCRIPT_HASH UID PID OUT_FILE"
     exit 0
 else
     env_name="$1"; shift

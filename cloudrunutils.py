@@ -188,7 +188,8 @@ def compute_script_command(run_dir,config):
         filename = os.path.basename(config['run_script'])
         file_ext = os.path.splitext(filename)[1]
         if file_ext == '.py' or file_ext == '.PY':
-            script_command = "python3 " + run_dir + '/' + filename
+            # -u is to skip stdout buffering (used by tail function)
+            script_command = "python3 -u " + run_dir + '/' + filename
         elif file_ext == '.jl' or file_ext == '.JL':
             script_command = "julia " + run_dir + '/' + filename 
         else:
