@@ -1,12 +1,13 @@
 #!/usr/bin/bash
 
-if (( $# < 2 )); then
-    echo "$0 ENV_NAME RUN_HASH PID"
+if (( $# < 4 )); then
+    echo "$0 ENV_NAME UID PID RUN_HASH OUT_FILE"
     exit 0
 else
     env_name="$1"; shift
-    run_hash="$1"; shift
+    uid=$1; shift
     pid=$1; shift
+    run_hash="$1"; shift
     out_file="$1"; shift
 fi
 
@@ -33,7 +34,7 @@ if [ -f state ]; then
     fi
     # if state is done but we dont have the out file, this is probably aborted?
     if [[ $(< state) == "done" ]]; then
-        if ! [ -f $out_file ];then
+        if ! [ -f $out_file ]; then
             echo "aborted_q" # "aborted?" _q for question
             exit
         fi
@@ -48,8 +49,8 @@ if [ -f ../state ]; then
         echo "idle"
         exit
     elif [[ $(< ../state) == "bootstraped" ]]; then
-        # the environment is bootstraped but we can't find the state file nor the process in memory ...
-        if [ -f $out_file ];then
+        # the environment is bootstraped but we cdont have state file nor the process in memory ...
+        if [ -f $out_file ]; then
             echo "done"
             exit
         else

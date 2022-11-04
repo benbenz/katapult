@@ -1,7 +1,7 @@
 import boto3
 import os , json
 import cloudrunutils
-from cloudruncore import CloudRunError , CloudRunCommandState
+from cloudrun import CloudRunError , CloudRunCommandState , CloudRunProvider
 import paramiko
 from botocore.exceptions import ClientError
 from datetime import datetime , timedelta
@@ -183,7 +183,7 @@ def create_subnet(config,vpc):
         return subnet
     return None # todo: create a subnet
 
-def create_bucket():
+def create_bucket(config):
 
     debug(1,"Creating BUCKET ...")
 
@@ -262,6 +262,8 @@ def find_instance(config):
         return instance 
     
     else:
+
+        debug(1,"not found")
 
         return None 
 
@@ -543,212 +545,210 @@ def line_buffered(f):
     except:
         pass
 
-####################
-#                  #
-# PUBLIC FUNCTIONS #
-#                  #
-####################
+##########
+# PUBLIC #
+##########
 
-def set_debug_level(value):
-    DBG_LVL = value
+class AWSCloudRunProvider(CloudRunProvider):
 
-def get_instance(config):
+    def __init__(self, conf):
+        CloudRunProvider.__init__(self,conf)
+        if 'debug' in conf:
+            DBG_LVL = conf['debug']
 
-    return find_instance(config)
+    def get_instance(self):
 
-def start(config):
+        return find_instance(self.config)
 
-    instance = find_instance(config)
+    def start_instance(self):
 
-    if instance is None:
-        keypair  = create_keypair(config)
-        vpc      = create_vpc(config) 
-        secGroup = create_security_group(config,vpc)
-        subnet   = create_subnet(config,vpc) 
-        instance , created = create_instance(config,vpc,subnet,secGroup)
-    else:
-        created = False
+        instance = find_instance(self.config)
 
-    return instance , created
+        if instance is None:
+            keypair  = create_keypair(self.config)
+            vpc      = create_vpc(self.config) 
+            secGroup = create_security_group(self.config,vpc)
+            subnet   = create_subnet(self.config,vpc) 
+            instance , created = create_instance(self.config,vpc,subnet,secGroup)
+        else:
+            created = False
 
-def stop(instance):
-    stop_instance(instance)
+        return instance , created
 
-def terminate(instance):
-    terminate_instance(instance)
+    def stop_instance(self):
+        stop_instance(self.get_instance())
 
-async def run(config):
+    def terminate_instance(self):
+        terminate_instance(self.get_instance())
 
-    if (not 'input_file' in config) or (not 'output_file' in config) or not isinstance(config['input_file'],str) or not isinstance(config['output_file'],str):
-        print("\n\nConfiguration requires an input and output file names\n\n")
-        raise CloudRunError() 
+    async def run_script(self):
 
-    # CHECK EVERY TIME !
-    instance , created = start(config)
+        if (not 'input_file' in self.config) or (not 'output_file' in self.config) or not isinstance(self.config['input_file'],str) or not isinstance(self.config['output_file'],str):
+            print("\n\nConfiguration requires an input and output file names\n\n")
+            raise CloudRunError() 
 
-    updated_instance_info = await wait_for_instance(config,instance)
+        # CHECK EVERY TIME !
+        instance , created = self.start_instance()
 
-    debug(2,updated_instance_info)    
+        updated_instance_info = await wait_for_instance(self.config,instance)
 
-    # init environment object
-    env_obj = init_environment(config)
-    debug(2,json.dumps(env_obj))
+        debug(2,updated_instance_info)    
 
-    ssh_client = await connect_to_instance(config,updated_instance_info)
+        # init environment object
+        env_obj = init_environment(self.config)
+        debug(2,json.dumps(env_obj))
 
-    files_path = env_obj['path']
+        ssh_client = await connect_to_instance(self.config,updated_instance_info)
 
-    run_hash = cloudrunutils.compute_script_hash(config)
+        files_path = env_obj['path']
 
-    run_path   = env_obj['path_abs'] + '/' + run_hash
+        script_hash = cloudrunutils.compute_script_hash(self.config)
 
-    script_command = cloudrunutils.compute_script_command(run_path,config)
+        run_path   = env_obj['path_abs'] + '/' + script_hash
 
-    debug(1,"creating directories ...")
-    stdin0, stdout0, stderr0 = ssh_client.exec_command("mkdir -p "+files_path+" "+run_path)
-    debug(1,"directories created")
+        script_command = cloudrunutils.compute_script_command(run_path,self.config)
+
+        debug(1,"creating directories ...")
+        stdin0, stdout0, stderr0 = ssh_client.exec_command("mkdir -p "+files_path+" "+run_path)
+        debug(1,"directories created")
 
 
-    debug(1,"uploading files ... ")
+        debug(1,"uploading files ... ")
 
-    # upload the install file, the env file and the script file
-    ftp_client = ssh_client.open_sftp()
+        # upload the install file, the env file and the script file
+        ftp_client = ssh_client.open_sftp()
 
-    # change to env dir
-    ftp_client.chdir(env_obj['path_abs'])
-    remote_config = 'config-'+env_obj['name']+'.json'
-    with open(remote_config,'w') as cfg_file:
-        cfg_file.write(json.dumps(env_obj))
-        cfg_file.close()
-        ftp_client.put(remote_config,'config.json')
-        os.remove(remote_config)
-    ftp_client.put('remote_files/config.py','config.py')
-    ftp_client.put('remote_files/bootstrap.sh','bootstrap.sh')
-    ftp_client.put('remote_files/run.sh','run.sh')
-    ftp_client.put('remote_files/microrun.sh','microrun.sh')
-    ftp_client.put('remote_files/state.sh','state.sh')
-    
-    # change to run dir
-    ftp_client.chdir(run_path)
-    if 'run_script' in config and config['run_script']:
-        filename = os.path.basename(config['run_script'])
-        ftp_client.put(config['run_script'],filename)
-    if 'upload_files' in config and config['upload_files'] is not None:
-        if isinstance( config['upload_files'],str):
-            config['upload_files'] = [ config['upload_files']  ]
-        for upfile in config['upload_files']:
+        # change to env dir
+        ftp_client.chdir(env_obj['path_abs'])
+        remote_config = 'config-'+env_obj['name']+'.json'
+        with open(remote_config,'w') as cfg_file:
+            cfg_file.write(json.dumps(env_obj))
+            cfg_file.close()
+            ftp_client.put(remote_config,'config.json')
+            os.remove(remote_config)
+        ftp_client.put('remote_files/config.py','config.py')
+        ftp_client.put('remote_files/bootstrap.sh','bootstrap.sh')
+        ftp_client.put('remote_files/run.sh','run.sh')
+        ftp_client.put('remote_files/microrun.sh','microrun.sh')
+        ftp_client.put('remote_files/state.sh','state.sh')
+        
+        # change to run dir
+        ftp_client.chdir(run_path)
+        if 'run_script' in self.config and self.config['run_script']:
+            filename = os.path.basename(self.config['run_script'])
+            ftp_client.put(self.config['run_script'],filename)
+        if 'upload_files' in self.config and self.config['upload_files'] is not None:
+            if isinstance( self.config['upload_files'],str):
+                self.config['upload_files'] = [ self.config['upload_files']  ]
+            for upfile in self.config['upload_files']:
+                try:
+                    ftp_client.put(upfile,os.path.basename(upfile))
+                except Exception as e:
+                    print("Error while uploading file",upfile)
+                    print(e)
+
+        ftp_client.close()
+
+        debug(1,"uploaded.")
+
+        if created:
+            debug(1,"Installing PyYAML for newly created instance ...")
+            stdin , stdout, stderr = ssh_client.exec_command("pip install pyyaml")
+            debug(2,stdout.read())
+            debug(2, "Errors")
+            debug(2,stderr.read())
+
+        # generate unique PID file
+        uid = cloudrunutils.generate_unique_filename() 
+        # run
+        commands = [ 
+            # make bootstrap executable
+            { 'cmd': "chmod +x "+files_path+"/bootstrap.sh "+files_path+"/run.sh " +files_path+"/microrun.sh "+files_path+"/state.sh" , 'out' : True },  
+            # recreate pip+conda files according to config
+            { 'cmd': "cd " + files_path + " && python3 "+files_path+"/config.py" , 'out' : True },
+            # setup envs according to current config files state
+            { 'cmd': files_path+"/bootstrap.sh \"" + env_obj['name'] + "\" " + ("1" if self.config['dev'] else "0") , 'out': True },  
+            # execute main script (spawn)
+            { 'cmd': files_path+"/run.sh \"" + env_obj['name'] + "\" \""+script_command+"\" " + self.config['input_file'] + " " + self.config['output_file']+" "+script_hash+" "+uid, 'out' : False }
+        ]
+        for command in commands:
+            debug(1,"Executing ",format( command['cmd'] ),"output",command['out'])
             try:
-                ftp_client.put(upfile,os.path.basename(upfile))
-            except Exception as e:
-                print("Error while uploading file",upfile)
-                print(e)
+                stdin , stdout, stderr = ssh_client.exec_command(command['cmd'])
+                #print(stdout.read())
+                if command['out']:
+                    for l in line_buffered(stdout):
+                        debug(1,l)
+                    errmsg = stderr.read()
+                    dbglvl = 1 if errmsg else 2
+                    debug(dbglvl,"Errors")
+                    debug(dbglvl,errmsg)
+                else:
+                    pass
+                    #stdout.read()
+                    #pid = int(stdout.read().strip().decode("utf-8"))
+            except paramiko.ssh_exception.SSHException as sshe:
+                print("The SSH Client has been disconnected!")
+                print(sshe)
+                raise CloudRunError()
 
-    ftp_client.close()
+        # retrieve PID
+        pid_file = run_path + "/" + uid + ".pid"
+        getpid_cmd = "tail "+pid_file +" && cp "+pid_file+ " "+run_path+"/pid" # && rm -f "+pid_file
+        debug(1,"Executing ",format( getpid_cmd ) )
+        stdin , stdout, stderr = ssh_client.exec_command(getpid_cmd)
+        pid = int(stdout.readline().strip())
 
-    debug(1,"uploaded.")
+        # try:
+        #     getpid_cmd = "tail "+pid_file + "2" #+" && cp "+pid_file+ " "+run_path+"/pid && rm -f "+pid_file
+        #     debug(1,"Executing ",format( getpid_cmd ) )
+        #     stdin , stdout, stderr = ssh_client.exec_command(getpid_cmd)
+        #     pid2 = int(stdout.readline().strip())
+        # except:
+        #     pid2 = 0 
 
-    if created:
-        debug(1,"Installing PyYAML for newly created instance ...")
-        stdin , stdout, stderr = ssh_client.exec_command("pip install pyyaml")
-        debug(2,stdout.read())
-        debug(2, "Errors")
-        debug(2,stderr.read())
+        ssh_client.close()
 
-    # generate unique PID file
-    uid = cloudrunutils.generate_unique_filename() + ".pid"
-    pid_file = run_path + "/" + uid
-    # run
-    commands = [ 
-        # make bootstrap executable
-        { 'cmd': "chmod +x "+files_path+"/bootstrap.sh "+files_path+"/run.sh " +files_path+"/microrun.sh "+files_path+"/state.sh" , 'out' : True },  
-        # recreate pip+conda files according to config
-        { 'cmd': "cd " + files_path + " && python3 "+files_path+"/config.py" , 'out' : True },
-        # setup envs according to current config files state
-        { 'cmd': files_path+"/bootstrap.sh \"" + env_obj['name'] + "\" " + ("1" if config['dev'] else "0") , 'out': True },  
-        # execute main script (spawn)
-        { 'cmd': files_path+"/run.sh \"" + env_obj['name'] + "\" \""+script_command+"\" " + config['input_file'] + " " + config['output_file']+" "+run_hash+" "+pid_file, 'out' : False }
-    ]
-    for command in commands:
-        debug(1,"Executing ",format( command['cmd'] ),"output",command['out'])
+        debug(1,"UID =",uid,", PID =",pid,", SCRIPT_HASH =",script_hash) 
+
+        # make sure we stop the instance to avoid charges !
+        #stop_instance(instance)
+
+        return instance , uid , pid , script_hash 
+
+
+    # this allow any external process to wait for a specific job
+    async def get_script_state( self, uid , pid = None , script_hash = None ):
+
+        instance = self.get_instance()
+
+        if instance is None:
+            print("get_command_state: instance is not available!")
+            return CloudRunCommandState.UNKNOWN
+
+        updated_instance_info = await wait_for_instance(config,instance)
+
+        env_obj    = init_environment(config)
+        files_path = env_obj['path']
+
+        ssh_client = await connect_to_instance(config,updated_instance_info)
+
+        stdin, stdout, stderr = ssh_client.exec_command(files_path + "/state.sh " + env_obj['name'] + " " + uid + " " + pid + " " + script_hash + " " + self.config['output_file'])
+
+        statestr = stdout.read().decode("utf-8").strip()
+
         try:
-            stdin , stdout, stderr = ssh_client.exec_command(command['cmd'])
-            #print(stdout.read())
-            if command['out']:
-                for l in line_buffered(stdout):
-                    debug(1,l)
-                errmsg = stderr.read()
-                dbglvl = 1 if errmsg else 2
-                debug(dbglvl,"Errors")
-                debug(dbglvl,errmsg)
-            else:
-                pass
-                #stdout.read()
-                #pid = int(stdout.read().strip().decode("utf-8"))
-        except paramiko.ssh_exception.SSHException as sshe:
-            print("The SSH Client has been disconnected!")
-            print(sshe)
-            raise CloudRunError()
+            state = CloudRunCommandState[statestr.upper()]
+        except:
+            print("\nUnhandled state received by state.sh!!!\n")
+            state = CloudRunCommandState.UNKNOWN
 
-    # retrieve PID
-    # TODO: fix this - it could cause issues with concurrent calls on same run_hash ... ?
-    # it was better to get the stdout (see line above)
-    #await asyncio.sleep(0.5)
+        ssh_client.close()
 
-    getpid_cmd = "tail "+pid_file +" && cp "+pid_file+ " "+run_path+"/pid" # && rm -f "+pid_file
-    debug(1,"Executing ",format( getpid_cmd ) )
-    stdin , stdout, stderr = ssh_client.exec_command(getpid_cmd)
-    pid = int(stdout.readline().strip())
-
-    # try:
-    #     getpid_cmd = "tail "+pid_file + "2" #+" && cp "+pid_file+ " "+run_path+"/pid && rm -f "+pid_file
-    #     debug(1,"Executing ",format( getpid_cmd ) )
-    #     stdin , stdout, stderr = ssh_client.exec_command(getpid_cmd)
-    #     pid2 = int(stdout.readline().strip())
-    # except:
-    #     pid2 = 0 
-
-    ssh_client.close()
-
-    print("RUN_HASH =",run_hash,", PID =",pid) #, ", PID2 =",pid2)
-
-    # make sure we stop the instance to avoid charges !
-    #stop_instance(instance)
-
-    return instance , run_hash , pid    
+        return state
 
 
-# this allow any external process to wait for a specific job
-async def get_command_state( config , run_hash , pid ):
+    async def tail( self , uid , pid = None , script_hash = None ):
 
-    instance = cr_client.get_instance(config)
-
-    if instance is None:
-        print("get_command_state: instance is not available!")
-        return CloudRunCommandState.UNKNOWN
-
-    updated_instance_info = await wait_for_instance(config,instance)
-
-    env_obj    = init_environment(config)
-    files_path = env_obj['path']
-
-    ssh_client = await connect_to_instance(config,updated_instance_info)
-
-    stdin, stdout, stderr = ssh_client.exec_command(files_path + "/state.sh " + env_obj['name'] + " " + run_hash + " " + pid + " " + config['output_file'])
-
-    statestr = stdout.read().decode("utf-8").strip()
-
-    try:
-        state = CloudRunCommandState[statestr.upper()]
-    except:
-        print("\nUnhandled state received by state.sh!!!\n")
-        state = CloudRunCommandState.UNKNOWN
-
-    ssh_client.close()
-
-    return state
-
-
-async def tail( instance , run_hash ):
-
-    pass
+        pass
 

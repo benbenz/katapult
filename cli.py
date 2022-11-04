@@ -12,9 +12,6 @@ except ModuleNotFoundError as mnfe:
 # get client for AWS
 cr_client = cr.get_client(config['provider'])
 
-# set the debug level for AWS module
-cr_client.set_debug_level(config['debug'])
-
 async def mainloop(config):
 
     while True:
