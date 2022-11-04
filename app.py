@@ -11,7 +11,7 @@ except ModuleNotFoundError as mnfe:
 
 cr_client = cr.get_client(config)
 
-async def mainloop(config):
+async def mainloop():
 
     print("\n== START ==\n")
 
@@ -31,4 +31,4 @@ async def mainloop(config):
     print("\n== DONE ==\n")
 
 # run main loop
-asyncio.run( mainloop(config) )
+asyncio.run( mainloop() )
