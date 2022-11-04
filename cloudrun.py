@@ -51,11 +51,11 @@ class CloudRunProvider(ABC):
         pass
 
     @abstractmethod
-    async def wait_for_script_state( self, script_state , script_hash , uid , pid = None , ):
+    async def wait_for_script_state( self, script_state , script_hash , uid , pid = None ):
         pass
 
     @abstractmethod
-    async def tail( self, script_hash , uid , pid = None , ):    
+    async def tail( self, script_hash , uid , pid = None ):    
         pass    
 
     def init_environment( self ):
