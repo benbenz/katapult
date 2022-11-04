@@ -1,5 +1,6 @@
 import cloudrun as cr
 import asyncio
+from cloudrun import CloudRunCommandState
 
 try:
     configModule = __import__("config")

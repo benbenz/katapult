@@ -1,4 +1,4 @@
-from enum import Enum
+from enum import IntFlag
 from abc import ABC , abstractmethod
 import cloudrunutils
 
@@ -13,7 +13,7 @@ class CloudRunError(Exception):
     pass
 
 
-class CloudRunCommandState(Enum):
+class CloudRunCommandState(IntFlag):
     UNKNOWN   = 0
     IDLE      = 1
     RUNNING   = 2
