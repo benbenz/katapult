@@ -28,7 +28,7 @@ cr_client = cr.get_client(config)
 
 if command=="wait":
     # run main loop
-    asyncio.run( cr_client.wait_for_script_state(CloudRunCommandState.DONE,sys.argv[2],sys.argv[3]))
+    asyncio.run( cr_client.wait_for_script_state(CloudRunCommandState.DONE|CloudRunCommandState.ABORTED,sys.argv[2],sys.argv[3]))
 elif command=="getstate":
     asyncio.run( cr_client.get_script_state(sys.argv[2],sys.argv[3]) )
 

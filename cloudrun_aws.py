@@ -681,7 +681,7 @@ class AWSCloudRunProvider(CloudRunProvider):
         # make sure we stop the instance to avoid charges !
         #stop_instance(instance)
 
-        return instance , uid , pid , script_hash 
+        return script_hash , uid , pid
 
     # this allow any external process to wait for a specific job
     async def get_script_state( self, script_hash , uid , pid = None ):
@@ -746,7 +746,7 @@ class AWSCloudRunProvider(CloudRunProvider):
                 print("\nUnhandled state received by state.sh!!!",statestr,"\n")
                 state = CloudRunCommandState.UNKNOWN
 
-            if state == script_state:
+            if state & script_state:
                 break 
 
             await asyncio.sleep(2)

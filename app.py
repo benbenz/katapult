@@ -20,7 +20,14 @@ async def mainloop(config):
     print("\n== RUN ==\n")
         
     # run the script
-    await cr_client.run_script() 
+    script_hash , uid , pid = await cr_client.run_script() 
+
+    print("\n== WAIT ==\n")
+
+    print("Waiting for DONE or ABORTED ...")
+    await cr_client.wait_for_script_state(CloudRunCommandState.DONE|CloudRunCommandState.ABORTED,script_hash,uid)
+
+    print("\n== DONE ==\n")
 
 # run main loop
 asyncio.run( mainloop(config) )

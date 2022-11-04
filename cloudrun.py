@@ -17,8 +17,8 @@ class CloudRunCommandState(Enum):
     UNKNOWN   = 0
     IDLE      = 1
     RUNNING   = 2
-    DONE      = 3
-    ABORTED   = 5
+    DONE      = 4
+    ABORTED   = 8
 
 
 class CloudRunProvider(ABC):
