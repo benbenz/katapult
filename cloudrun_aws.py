@@ -2,17 +2,12 @@ import boto3
 import os , json
 import cloudrunutils
 from cloudrun import CloudRunError , CloudRunCommandState , CloudRunProvider
+from cloudrun import cr_keypairName , cr_secGroupName , cr_bucketName , cr_vpcName , cr_instanceNameRoot , cr_environmentNameRoot 
 import paramiko
 from botocore.exceptions import ClientError
 from datetime import datetime , timedelta
 import asyncio
-
-cr_keypairName         = 'cloudrun-keypair'
-cr_secGroupName        = 'cloudrun-sec-group-allow-ssh'
-cr_bucketName          = 'cloudrun-bucket'
-cr_vpcName             = 'cloudrun-vpc'
-cr_instanceNameRoot    = 'cloudrun-instance'
-cr_environmentNameRoot = 'cloudrun-env'
+import re
 
 DBG_LVL = 1
 
@@ -451,34 +446,6 @@ def list_amis(config):
         for instance in reservation["Instances"]:
             print(instance["ImageId"])
 
-def init_environment(conf):
-    env_obj  = cloudrunutils.compute_environment_object(conf)
-    env_hash = cloudrunutils.compute_environment_hash(env_obj)
-
-    env_name = cr_environmentNameRoot
-
-    if ('dev' in conf) and (conf['dev'] == True):
-        env_name = cr_environmentNameRoot
-    else:
-        if 'project' in conf:
-            env_name = cr_environmentNameRoot + '-' + conf['project'] + '-' + env_hash
-        else:
-            env_name = cr_environmentNameRoot + '-' + env_hash    
-
-    # overwrite name in conda config as well
-    if env_obj['env_conda'] is not None:
-        env_obj['env_conda']['name'] = env_name 
-    env_obj['name'] = env_name
-    env_obj['hash'] = env_hash
-    env_obj['path'] = "$HOME/run/" + env_name
-    env_obj['path_abs'] = "/home/" + conf['img_username'] + '/run/' + env_name
-
-    # replace __REQUIREMENTS_TXT_LINK__ with the actual requirements.txt path (dependent of config and env hash)
-    # the file needs to be absolute
-    env_obj = cloudrunutils.update_requirements_path(env_obj,env_obj['path_abs'])
-
-    return env_obj  
-
 async def wait_for_instance(config,instance):
     # get the public DNS info when instance actually started (todo: check actual state)
     waitFor = True
@@ -595,7 +562,7 @@ class AWSCloudRunProvider(CloudRunProvider):
         debug(2,updated_instance_info)    
 
         # init environment object
-        env_obj = init_environment(self.config)
+        env_obj = self.init_environment()
         debug(2,json.dumps(env_obj))
 
         ssh_client = await connect_to_instance(self.config,updated_instance_info)
@@ -694,7 +661,7 @@ class AWSCloudRunProvider(CloudRunProvider):
 
         # retrieve PID
         pid_file = run_path + "/" + uid + ".pid"
-        getpid_cmd = "tail "+pid_file +" && cp "+pid_file+ " "+run_path+"/pid" # && rm -f "+pid_file
+        getpid_cmd = "tail "+pid_file #+" && cp "+pid_file+ " "+run_path+"/pid" # && rm -f "+pid_file
         debug(1,"Executing ",format( getpid_cmd ) )
         stdin , stdout, stderr = ssh_client.exec_command(getpid_cmd)
         pid = int(stdout.readline().strip())
@@ -716,9 +683,8 @@ class AWSCloudRunProvider(CloudRunProvider):
 
         return instance , uid , pid , script_hash 
 
-
     # this allow any external process to wait for a specific job
-    async def get_script_state( self, uid , pid = None , script_hash = None ):
+    async def get_script_state( self, script_hash , uid , pid = None ):
 
         instance = self.get_instance()
 
@@ -726,17 +692,20 @@ class AWSCloudRunProvider(CloudRunProvider):
             print("get_command_state: instance is not available!")
             return CloudRunCommandState.UNKNOWN
 
-        updated_instance_info = await wait_for_instance(config,instance)
+        updated_instance_info = await wait_for_instance(self.config,instance)
 
-        env_obj    = init_environment(config)
+        env_obj    = self.init_environment()
         files_path = env_obj['path']
 
-        ssh_client = await connect_to_instance(config,updated_instance_info)
+        ssh_client = await connect_to_instance(self.config,updated_instance_info)
 
-        stdin, stdout, stderr = ssh_client.exec_command(files_path + "/state.sh " + env_obj['name'] + " " + uid + " " + pid + " " + script_hash + " " + self.config['output_file'])
+        cmd = files_path + "/state.sh " + env_obj['name'] + " " + str(script_hash) + " " + str(uid) + " " + str(pid) + " " + self.config['output_file']
+        debug(1,"Executing command",cmd)
+        stdin, stdout, stderr = ssh_client.exec_command(cmd)
 
         statestr = stdout.read().decode("utf-8").strip()
-
+        debug(1,"State=",statestr)
+        statestr = re.sub(r'\([0-9]+\)','',statestr)
         try:
             state = CloudRunCommandState[statestr.upper()]
         except:
@@ -747,8 +716,46 @@ class AWSCloudRunProvider(CloudRunProvider):
 
         return state
 
+    async def wait_for_script_state( self, script_state , script_hash , uid , pid = None ):    
+        instance = self.get_instance()
 
-    async def tail( self , uid , pid = None , script_hash = None ):
+        if instance is None:
+            print("get_command_state: instance is not available!")
+            return CloudRunCommandState.UNKNOWN
 
+        updated_instance_info = await wait_for_instance(self.config,instance)
+
+        env_obj    = self.init_environment()
+        files_path = env_obj['path']
+
+        ssh_client = await connect_to_instance(self.config,updated_instance_info)
+
+        while True:
+
+            cmd = files_path + "/state.sh " + env_obj['name'] + " " + str(script_hash) + " " + str(uid) + " " + str(pid) + " " + self.config['output_file']
+            debug(1,"Executing command",cmd)
+            stdin, stdout, stderr = ssh_client.exec_command(cmd)
+
+            statestr = stdout.read().decode("utf-8").strip()
+            debug(1,"State=",statestr)
+            statestr = re.sub(r'\([0-9]+\)','',statestr)
+
+            try:
+                state = CloudRunCommandState[statestr.upper()]
+            except:
+                print("\nUnhandled state received by state.sh!!!",statestr,"\n")
+                state = CloudRunCommandState.UNKNOWN
+
+            if state == script_state:
+                break 
+
+            await asyncio.sleep(2)
+
+        ssh_client.close()
+
+        return state
+
+
+    async def tail( self, script_hash , uid , pid = None ):    
         pass
 

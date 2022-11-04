@@ -21,9 +21,9 @@ run_path="$HOME/run/$env_name/$script_hash"
 pid_file="$run_path/$uid.pid"
 
 # TODO: check if existing PID and PID running ... and throw warning, exit or do something ?
-printf '%s\n' $$ > $pid_file
+# printf '%s\n' $$ > $pid_file
 
-echo 'idle' > $run_path/state # used to check the state of a process
+echo 'idle' > $run_path/$uid-state # used to check the state of a process
 rm -f output_file
 
 FILE_CONDA="$HOME/run/$env_name/environment.yml"
@@ -46,14 +46,14 @@ fi
 #exit
 
 cd $run_path
-echo 'running' > $run_path/state
+echo 'running' > $run_path/$uid-state
 #exec nohup $thecommand >run.log 2>&1  
 #exec $thecommand >run.log
 #$( exec $thecommand >run.log && echo 'done' > $run_path/state) & printf '%s\n' $(jobs -p) >  "${pid_file}2"
 #($thecommand >run.log && echo 'done' > $run_path/state) & printf '%s\n' $(jobs -p) >  "${pid_file}2"
 # { $thecommand >run.log & export pid=$! & echo $pid > "${pid_file}2" && wait $pid; } && echo 'done' > $run_path/state
 # { $HOME/run/$env_name/microrun.sh "$thecommand" "$run_path" & echo $! > "${pid_file}2"; }
-{ $HOME/run/$env_name/microrun.sh "$thecommand" "$run_path" "$pid_file" & echo $! > "${pid_file}"; }
+{ $HOME/run/$env_name/microrun.sh "$thecommand" "$uid" "$run_path" "$pid_file" "$output_file" & echo $! > "${pid_file}"; }
 
 
 # pgrep -P PID >>> Get the subprocesses

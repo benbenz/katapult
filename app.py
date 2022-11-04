@@ -5,7 +5,7 @@ try:
     configModule = __import__("config")
     config = configModule.config
 except ModuleNotFoundError as mnfe:
-    print("\n\033[91mYou need to create a config.py file (see 'config.example.py')\033[0m\n")
+    print("\n\033[91mYou need to create a config.py file (see 'example/config.example.py')\033[0m\n")
     raise mfe
 
 cr_client = cr.get_client(config)
