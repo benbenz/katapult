@@ -92,9 +92,11 @@ class CloudRunProvider:
        pass
 
     async def run_script():
+       # return script_hash , uid , pid       
        pass
 
     async def get_script_state( script_hash , uid , pid = None ):
+       # returns CloudRunCommandState
        pass
 
     async def wait_for_script_state( script_state , script_hash , uid , pid = None ):
@@ -102,6 +104,9 @@ class CloudRunProvider:
 
     async def tail( self, script_hash , uid , pid = None ):
        pass
+
+def get_client(config):
+   pass       
  
 ```
 
