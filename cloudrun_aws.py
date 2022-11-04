@@ -365,11 +365,12 @@ def start_instance(config,instance):
 
     try:
         ec2_client.start_instances(InstanceIds=[instance['InstanceId']])
-    except botocore.exceptions.ClientError as botoerr:
+    except ClientError as botoerr:
         errmsg = str(botoerr)
         if 'IncorrectSpotRequestState' in errmsg:
-            print("Could not start because it is a SPOT instance, waiting on SPOT Request")
-            pass # I guess SPOT Will start it ? 
+            print("Could not start because it is a SPOT instance, waiting on SPOT ...")
+            # try reboot
+            # ec2_client.reboot_instances(InstanceIds=[instance['InstanceId']])
         else:
             print(botoerr)
             raise CloudRunError()
