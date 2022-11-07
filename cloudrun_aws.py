@@ -327,32 +327,64 @@ def create_instance(config,vpc,subnet,secGroup):
     else:
         market_options = { } 
 
-    instances = ec2_client.run_instances(
-            ImageId = config['img_id'],
-            MinCount = 1,
-            MaxCount = 1,
-            InstanceType = config['size'],
-            KeyName = cr_keypairName,
-            SecurityGroupIds=[secGroup['GroupId']],
-            SubnetId = subnet['SubnetId'],
-            TagSpecifications=[
-                {
-                    'ResourceType': 'instance',
-                    'Tags': [
-                        {
-                            'Key': 'Name',
-                            'Value': instanceName
-                        },
-                    ]
-                },
-            ],
-            ElasticGpuSpecification = gpu_spec ,
-            InstanceMarketOptions = market_options,
-            CpuOptions = cpus_spec,
-            HibernationOptions={
-                'Configured': False
-            },            
-    )    
+    if 'disk_size' in config and config['disk_size']:
+        #TODO: improve selection of disk_type
+        disk_size = config['disk_size']
+        if disk_size < 1024:
+            volume_type = 'standard'
+        else:
+            volume_type = 'st1' # sc1, io1, io2, gp2, gp3
+        if 'disk_type' in config and config['disk_type']:
+            volume_type = config['disk_type']
+        block_device_mapping = [
+            {
+                'DeviceName' : '/dev/sda' ,
+                'Ebs' : {
+                    "DeleteOnTermination" : True ,
+                    "VolumeSize": disk_size ,
+                    "VolumeType": volume_type
+                }
+            }
+        ]
+    else:
+        block_device_mapping = [ ]
+
+    try:
+
+        instances = ec2_client.run_instances(
+                ImageId = config['img_id'],
+                MinCount = 1,
+                MaxCount = 1,
+                InstanceType = config['size'],
+                KeyName = cr_keypairName,
+                SecurityGroupIds=[secGroup['GroupId']],
+                SubnetId = subnet['SubnetId'],
+                TagSpecifications=[
+                    {
+                        'ResourceType': 'instance',
+                        'Tags': [
+                            {
+                                'Key': 'Name',
+                                'Value': instanceName
+                            },
+                        ]
+                    },
+                ],
+                ElasticGpuSpecification = gpu_spec ,
+                InstanceMarketOptions = market_options,
+                CpuOptions = cpus_spec,
+                HibernationOptions={
+                    'Configured': False
+                },            
+        )    
+    except ClientError as ce:
+        errmsg = str(ce)
+        if 'InsufficientInstanceCapacity' in errmsg: # Amazon doesnt have enough resources at the moment
+            debug(1,"AWS doesnt have enough SPOT resources at the moment, retrying in 2 minutes ...",errmsg)
+        else:
+            debug(1,"An error occured while trying to create this instance",errmsg)
+        raise CloudRunError()
+
 
     created = True
 
@@ -366,6 +398,7 @@ def create_instance_objects(config):
     secGroup = create_security_group(config,vpc)
     subnet   = create_subnet(config,vpc) 
     instance , created = create_instance(config,vpc,subnet,secGroup)
+
     return instance , created 
 
 
@@ -470,6 +503,7 @@ async def wait_for_instance(config,instance):
     while waitFor:
         updated_instance_info = get_instance_info(config,instance)
         lookForDNS   = not 'PublicDnsName' in updated_instance_info or updated_instance_info['PublicDnsName'] is None
+        lookForIP    = not 'PublicIpAddress' in updated_instance_info or updated_instance_info['PublicIpAddress'] is None
         instanceState =  updated_instance_info['State']['Name']
 
         lookForState = True
@@ -480,7 +514,10 @@ async def wait_for_instance(config,instance):
                 start_instance(config,instance)
             except CloudRunError:
                 terminate_instance(config,instance)
-                create_instance_objects(config)
+                try :
+                    create_instance_objects(config)
+                except:
+                    return None
 
         elif instanceState == 'running':
             lookForState = False
@@ -490,7 +527,10 @@ async def wait_for_instance(config,instance):
             if lookForDNS:
                 debug(1,"waiting for DNS address and  state ...",instanceState)
             else:
-                debug(1,"waiting for state ...",instanceState)
+                if lookForIP:
+                    debug(1,"waiting for state ...",instanceState)
+                else:
+                    debug(1,"waiting for state ...",instanceState," IP =",updated_instance_info['PublicIpAddress'])
             
             await asyncio.sleep(10)
 
@@ -531,8 +571,9 @@ def line_buffered(f):
                     yield line_buf
                     line_buf = ''
             except Exception as e:
-                errmsg = str(e)
-                debug(1,"error (1) while buffering line",errmsg)
+                #errmsg = str(e)
+                #debug(1,"error (1) while buffering line",errmsg)
+                pass 
                 #doContinue = False
     except Exception as e0:
         debug(1,"error (2) while buffering line",str(e0))
@@ -591,11 +632,16 @@ class AWSCloudRunProvider(CloudRunProvider):
 
         files_path = env_obj['path']
 
+        # compute script hash 
         script_hash = cloudrunutils.compute_script_hash(self.config)
+        script_path = env_obj['path_abs'] + '/' + script_hash
 
-        run_path   = env_obj['path_abs'] + '/' + script_hash
+        # generate unique PID file
+        uid = cloudrunutils.generate_unique_filename() 
+        
+        run_path   = script_path + '/' + uid
 
-        script_command = cloudrunutils.compute_script_command(run_path,self.config)
+        script_command = cloudrunutils.compute_script_command(script_path,self.config)
 
         debug(1,"creating directories ...")
         stdin0, stdout0, stderr0 = ssh_client.exec_command("mkdir -p "+files_path+" "+run_path)
@@ -621,9 +667,10 @@ class AWSCloudRunProvider(CloudRunProvider):
         ftp_client.put('remote_files/microrun.sh','microrun.sh')
         ftp_client.put('remote_files/state.sh','state.sh')
         ftp_client.put('remote_files/tail.sh','tail.sh')
+        ftp_client.put('remote_files/getpid.sh','getpid.sh')
         
         # change to run dir
-        ftp_client.chdir(run_path)
+        ftp_client.chdir(script_path)
         if 'run_script' in self.config and self.config['run_script']:
             filename = os.path.basename(self.config['run_script'])
             ftp_client.put(self.config['run_script'],filename)
@@ -648,18 +695,18 @@ class AWSCloudRunProvider(CloudRunProvider):
             debug(2, "Errors")
             debug(2,stderr.read())
 
-        # generate unique PID file
-        uid = cloudrunutils.generate_unique_filename() 
         # run
         commands = [ 
             # make bootstrap executable
-            { 'cmd': "chmod +x "+files_path+"/bootstrap.sh "+files_path+"/run.sh " +files_path+"/microrun.sh "+files_path+"/state.sh "+files_path+"/tail.sh " , 'out' : True },  
+            { 'cmd': "chmod +x "+files_path+"/*.sh ", 'out' : True },  
             # recreate pip+conda files according to config
             { 'cmd': "cd " + files_path + " && python3 "+files_path+"/config.py" , 'out' : True },
             # setup envs according to current config files state
-            { 'cmd': files_path+"/bootstrap.sh \"" + env_obj['name'] + "\" " + ("1" if self.config['dev'] else "0") , 'out': True },  
-            # execute main script (spawn)
-            { 'cmd': files_path+"/run.sh \"" + env_obj['name'] + "\" \""+script_command+"\" " + self.config['input_file'] + " " + self.config['output_file']+" "+script_hash+" "+uid, 'out' : False }
+            # NOTE: make sure to let out = True or bootstraping is not executed properly 
+            # TODO: INVESTIGATE THIS
+            { 'cmd': files_path+"/bootstrap.sh \"" + env_obj['name'] + "\" " + ("1" if self.config['dev'] else "0") + " &", 'out': True },  
+            # execute main script (spawn) (this will wait for bootstraping)
+            { 'cmd': files_path+"/run.sh \"" + env_obj['name'] + "\" \""+script_command+"\" " + self.config['input_file'] + " " + self.config['output_file'] + " " + script_hash+" "+uid, 'out' : False }
         ]
         for command in commands:
             debug(1,"Executing ",format( command['cmd'] ),"output",command['out'])
@@ -683,9 +730,11 @@ class AWSCloudRunProvider(CloudRunProvider):
                 print(sshe)
                 raise CloudRunError()
 
-        # retrieve PID
-        pid_file = run_path + "/" + uid + ".pid"
-        getpid_cmd = "tail "+pid_file #+" && cp "+pid_file+ " "+run_path+"/pid" # && rm -f "+pid_file
+        # retrieve PID (this will wait for PID file)
+        pid_file = run_path + "/pid"
+        #getpid_cmd = "tail "+pid_file #+" && cp "+pid_file+ " "+run_path+"/pid" # && rm -f "+pid_file
+        getpid_cmd = files_path+"/getpid.sh \"" + pid_file + "\""
+        
         debug(1,"Executing ",format( getpid_cmd ) )
         stdin , stdout, stderr = ssh_client.exec_command(getpid_cmd)
         pid = int(stdout.readline().strip())

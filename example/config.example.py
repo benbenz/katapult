@@ -13,7 +13,7 @@ config = {
     'provider'     : 'aws' ,                              # the provider name ('aws' | 'azure' | ...)
 
     ################################################################################
-    # INSTANCE / HARDWARE
+    # INSTANCES / HARDWARE
     ################################################################################
 
     'instances_types' : [
@@ -25,7 +25,8 @@ config = {
             'size'         : 't2.micro' ,                 # proprietary size spec (has to be valid)
             'cpus'         : None ,                       # number of CPU cores
             'gpu'          : None ,                       # the proprietary type of the GPU 
-            'disk_size'    : None ,                       # the disk size of this instance type
+            'disk_size'    : None ,                       # the disk size of this instance type (in GB)
+            'disk_type'    : None ,                       # the proprietary disk type of this instance type: 'standard', 'io1', 'io2', 'st1', etc
             'eco'          : True ,                       # eco == True >> SPOT e.g.
             'eco_life'     : timedelta(days=30) ,         # lifecycle of the machine in ECO mode (timedelta) (can be None with eco = True)
             'max_bid'      : None ,                       # max bid ($/hour) (can be None with eco = True)
@@ -36,7 +37,7 @@ config = {
     ] ,
 
     ################################################################################
-    # ENVIRONMENT / SOFTWARE
+    # ENVIRONMENTS / SOFTWARE
     ################################################################################
 
     'environments' : [

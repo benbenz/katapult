@@ -176,26 +176,46 @@ def compute_script_hash(config):
     else:
         script_to_hash = 'unknown'
 
+    # also add the upload files as part of the hash
+    # this could mean the script will run with different multi inputs ... 
+    if 'upload_files' in config and config['upload_files'] is not None:
+        files = config['upload_files']
+        if isinstance(files,str):
+            files = [ files ] 
+        script_to_hash = script_to_hash + ":" + ",".join(files)
+
+    # also add the input file which should be pointing to a specific file 
+    # so if this is different for some reason (but with all the same python file, args, and upload files)
+    # this means that we should probably run 
+
+    # NO! 
+    # this will be differentiated with the UID at run time
+    # to mutualize more the upload files + script file ...
+    # if 'input_files' in config and config['input_files'] is not None:
+    #    script_to_hash = script_to_hash + ':' + config['input_files']
+
     hash = hashlib.md5(script_to_hash.encode()).hexdigest()
     return hash[0:12]
 
 def generate_unique_filename():
     return str(uuid.uuid4())
 
-def compute_script_command(run_dir,config):
+def compute_script_command(script_dir,config):
     script_command = ''
     if 'run_script' in config and config['run_script'] is not None:
-        filename = os.path.basename(config['run_script'])
+        script_args = config['run_script'].split()
+        filename = os.path.basename(script_args[0])
         file_ext = os.path.splitext(filename)[1]
-        if file_ext == '.py' or file_ext == '.PY':
+        script_args.pop(0)
+        if file_ext.lower() == '.py':
             # -u is to skip stdout buffering (used by tail function)
-            script_command = "python3 -u " + run_dir + '/' + filename
-        elif file_ext == '.jl' or file_ext == '.JL':
-            script_command = "julia " + run_dir + '/' + filename 
+            script_command = "python3 -u " + script_dir + '/' + filename + " " + " ".join(script_args)
+        elif file_ext.lower() == '.jl':
+            script_command = "julia " + script_dir + '/' + filename + " " + " ".join(script_args)
         else:
             script_command = "echo 'SCRIPT NOT HANDLED'"
     elif 'run_command' in config and config['run_command']:
-        script_command = './' + run_dir + '/' + config['run_command']
+        script_command = script_dir + '/' + config['run_command']
     else:
         script_command = "echo 'NO SCRIPT DEFINED'" 
 

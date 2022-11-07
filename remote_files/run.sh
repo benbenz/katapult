@@ -14,17 +14,34 @@ else
   uid="$1"; shift
 fi
 
-# TODO: check if existing PID and PID running ... and throw warning, exit or do something ?
-# printf '%s\n' $$ > $pid_file
-
-run_path="$HOME/run/$env_name/$script_hash"
-pid_file="$run_path/$uid.pid"
+env_path="$HOME/run/$env_name"
+run_path="$HOME/run/$env_name/$script_hash/$uid"
+pid_file="$run_path/pid"
 
 # TODO: check if existing PID and PID running ... and throw warning, exit or do something ?
-# printf '%s\n' $$ > $pid_file
+# we print the mother PID in the PID file (it used to be the one from microrun)
+printf '%s\n' $$ > $pid_file
 
-echo 'idle' > $run_path/$uid-state # used to check the state of a process
+echo 'idle' > $run_path/state # used to check the state of a process
 rm -f output_file
+
+waittime=0
+while [[ $(< $env_path/state) != "bootstraped" ]] || ! [ -f $env_path/state ]
+do
+  if [[ $(ps aux | grep "bootstrap.sh" | grep "$env_name" | grep -v 'grep') ]]; then
+    echo "Waiting on environment to be bootstraped"
+    sleep 15 # sleep 15 seconds
+    waittime=waittime+15
+    if [waittime>3600]; then
+      echo "Waited too long for bootstraped environment\nexiting"
+      exit 99
+    fi
+  else
+    echo "Bootstraping has stopped without success, exiting"
+    exit 98
+  fi
+done
+echo "Environment is bootstraped"
 
 FILE_CONDA="$HOME/run/$env_name/environment.yml"
 FILE_PYPI="$HOME/run/$env_name/requirements.txt"
@@ -46,27 +63,19 @@ fi
 #exit
 
 cd $run_path
-echo 'running' > $run_path/$uid-state
+echo 'running' > $run_path/state
 #exec nohup $thecommand >run.log 2>&1  
 #exec $thecommand >run.log
 #$( exec $thecommand >run.log && echo 'done' > $run_path/state) & printf '%s\n' $(jobs -p) >  "${pid_file}2"
 #($thecommand >run.log && echo 'done' > $run_path/state) & printf '%s\n' $(jobs -p) >  "${pid_file}2"
 # { $thecommand >run.log & export pid=$! & echo $pid > "${pid_file}2" && wait $pid; } && echo 'done' > $run_path/state
 # { $HOME/run/$env_name/microrun.sh "$thecommand" "$run_path" & echo $! > "${pid_file}2"; }
-{ $HOME/run/$env_name/microrun.sh "$thecommand" "$uid" "$run_path" "$pid_file" "$output_file" & echo $! > "${pid_file}"; }
 
+# { $HOME/run/$env_name/microrun.sh "$thecommand" "$uid" "$run_path" "$pid_file" "$output_file" & echo $! > "${pid_file}"; }
+{ $HOME/run/$env_name/microrun.sh "$thecommand" "$uid" "$run_path" "$pid_file" "$output_file"; }
 
 # pgrep -P PID >>> Get the subprocesses
 
-
-
-# { { $thecommand >run.log & echo $! > "${pid_file}2" & wait; } && echo "done" > $run_path/state; } 
-##{ { $thecommand >run.log & export pid=$! & echo $pid > "${pid_file}2"; & wait $pid } && echo "done" > $run_path/state; }
-#( exec $thecommand >run.log && echo 'done' > $run_path/state ) & printf '%s\n' $(jobs -p) >  "${pid_file}2"
-#wait $!
-#wait $(jobs -p)
-#wait 
-#echo 'done' > $run_path/state #& printf '%s\n' $! > "${pid_file}2") 
 
 # stop the instance if no other scripts are running 
 #if ! [ ps aux | grep "$HOME/run.sh" | grep -v 'grep' ]; then

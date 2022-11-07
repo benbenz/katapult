@@ -50,11 +50,11 @@ if [ -f "$FILE_CONDA" ]; then
     echo "installing mamba ..."
     curl micro.mamba.pm/install.sh | bash
     #eval "$($HOME/.local/bin/micromamba shell hook -s posix)"
-    eval "$($HOME/.local/bin/micromamba shell hook --shell=bash)"
+    eval "$($HOME/.local/bin/micromamba shell hook --shell=bash )"
   else
     echo "mamba has been found"
     #eval "$($HOME/.local/bin/micromamba shell hook -s posix)"
-    eval "$($HOME/.local/bin/micromamba shell hook --shell=bash)"
+    eval "$($HOME/.local/bin/micromamba shell hook --shell=bash )"
   fi  
 
   # 2. check if we need to create the environment

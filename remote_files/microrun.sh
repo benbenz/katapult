@@ -13,8 +13,7 @@ fi
 
 cd $run_path
 
-echo 'running' > $run_path/$uid-state
+echo 'running' > $run_path/state
 
-# { $thecommand >$uid-run.log && echo "done" > $run_path/$uid-state && cp "$out_file" "$uid-$out_file" 2>/dev/null; }
-
-{ $thecommand >$uid-run.log && echo "done" > $run_path/$uid-state && cp "$out_file" "$uid-$out_file" 2>/dev/null; }
+# { $thecommand >$uid-run.log && echo "done" > $run_path/state && cp "$out_file" "$uid-$out_file" 2>/dev/null; }
+{ $thecommand >run.log && echo "done" > $run_path/state; }

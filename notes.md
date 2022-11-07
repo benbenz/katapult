@@ -22,14 +22,20 @@
   - [x] new global options:
     - [x] maestro        = 'local' | 'remote' (nano) | 'lambda'
 
+  - [x] use new instances variables:
+        - [x] disk_size
+        - [x] disk_type
+
 3) Re-factorize classes / plurality / calls etc.
-  - [ ] improve script has to use script name / command + uploaded files  
-  - [ ] improve script handling to allow args after the python/julia name...
-  - [ ] improve structure of execution to:
-        - [ ] create uid directory 
-        - [ ] move uploaded files to uid subdirectory
-        - [ ] move script file to uid subdirectory as well
+  - [x] improve script hash computation to use command and uploaded files list ...
+  - [ ] improve run.sh to wait for the environment to be bootstraped
+  - [x] improve script handling to allow args after the python/julia name...
+  - [x] improve structure of execution to:
+        - [x] create uid directory 
+        - [x] move uploaded files to script hash directory (hash now computed with script name, args + uploaded)
+        - [x] move script file to to script hash directory as well (hash now computed with script name, args + uploaded)
   - [ ] refactor existing code to minimize arguments (not config everywhere but exactly what it needs ...)
+  - [ ] allocate job to instance before doing anything (so we know where to retrieve state once for all)
   - [ ] CloudRunInstance class stores the client once for all (for a region)
   - [ ] use instance class ?
   - [ ] rewrite CloudRun to handle plurality / new config

@@ -16,7 +16,7 @@ if [[ "$script_hash" == "None" ]]; then
     exit
 fi
 
-run_path="$HOME/run/$env_name/$script_hash"
+run_path="$HOME/run/$env_name/$script_hash/$uid"
 cd $run_path 
 
 # this is running (by UID)
@@ -25,16 +25,16 @@ if [[ $uid != "None" ]]; then
         echo "running(1)"
         exit
     fi
-    if [ -f "$uid-state" ]; then
+    if [ -f "state" ]; then
         # it says its running but we didnt find the UID, the PID nor the command name >> this has been aborted
-        if [[ $(< $uid-state) == "running" ]]; then
+        if [[ $(< state) == "running" ]]; then
             echo "aborted(1)"
             exit
         fi
         # if state is done but we dont have the out file, this is probably aborted
         # anyhow we cant do anything because we dont have an output file
-        if [[ $(< $uid-state) == "done" ]]; then
-            if ! [ -f "$uid-$out_file" ]; then
+        if [[ $(< state) == "done" ]]; then
+            if ! [ -f "$out_file" ]; then
                 echo "aborted(2)" 
                 exit
             fi
@@ -54,14 +54,16 @@ if [[ pid != "None" ]] && ! [[ pid -eq 0 ]]; then
         echo "running(2)"
         exit
     fi
+    if [[ $(ps -ppid $pid | tail +2) ]]; then #usually this is the one that will hit positive (when using PID)
+        echo "running(3)"
+        exit
+    fi
 fi
+
 # check if we have a command state file
 if [[ "$script_hash" != "None" ]]; then
-    # this is running (by SCRIPT_HASH / "command name")
-    cd "$HOME/run/$env_name/$script_hash"
-
     if [[ $(ps aux | grep "$env_name/$script_hash" | grep -v 'grep') ]]; then
-        echo "running(3)"
+        echo "running(4)"
         exit
     fi
 fi

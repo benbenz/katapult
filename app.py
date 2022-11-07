@@ -24,7 +24,11 @@ async def mainloop():
     print("\n== START ==\n")
 
     # create the instance
-    cr_client.start_instance()
+    try:
+        cr_client.start_instance()
+    except Exception as e:
+        print("Aborting mainloop()",str(e))
+        return
 
     print("\n== RUN ==\n")
         
@@ -34,7 +38,7 @@ async def mainloop():
     print("\n== WAIT ==\n")
 
     print("Waiting for DONE or ABORTED ...")
-    await cr_client.wait_for_script_state(CloudRunCommandState.DONE|CloudRunCommandState.ABORTED,script_hash,uid)
+    await cr_client.wait_for_script_state(CloudRunCommandState.DONE|CloudRunCommandState.ABORTED,script_hash,uid,pid)
 
     # print("\n== WAIT and TAIL ==\n")
 

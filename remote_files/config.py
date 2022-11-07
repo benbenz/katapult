@@ -36,6 +36,3 @@ if config['env_aptget'] is not None:
         st = os.stat('aptget.sh')
         os.chmod('aptget.sh', st.st_mode | stat.S_IEXEC)
 
-
-
-
