@@ -6,6 +6,7 @@ from cloudrun import cr_keypairName , cr_secGroupName , cr_bucketName , cr_vpcNa
 import paramiko
 from botocore.exceptions import ClientError
 from datetime import datetime , timedelta
+from botocore.config import Config
 import asyncio
 import re
 
@@ -15,10 +16,16 @@ def debug(level,*args):
     if level <= DBG_LVL:
         print(*args)
 
+def get_config(region):
+    if region is None:
+        return Config()
+    else:
+        return Config(region_name=region)
+
 def create_keypair(region):
     debug(1,"Creating KEYPAIR ...")
-    ec2_client = boto3.client("ec2", region_name=region)
-    ec2 = boto3.resource('ec2')
+    ec2_client = boto3.client("ec2",config=get_config(region))
+    ec2 = boto3.resource('ec2',config=get_config(region))
 
     keypair = None
     try:
@@ -45,10 +52,11 @@ def create_keypair(region):
                     KeyType='rsa',
                     KeyFormat='pem'
                 )
-                pemfile = open("cloudrun.pem", "w")
+                fpath = "cloudrun-"+str(region)+".pem"
+                pemfile = open(fpath, "w")
                 pemfile.write(keypair['KeyMaterial']) # save the private key in the directory (we will use it with paramiko)
                 pemfile.close()
-                os.chmod(path, 0o600) # change permission to use with ssh (for debugging)
+                os.chmod(fpath, 0o600) # change permission to use with ssh (for debugging)
                 debug(2,keypair)
 
             except ClientError as e2: # the keypair probably exists already
@@ -74,7 +82,7 @@ def create_keypair(region):
     return keypair 
 
 def find_or_create_default_vpc(region):
-    ec2_client = boto3.client("ec2", region_name=config['region'])
+    ec2_client = boto3.client("ec2", config=get_config(region))
     vpcs = ec2_client.describe_vpcs(
         Filters=[
             {
@@ -91,7 +99,7 @@ def find_or_create_default_vpc(region):
 def create_vpc(region,cloudId=None):
     debug(1,"Creating VPC ...")
     vpc = None
-    ec2_client = boto3.client("ec2", region_name=region)
+    ec2_client = boto3.client("ec2", config=get_config(region))
 
     if cloudId is not None:
         vpcID = cloudId
@@ -121,7 +129,7 @@ def create_vpc(region,cloudId=None):
 def create_security_group(region,vpc):
     debug(1,"Creating SECURITY GROUP ...")
     secGroup = None
-    ec2_client = boto3.client("ec2", region_name=region)
+    ec2_client = boto3.client("ec2", config=get_config(region))
 
     secgroups = ec2_client.describe_security_groups(Filters=[
         {
@@ -168,8 +176,8 @@ def create_security_group(region,vpc):
 # for now just return the first subnet present in the Vpc ...
 def create_subnet(region,vpc):
     debug(1,"Creating SUBNET ...")
-    ec2 = boto3.resource('ec2')
-    ec2_client = boto3.client("ec2", region_name=region)
+    ec2 = boto3.resource('ec2',config=get_config(region))
+    ec2_client = boto3.client("ec2", config=get_config(region))
     vpc_obj = ec2.Vpc(vpc['VpcId'])
     for subnet in vpc_obj.subnets.all():
         subnets = ec2_client.describe_subnets(SubnetIds=[subnet.id])
@@ -182,8 +190,8 @@ def create_bucket(region):
 
     debug(1,"Creating BUCKET ...")
 
-    s3_client = boto3.client('s3', region_name=region)
-    s3 = boto3.resource('s3')
+    s3_client = boto3.client('s3', config=get_config(region))
+    s3 = boto3.resource('s3', config=get_config(region))
 
     try :
 
@@ -210,7 +218,7 @@ def create_bucket(region):
 
 def upload_file( region , bucket , file_path ):
     debug(1,"uploading FILE ...")
-    s3_client = boto3.client('s3', region_name=region)
+    s3_client = boto3.client('s3', config=get_config(region))
     response = s3_client.upload_file( file_path, bucket['BucketName'], 'cr-run-script' )
     debug(2,response)
 
@@ -221,7 +229,7 @@ def find_instance(instance_config):
     instanceName = init_instance_name(instance_config)
     region = instance_config['region']
 
-    ec2_client = boto3.client("ec2", region_name=region)
+    ec2_client = boto3.client("ec2", config=get_config(region))
 
     existing = ec2_client.describe_instances(
         Filters = [
@@ -262,7 +270,7 @@ def create_instance(instance_config,vpc,subnet,secGroup):
 
     region = instance_config['region']
 
-    ec2_client = boto3.client("ec2", region_name=region)
+    ec2_client = boto3.client("ec2", config=get_config(region))
 
     existing = ec2_client.describe_instances(
         Filters = [
@@ -401,7 +409,7 @@ def create_instance_objects(instance_config):
 
 
 def start_instance(instance):
-    ec2_client = boto3.client("ec2", region_name=instance.get_region())
+    ec2_client = boto3.client("ec2", config=get_config(instance.get_region()))
 
     try:
         ec2_client.start_instances(InstanceIds=[instance.get_id()])
@@ -424,13 +432,13 @@ def start_instance(instance):
             raise CloudRunError()
 
 def stop_instance(instance):
-    ec2_client = boto3.client("ec2", region_name=instance.get_region())
+    ec2_client = boto3.client("ec2", config=get_config(instance.get_region()))
 
     ec2_client.stop_instances(InstanceIds=[instance.get_id()])
 
 def terminate_instance(instance):
 
-    ec2_client = boto3.client("ec2", region_name=instance.get_region())
+    ec2_client = boto3.client("ec2", config=get_config(instance.get_region()))
 
     ec2_client.terminate_instances(InstanceIds=[instance.get_id()])
 
@@ -439,7 +447,7 @@ def terminate_instance(instance):
         ec2_client.cancel_spot_instance_requests(SpotInstanceRequestIds=[instance.get_data('SpotInstanceRequestId')]) 
 
 def get_instance_info(instance):
-    ec2_client   = boto3.client("ec2", region_name=instance.get_region())
+    ec2_client   = boto3.client("ec2", config=get_config(instance.get_region()))
     instances    = ec2_client.describe_instances( InstanceIds=[instance.get_id()] )
     instance_new = instances['Reservations'][0]['Instances'][0]
     return instance_new
@@ -489,7 +497,7 @@ async def wait_for_instance(instance):
 
 async def connect_to_instance(instance):
     # ssh into instance and run the script from S3/local? (or sftp)
-    k = paramiko.RSAKey.from_private_key_file('cloudrun.pem')
+    k = paramiko.RSAKey.from_private_key_file('cloudrun-'+str(instance.get_region())+'.pem')
     ssh_client = paramiko.SSHClient()
     ssh_client.set_missing_host_key_policy(paramiko.AutoAddPolicy())
     debug(1,"connecting to ",instance.get_dns_addr(),"/",instance.get_ip_addr())
@@ -539,6 +547,7 @@ class AWSCloudRunProvider(CloudRunProvider):
     def __init__(self, conf):
         CloudRunProvider.__init__(self,conf)
         if 'debug' in conf:
+            global DBG_LVL
             DBG_LVL = conf['debug']
 
     def get_instance(self):

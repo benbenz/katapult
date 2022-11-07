@@ -3,6 +3,7 @@ aws-creds
 .venv
 *.pyc
 cloudrun.pem
+cloudrun*.pem
 remote_files/config.json
 /config.py
 /example/config.py

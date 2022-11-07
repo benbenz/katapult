@@ -18,7 +18,7 @@ config = {
 
     'instances_types' : [
         { 
-            'region'       : 'eu-west-3' ,                # has to be valid
+            'region'       : None ,                       # can be None or has to be valid. Overrides AWS user region configuration.
             'cloud_id'     : 'vpc-0babc28485f6730bc' ,    # can be None, or even wrong/non-existing - then the default one is used
             'img_id'       : 'ami-077fd75cd229c811b' ,    # OS image: has to be valid and available for the profile (user/region)
             'img_username' : 'ubuntu' ,                   # the SSH user for the image
