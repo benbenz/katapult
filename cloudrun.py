@@ -123,11 +123,13 @@ class CloudRunProvider(ABC):
 
     def __init__(self, conf):
         self.config  = conf
-        self.process_instance_types()
+        self.preprocess_instances()
 
     # process the instance_types section:
-    # - multiply instances according to plurality
-    def process_instance_types(self):
+    # - multiply instances according to plurality ('number' and 'explode')
+    # - change cpus value according to distribution
+    # - adds a 'rank' attribute to the instances configurations
+    def preprocess_instances(self):
         pass
 
     @abstractmethod
@@ -194,7 +196,7 @@ def init_instance_name(instance_config):
         else:
             return cr_instanceNameRoot + '-' + instance_config['rank'] + '-' + instance_hash    
 
-def init_environment( env_config ):
+def init_environment( projectName , instance , env_config ):
     env_obj  = cloudrunutils.compute_environment_object(env_config)
     env_hash = cloudrunutils.compute_environment_hash(env_obj)
 
@@ -203,8 +205,8 @@ def init_environment( env_config ):
     if env_config.get('dev') == True:
         env_name = cr_environmentNameRoot
     else:
-        if 'project' in env_config:
-            env_name = cr_environmentNameRoot + '-' + env_config['project'] + '-' + env_hash
+        if projectName:
+            env_name = cr_environmentNameRoot + '-' + projectName + '-' + env_hash
         else:
             env_name = cr_environmentNameRoot + '-' + env_hash    
 
@@ -214,7 +216,7 @@ def init_environment( env_config ):
     env_obj['name'] = env_name
     env_obj['hash'] = env_hash
     env_obj['path'] = "$HOME/run/" + env_name
-    env_obj['path_abs'] = "/home/" + env_config['img_username'] + '/run/' + env_name
+    env_obj['path_abs'] = "/home/" + instance.get_config('img_username') + '/run/' + env_name
 
     # replace __REQUIREMENTS_TXT_LINK__ with the actual requirements.txt path (dependent of config and env hash)
     # the file needs to be absolute

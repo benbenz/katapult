@@ -72,7 +72,7 @@ echo 'running' > $run_path/state
 # { $HOME/run/$env_name/microrun.sh "$thecommand" "$run_path" & echo $! > "${pid_file}2"; }
 
 # { $HOME/run/$env_name/microrun.sh "$thecommand" "$uid" "$run_path" "$pid_file" "$output_file" & echo $! > "${pid_file}"; }
-{ $HOME/run/$env_name/microrun.sh "$thecommand" "$uid" "$run_path" "$pid_file" "$output_file"; }
+{ $HOME/run/microrun.sh "$thecommand" "$uid" "$run_path" "$pid_file" "$output_file"; }
 
 # pgrep -P PID >>> Get the subprocesses
 

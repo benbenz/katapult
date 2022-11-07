@@ -52,6 +52,10 @@ def create_keypair(region):
                     KeyType='rsa',
                     KeyFormat='pem'
                 )
+                if region is None:
+                    # get the default user region so we know what were getting ... (if it changes later etc... could be a mess)
+                    my_session = boto3.session.Session()
+                    region = my_session.region_name                
                 fpath = "cloudrun-"+str(region)+".pem"
                 pemfile = open(fpath, "w")
                 pemfile.write(keypair['KeyMaterial']) # save the private key in the directory (we will use it with paramiko)
@@ -497,7 +501,11 @@ async def wait_for_instance(instance):
 
 async def connect_to_instance(instance):
     # ssh into instance and run the script from S3/local? (or sftp)
-    k = paramiko.RSAKey.from_private_key_file('cloudrun-'+str(instance.get_region())+'.pem')
+    region = instance.get_region()
+    if region is None:
+        my_session = boto3.session.Session()
+        region = my_session.region_name              
+    k = paramiko.RSAKey.from_private_key_file('cloudrun-'+str(region)+'.pem')
     ssh_client = paramiko.SSHClient()
     ssh_client.set_missing_host_key_policy(paramiko.AutoAddPolicy())
     debug(1,"connecting to ",instance.get_dns_addr(),"/",instance.get_ip_addr())
@@ -583,7 +591,7 @@ class AWSCloudRunProvider(CloudRunProvider):
         await wait_for_instance(instance)
 
         # init environment object
-        env_obj = init_environment(self.config)
+        env_obj = init_environment(self.config.get('project'),instance,self.config)
         debug(2,json.dumps(env_obj))
 
         ssh_client = await connect_to_instance(instance)
@@ -611,6 +619,18 @@ class AWSCloudRunProvider(CloudRunProvider):
         # upload the install file, the env file and the script file
         ftp_client = ssh_client.open_sftp()
 
+        # change dir to global dir (should be done once)
+        global_path = "/home/" + instance.get_config('img_username') + '/run/' 
+        ftp_client.chdir(global_path)
+        ftp_client.put('remote_files/config.py','config.py')
+        ftp_client.put('remote_files/bootstrap.sh','bootstrap.sh')
+        ftp_client.put('remote_files/run.sh','run.sh')
+        ftp_client.put('remote_files/microrun.sh','microrun.sh')
+        ftp_client.put('remote_files/state.sh','state.sh')
+        ftp_client.put('remote_files/tail.sh','tail.sh')
+        ftp_client.put('remote_files/getpid.sh','getpid.sh')
+        global_path = "$HOME/run" # more robust
+
         # change to env dir
         ftp_client.chdir(env_obj['path_abs'])
         remote_config = 'config-'+env_obj['name']+'.json'
@@ -619,13 +639,6 @@ class AWSCloudRunProvider(CloudRunProvider):
             cfg_file.close()
             ftp_client.put(remote_config,'config.json')
             os.remove(remote_config)
-        ftp_client.put('remote_files/config.py','config.py')
-        ftp_client.put('remote_files/bootstrap.sh','bootstrap.sh')
-        ftp_client.put('remote_files/run.sh','run.sh')
-        ftp_client.put('remote_files/microrun.sh','microrun.sh')
-        ftp_client.put('remote_files/state.sh','state.sh')
-        ftp_client.put('remote_files/tail.sh','tail.sh')
-        ftp_client.put('remote_files/getpid.sh','getpid.sh')
         
         # change to run dir
         ftp_client.chdir(script_path)
@@ -656,15 +669,15 @@ class AWSCloudRunProvider(CloudRunProvider):
         # run
         commands = [ 
             # make bootstrap executable
-            { 'cmd': "chmod +x "+files_path+"/*.sh ", 'out' : True },  
+            { 'cmd': "chmod +x "+global_path+"/*.sh ", 'out' : True },  
             # recreate pip+conda files according to config
-            { 'cmd': "cd " + files_path + " && python3 "+files_path+"/config.py" , 'out' : True },
+            { 'cmd': "cd " + files_path + " && python3 "+global_path+"/config.py" , 'out' : True },
             # setup envs according to current config files state
             # NOTE: make sure to let out = True or bootstraping is not executed properly 
             # TODO: INVESTIGATE THIS
-            { 'cmd': files_path+"/bootstrap.sh \"" + env_obj['name'] + "\" " + ("1" if self.config['dev'] else "0") + " &", 'out': True },  
+            { 'cmd': global_path+"/bootstrap.sh \"" + env_obj['name'] + "\" " + ("1" if self.config['dev'] else "0") + " &", 'out': True },  
             # execute main script (spawn) (this will wait for bootstraping)
-            { 'cmd': files_path+"/run.sh \"" + env_obj['name'] + "\" \""+script_command+"\" " + self.config['input_file'] + " " + self.config['output_file'] + " " + script_hash+" "+uid, 'out' : False }
+            { 'cmd': global_path+"/run.sh \"" + env_obj['name'] + "\" \""+script_command+"\" " + self.config['input_file'] + " " + self.config['output_file'] + " " + script_hash+" "+uid, 'out' : False }
         ]
         for command in commands:
             debug(1,"Executing ",format( command['cmd'] ),"output",command['out'])
@@ -691,7 +704,7 @@ class AWSCloudRunProvider(CloudRunProvider):
         # retrieve PID (this will wait for PID file)
         pid_file = run_path + "/pid"
         #getpid_cmd = "tail "+pid_file #+" && cp "+pid_file+ " "+run_path+"/pid" # && rm -f "+pid_file
-        getpid_cmd = files_path+"/getpid.sh \"" + pid_file + "\""
+        getpid_cmd = global_path+"/getpid.sh \"" + pid_file + "\""
         
         debug(1,"Executing ",format( getpid_cmd ) )
         stdin , stdout, stderr = ssh_client.exec_command(getpid_cmd)
@@ -725,8 +738,9 @@ class AWSCloudRunProvider(CloudRunProvider):
 
         await wait_for_instance(instance)
 
-        env_obj    = self.init_environment()
+        env_obj    = init_environment(self.config.get('project'),instance,self.config)
         files_path = env_obj['path']
+        global_path = "$HOME/run"
 
         ssh_client = await connect_to_instance(instance)
 
@@ -734,7 +748,7 @@ class AWSCloudRunProvider(CloudRunProvider):
         uid   = scriptRuntimeInfo.get_uid()
         pid   = scriptRuntimeInfo.get_pid()
 
-        cmd = files_path + "/state.sh " + env_obj['name'] + " " + str(shash) + " " + str(uid) + " " + str(pid) + " " + self.config['output_file']
+        cmd = global_path + "/state.sh " + env_obj['name'] + " " + str(shash) + " " + str(uid) + " " + str(pid) + " " + self.config['output_file']
         debug(1,"Executing command",cmd)
         stdin, stdout, stderr = ssh_client.exec_command(cmd)
 
@@ -760,8 +774,9 @@ class AWSCloudRunProvider(CloudRunProvider):
 
         await wait_for_instance(instance)
 
-        env_obj    = init_environment(self.config)
+        env_obj    = init_environment(self.config.get('project'),instance,self.config)
         files_path = env_obj['path']
+        global_path = "$HOME/run"
 
         ssh_client = await connect_to_instance(instance)
 
@@ -771,7 +786,7 @@ class AWSCloudRunProvider(CloudRunProvider):
 
         while True:
 
-            cmd = files_path + "/state.sh " + env_obj['name'] + " " + str(shash) + " " + str(uid) + " " + str(pid) + " " + self.config['output_file']
+            cmd = global_path + "/state.sh " + env_obj['name'] + " " + str(shash) + " " + str(uid) + " " + str(pid) + " " + self.config['output_file']
             debug(1,"Executing command",cmd)
             stdin, stdout, stderr = ssh_client.exec_command(cmd)
 
@@ -815,7 +830,7 @@ class AWSCloudRunProvider(CloudRunProvider):
 
         await wait_for_instance(instance)
 
-        env_obj    = self.init_environment()
+        env_obj    = init_environment(self.config.get('project'),instance,self.config)
         files_path = env_obj['path']
 
         shash = scriptRuntimeInfo.get_hash()
