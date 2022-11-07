@@ -1,6 +1,7 @@
 import cloudrun as cr
 import asyncio
 from cloudrun import CloudRunCommandState
+import traceback
 
 try:
     configModule = __import__("config")
@@ -27,18 +28,19 @@ async def mainloop():
     try:
         cr_client.start_instance()
     except Exception as e:
+        traceback.print_exc()
         print("Aborting mainloop()",str(e))
         return
 
     print("\n== RUN ==\n")
         
     # run the script
-    script_hash , uid , pid = await cr_client.run_script() 
+    scriptRuntime = await cr_client.run_script() 
 
     print("\n== WAIT ==\n")
 
     print("Waiting for DONE or ABORTED ...")
-    await cr_client.wait_for_script_state(CloudRunCommandState.DONE|CloudRunCommandState.ABORTED,script_hash,uid,pid)
+    await cr_client.wait_for_script_state(CloudRunCommandState.DONE|CloudRunCommandState.ABORTED,scriptRuntime)
 
     # print("\n== WAIT and TAIL ==\n")
 

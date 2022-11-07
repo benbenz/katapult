@@ -1,8 +1,8 @@
 import boto3
 import os , json
 import cloudrunutils
-from cloudrun import CloudRunError , CloudRunCommandState , CloudRunProvider
-from cloudrun import cr_keypairName , cr_secGroupName , cr_bucketName , cr_vpcName , cr_instanceNameRoot , cr_environmentNameRoot 
+from cloudrun import CloudRunError , CloudRunCommandState , CloudRunInstance , CloudRunEnvironment , CloudRunScriptRuntimeInfo, CloudRunProvider
+from cloudrun import cr_keypairName , cr_secGroupName , cr_bucketName , cr_vpcName , init_instance_name , init_environment
 import paramiko
 from botocore.exceptions import ClientError
 from datetime import datetime , timedelta
@@ -15,9 +15,9 @@ def debug(level,*args):
     if level <= DBG_LVL:
         print(*args)
 
-def create_keypair(config):
+def create_keypair(region):
     debug(1,"Creating KEYPAIR ...")
-    ec2_client = boto3.client("ec2", region_name=config['region'])
+    ec2_client = boto3.client("ec2", region_name=region)
     ec2 = boto3.resource('ec2')
 
     keypair = None
@@ -73,7 +73,7 @@ def create_keypair(config):
     
     return keypair 
 
-def find_or_create_default_vpc():
+def find_or_create_default_vpc(region):
     ec2_client = boto3.client("ec2", region_name=config['region'])
     vpcs = ec2_client.describe_vpcs(
         Filters=[
@@ -88,13 +88,13 @@ def find_or_create_default_vpc():
     defaultvpc = ec2_client.create_default_vpc() if len(vpcs['Vpcs'])==0 else vpcs['Vpcs'][0] 
     return defaultvpc
 
-def create_vpc(config):
+def create_vpc(region,cloudId=None):
     debug(1,"Creating VPC ...")
     vpc = None
-    ec2_client = boto3.client("ec2", region_name=config['region'])
+    ec2_client = boto3.client("ec2", region_name=region)
 
-    if 'cloud_id' in config:
-        vpcID = config['cloud_id']
+    if cloudId is not None:
+        vpcID = cloudId
         try :
             vpcs = ec2_client.describe_vpcs(
                 VpcIds=[
@@ -106,22 +106,22 @@ def create_vpc(config):
             ceMsg = str(ce)
             if 'InvalidVpcID.NotFound' in ceMsg:
                 debug(1,"WARNING: using default VPC. "+vpcID+" is unavailable")
-                vpc = find_or_create_default_vpc() 
+                vpc = find_or_create_default_vpc(region) 
             else:
                 debug(1,"WARNING: using default VPC. Unknown error")
-                vpc = find_or_create_default_vpc() 
+                vpc = find_or_create_default_vpc(region) 
 
     else:
         debug(1,"using default VPC (no VPC ID specified in config)")
-        vpc = find_or_create_default_vpc()
+        vpc = find_or_create_default_vpc(region)
     debug(2,vpc)
 
     return vpc 
 
-def create_security_group(config,vpc):
+def create_security_group(region,vpc):
     debug(1,"Creating SECURITY GROUP ...")
     secGroup = None
-    ec2_client = boto3.client("ec2", region_name=config['region'])
+    ec2_client = boto3.client("ec2", region_name=region)
 
     secgroups = ec2_client.describe_security_groups(Filters=[
         {
@@ -166,10 +166,10 @@ def create_security_group(config,vpc):
     return secGroup
 
 # for now just return the first subnet present in the Vpc ...
-def create_subnet(config,vpc):
+def create_subnet(region,vpc):
     debug(1,"Creating SUBNET ...")
     ec2 = boto3.resource('ec2')
-    ec2_client = boto3.client("ec2", region_name=config['region'])
+    ec2_client = boto3.client("ec2", region_name=region)
     vpc_obj = ec2.Vpc(vpc['VpcId'])
     for subnet in vpc_obj.subnets.all():
         subnets = ec2_client.describe_subnets(SubnetIds=[subnet.id])
@@ -178,11 +178,11 @@ def create_subnet(config,vpc):
         return subnet
     return None # todo: create a subnet
 
-def create_bucket(config):
+def create_bucket(region):
 
     debug(1,"Creating BUCKET ...")
 
-    s3_client = boto3.client('s3', region_name=config['region'])
+    s3_client = boto3.client('s3', region_name=region)
     s3 = boto3.resource('s3')
 
     try :
@@ -191,7 +191,7 @@ def create_bucket(config):
             ACL='private',
             Bucket=cr_bucketName,
             CreateBucketConfiguration={
-                'LocationConstraint': config['region']
+                'LocationConstraint': region
             },
 
         )
@@ -208,30 +208,20 @@ def create_bucket(config):
     return bucket 
 
 
-def upload_file( bucket , file_path ):
+def upload_file( region , bucket , file_path ):
     debug(1,"uploading FILE ...")
-    s3_client = boto3.client('s3', region_name=config['region'])
+    s3_client = boto3.client('s3', region_name=region)
     response = s3_client.upload_file( file_path, bucket['BucketName'], 'cr-run-script' )
     debug(2,response)
 
-def init_instance_name(config):
-    if ('dev' in config) and (config['dev'] == True):
-        return cr_instanceNameRoot
-    else:
-        instance_hash = cloudrunutils.compute_instance_hash(config)
-
-        if 'project' in config:
-            return cr_instanceNameRoot + '-' + config['project'] + '-' + instance_hash
-        else:
-            return cr_instanceNameRoot + '-' + instance_hash    
-
-def find_instance(config):
+def find_instance(instance_config):
 
     debug(1,"Searching INSTANCE ...")
 
-    instanceName = init_instance_name(config)
+    instanceName = init_instance_name(instance_config)
+    region = instance_config['region']
 
-    ec2_client = boto3.client("ec2", region_name=config['region'])
+    ec2_client = boto3.client("ec2", region_name=region)
 
     existing = ec2_client.describe_instances(
         Filters = [
@@ -254,6 +244,7 @@ def find_instance(config):
         instance = existing['Reservations'][0]['Instances'][0]
         debug(1,"Found exisiting instance !",instance['InstanceId'])
         debug(2,instance)
+        instance = CloudRunInstance( region , instanceName , instance['InstanceId'] , instance_config, instance )
         return instance 
     
     else:
@@ -263,13 +254,15 @@ def find_instance(config):
         return None 
 
 
-def create_instance(config,vpc,subnet,secGroup):
+def create_instance(instance_config,vpc,subnet,secGroup):
 
     debug(1,"Creating INSTANCE ...")
 
-    instanceName = init_instance_name(config)
+    instanceName = init_instance_name(instance_config)
 
-    ec2_client = boto3.client("ec2", region_name=config['region'])
+    region = instance_config['region']
+
+    ec2_client = boto3.client("ec2", region_name=region)
 
     existing = ec2_client.describe_instances(
         Filters = [
@@ -296,22 +289,23 @@ def create_instance(config,vpc,subnet,secGroup):
         instance = existing['Reservations'][0]['Instances'][0]
         debug(1,"Found exisiting instance !",instance['InstanceId'])
         debug(2,instance)
+        instance = CloudRunInstance( region , instanceName , instance['InstanceId'] , instance_config, instance )
         return instance , created
 
-    if 'cpus' in config and config['cpus'] is not None:
+    if instance_config.get('cpus') is not None:
         cpus_spec = {
-            'CoreCount': config['cpus'],
+            'CoreCount': instance_config['cpus'],
             'ThreadsPerCore': 1
         },
     else:
         cpus_spec = { }  
 
-    if 'gpu' in config and config['gpu']:
-        gpu_spec = [ { 'Type' : config['gpu'] } ]
+    if instance_config.get('gpu'):
+        gpu_spec = [ { 'Type' : instance_config['gpu'] } ]
     else:
         gpu_spec = [ ]
     
-    if 'eco' in config and config['eco'] :
+    if instance_config.get('eco') :
         market_options = {
             'MarketType': 'spot',
             'SpotOptions': {
@@ -319,23 +313,23 @@ def create_instance(config,vpc,subnet,secGroup):
                 'InstanceInterruptionBehavior': 'stop' #'hibernate'|'stop'|'terminate'
             }
         }     
-        if 'eco_life' in config and isinstance(config['eco_life'],timedelta):
-            validuntil = datetime.today() + config['eco_life']
+        if 'eco_life' in instance_config and isinstance(instance_config['eco_life'],timedelta):
+            validuntil = datetime.today() + instance_config['eco_life']
             market_options['SpotOptions']['ValidUntil'] = validuntil
-        if 'max_bid' in config and isinstance(config['max_bid'],str):
-            market_options['SpotOptions']['MaxPrice'] = config['max_bid']
+        if 'max_bid' in instance_config and isinstance(instance_config['max_bid'],str):
+            market_options['SpotOptions']['MaxPrice'] = instance_config['max_bid']
     else:
         market_options = { } 
 
-    if 'disk_size' in config and config['disk_size']:
+    if instance_config.get('disk_size'):
         #TODO: improve selection of disk_type
-        disk_size = config['disk_size']
+        disk_size = instance_config['disk_size']
         if disk_size < 1024:
             volume_type = 'standard'
         else:
             volume_type = 'st1' # sc1, io1, io2, gp2, gp3
-        if 'disk_type' in config and config['disk_type']:
-            volume_type = config['disk_type']
+        if 'disk_type' in instance_config and instance_config['disk_type']:
+            volume_type = instance_config['disk_type']
         block_device_mapping = [
             {
                 'DeviceName' : '/dev/sda' ,
@@ -352,10 +346,10 @@ def create_instance(config,vpc,subnet,secGroup):
     try:
 
         instances = ec2_client.run_instances(
-                ImageId = config['img_id'],
+                ImageId = instance_config['img_id'],
                 MinCount = 1,
                 MaxCount = 1,
-                InstanceType = config['size'],
+                InstanceType = instance_config['size'],
                 KeyName = cr_keypairName,
                 SecurityGroupIds=[secGroup['GroupId']],
                 SubnetId = subnet['SubnetId'],
@@ -390,30 +384,34 @@ def create_instance(config,vpc,subnet,secGroup):
 
     debug(2,instances["Instances"][0])
 
-    return instances["Instances"][0] , created
+    instance = CloudRunInstance( region , instanceName , instances["Instances"][0]["InstanceId"] , instance_config, instances["Instances"][0] )
 
-def create_instance_objects(config):
-    keypair  = create_keypair(config)
-    vpc      = create_vpc(config) 
-    secGroup = create_security_group(config,vpc)
-    subnet   = create_subnet(config,vpc) 
-    instance , created = create_instance(config,vpc,subnet,secGroup)
+    return instance , created
+
+def create_instance_objects(instance_config):
+    region   = instance_config['region']
+    keypair  = create_keypair(region)
+    vpc      = create_vpc(region,instance_config.get('cloud_id')) 
+    secGroup = create_security_group(region,vpc)
+    subnet   = create_subnet(region,vpc) 
+    # this is where all the instance_config is actually used
+    instance , created = create_instance(instance_config,vpc,subnet,secGroup)
 
     return instance , created 
 
 
-def start_instance(config,instance):
-    ec2_client = boto3.client("ec2", region_name=config['region'])
+def start_instance(instance):
+    ec2_client = boto3.client("ec2", region_name=instance.get_region())
 
     try:
-        ec2_client.start_instances(InstanceIds=[instance['InstanceId']])
+        ec2_client.start_instances(InstanceIds=[instance.get_id()])
     except ClientError as botoerr:
         errmsg = str(botoerr)
         if 'IncorrectSpotRequestState' in errmsg:
             debug(1,"Could not start because it is a SPOT instance, waiting on SPOT ...",errmsg)
             # try reboot
             try:
-                ec2_client.reboot_instances(InstanceIds=[instance['InstanceId']])
+                ec2_client.reboot_instances(InstanceIds=[instance.get_id()])
             except ClientError as botoerr2:
                 errmsg2 = str(botoerr2)
                 if 'IncorrectSpotRequestState' in errmsg2:
@@ -425,83 +423,32 @@ def start_instance(config,instance):
             debug(2,botoerr)
             raise CloudRunError()
 
-def stop_instance(config,instance):
-    ec2_client = boto3.client("ec2", region_name=config['region'])
+def stop_instance(instance):
+    ec2_client = boto3.client("ec2", region_name=instance.get_region())
 
-    ec2_client.stop_instances(InstanceIds=[instance['InstanceId']])
+    ec2_client.stop_instances(InstanceIds=[instance.get_id()])
 
-def terminate_instance(config,instance):
+def terminate_instance(instance):
 
-    ec2_client = boto3.client("ec2", region_name=config['region'])
+    ec2_client = boto3.client("ec2", region_name=instance.get_region())
 
-    ec2_client.terminate_instances(InstanceIds=[instance['InstanceId']])
+    ec2_client.terminate_instances(InstanceIds=[instance.get_id()])
 
-    if instance['SpotInstanceRequestId']:
+    if instance.get_data('SpotInstanceRequestId'):
 
-        ec2_client.cancel_spot_instance_requests(SpotInstanceRequestIds=[instance['SpotInstanceRequestId']])
+        ec2_client.cancel_spot_instance_requests(SpotInstanceRequestIds=[instance.get_data('SpotInstanceRequestId')]) 
 
-def run_instance_script(config,vpc,subnet,secGroup,script):
-
-    debug(1,"Creating INSTANCE ...")
-
-    ec2_client = boto3.client("ec2", region_name=config['region'])
-
-    instanceName = cr_instanceNameRoot
-
-    instances = ec2_client.run_instances(
-            ImageId = config['img_id'],
-            MinCount = 1,
-            MaxCount = 1,
-            InstanceType = 't2.micro',
-            KeyName = cr_keypairName,
-            SecurityGroupIds=[secGroup['GroupId']],
-            SubnetId = subnet['SubnetId'],
-            TagSpecifications=[
-                {
-                    'ResourceType': 'instance',
-                    'Tags': [
-                        {
-                            'Key': 'Name',
-                            'Value': instanceName
-                        },
-                    ]
-                },
-            ],
-            InstanceInitiatedShutdownBehavior='terminate',
-            UserData=script
-    )    
-
-    debug(2,instances["Instances"][0])
-
-    return instances["Instances"][0]    
-
-def get_instance_info(config,instance):
-    ec2_client   = boto3.client("ec2", region_name=config['region'])
-    instances    = ec2_client.describe_instances( InstanceIds=[instance['InstanceId']] )
+def get_instance_info(instance):
+    ec2_client   = boto3.client("ec2", region_name=instance.get_region())
+    instances    = ec2_client.describe_instances( InstanceIds=[instance.get_id()] )
     instance_new = instances['Reservations'][0]['Instances'][0]
     return instance_new
 
-def get_public_ip(config,instance_id):
-    ec2_client = boto3.client("ec2", region_name=config['region'])
-    reservations = ec2_client.describe_instances(InstanceIds=[instance_id]).get("Reservations")
-
-    for reservation in reservations:
-        for instance in reservation['Instances']:
-            print(instance.get("PublicIpAddress"))    
-
-
-def list_amis(config):
-    ec2 = boto3.client('ec2', region_name=config['region'])
-    response = ec2.describe_instances()
-    for reservation in response["Reservations"]:
-        for instance in reservation["Instances"]:
-            print(instance["ImageId"])
-
-async def wait_for_instance(config,instance):
+async def wait_for_instance(instance):
     # get the public DNS info when instance actually started (todo: check actual state)
     waitFor = True
     while waitFor:
-        updated_instance_info = get_instance_info(config,instance)
+        updated_instance_info = get_instance_info(instance)
         lookForDNS   = not 'PublicDnsName' in updated_instance_info or updated_instance_info['PublicDnsName'] is None
         lookForIP    = not 'PublicIpAddress' in updated_instance_info or updated_instance_info['PublicIpAddress'] is None
         instanceState =  updated_instance_info['State']['Name']
@@ -511,9 +458,9 @@ async def wait_for_instance(config,instance):
         if instanceState == 'stopped' or instanceState == 'stopping':
             try:
                 # restart the instance
-                start_instance(config,instance)
+                start_instance(instance)
             except CloudRunError:
-                terminate_instance(config,instance)
+                terminate_instance(instance)
                 try :
                     create_instance_objects(config)
                 except:
@@ -534,17 +481,21 @@ async def wait_for_instance(config,instance):
             
             await asyncio.sleep(10)
 
-    return updated_instance_info
+    debug(2,updated_instance_info)    
 
-async def connect_to_instance(config,instance):
+    instance.set_data(updated_instance_info)
+    instance.set_ip_addr(updated_instance_info['PublicIpAddress'])
+    instance.set_dns_addr(updated_instance_info['PublicDnsName'])
+
+async def connect_to_instance(instance):
     # ssh into instance and run the script from S3/local? (or sftp)
     k = paramiko.RSAKey.from_private_key_file('cloudrun.pem')
     ssh_client = paramiko.SSHClient()
     ssh_client.set_missing_host_key_policy(paramiko.AutoAddPolicy())
-    debug(1,"connecting to ",instance['PublicDnsName'],"/",instance['PublicIpAddress'])
+    debug(1,"connecting to ",instance.get_dns_addr(),"/",instance.get_ip_addr())
     while True:
         try:
-            ssh_client.connect(hostname=instance['PublicDnsName'],username=config['img_username'],pkey=k) #,password=’mypassword’)
+            ssh_client.connect(hostname=instance.get_dns_addr(),username=instance.get_config('img_username'),pkey=k) #,password=’mypassword’)
             break
         except paramiko.ssh_exception.NoValidConnectionsError as cexc:
             print(cexc)
@@ -620,15 +571,13 @@ class AWSCloudRunProvider(CloudRunProvider):
         # CHECK EVERY TIME !
         instance , created = self.start_instance()
 
-        updated_instance_info = await wait_for_instance(self.config,instance)
-
-        debug(2,updated_instance_info)    
+        await wait_for_instance(instance)
 
         # init environment object
-        env_obj = self.init_environment()
+        env_obj = init_environment(self.config)
         debug(2,json.dumps(env_obj))
 
-        ssh_client = await connect_to_instance(self.config,updated_instance_info)
+        ssh_client = await connect_to_instance(instance)
 
         files_path = env_obj['path']
 
@@ -754,10 +703,10 @@ class AWSCloudRunProvider(CloudRunProvider):
         # make sure we stop the instance to avoid charges !
         #stop_instance(instance)
 
-        return script_hash , uid , pid
+        return CloudRunScriptRuntimeInfo( script_hash , uid , pid )
 
     # this allow any external process to wait for a specific job
-    async def get_script_state( self, script_hash , uid , pid = None ):
+    async def get_script_state( self, scriptRuntimeInfo ):
 
         instance = self.get_instance()
 
@@ -765,14 +714,18 @@ class AWSCloudRunProvider(CloudRunProvider):
             print("get_command_state: instance is not available!")
             return CloudRunCommandState.UNKNOWN
 
-        updated_instance_info = await wait_for_instance(self.config,instance)
+        await wait_for_instance(instance)
 
         env_obj    = self.init_environment()
         files_path = env_obj['path']
 
-        ssh_client = await connect_to_instance(self.config,updated_instance_info)
+        ssh_client = await connect_to_instance(instance)
 
-        cmd = files_path + "/state.sh " + env_obj['name'] + " " + str(script_hash) + " " + str(uid) + " " + str(pid) + " " + self.config['output_file']
+        shash = scriptRuntimeInfo.get_hash()
+        uid   = scriptRuntimeInfo.get_uid()
+        pid   = scriptRuntimeInfo.get_pid()
+
+        cmd = files_path + "/state.sh " + env_obj['name'] + " " + str(shash) + " " + str(uid) + " " + str(pid) + " " + self.config['output_file']
         debug(1,"Executing command",cmd)
         stdin, stdout, stderr = ssh_client.exec_command(cmd)
 
@@ -789,23 +742,27 @@ class AWSCloudRunProvider(CloudRunProvider):
 
         return state
 
-    async def wait_for_script_state( self, script_state , script_hash , uid , pid = None ):    
+    async def wait_for_script_state( self, script_state , scriptRuntimeInfo ):    
         instance = self.get_instance()
 
         if instance is None:
             print("get_command_state: instance is not available!")
             return CloudRunCommandState.UNKNOWN
 
-        updated_instance_info = await wait_for_instance(self.config,instance)
+        await wait_for_instance(instance)
 
-        env_obj    = self.init_environment()
+        env_obj    = init_environment(self.config)
         files_path = env_obj['path']
 
-        ssh_client = await connect_to_instance(self.config,updated_instance_info)
+        ssh_client = await connect_to_instance(instance)
+
+        shash = scriptRuntimeInfo.get_hash()
+        uid   = scriptRuntimeInfo.get_uid()
+        pid   = scriptRuntimeInfo.get_pid()
 
         while True:
 
-            cmd = files_path + "/state.sh " + env_obj['name'] + " " + str(script_hash) + " " + str(uid) + " " + str(pid) + " " + self.config['output_file']
+            cmd = files_path + "/state.sh " + env_obj['name'] + " " + str(shash) + " " + str(uid) + " " + str(pid) + " " + self.config['output_file']
             debug(1,"Executing command",cmd)
             stdin, stdout, stderr = ssh_client.exec_command(cmd)
 
@@ -841,20 +798,24 @@ class AWSCloudRunProvider(CloudRunProvider):
         return int(lines_i[-1].split('\t')[0]) + 1 if lines_i else line_num            
 
 
-    async def tail( self, script_hash , uid , pid = None ):    
+    async def tail( self, scriptRuntimeInfo ):    
         instance = self.get_instance()
 
         if instance is None:
             print("tail: instance is not available!")
 
-        updated_instance_info = await wait_for_instance(self.config,instance)
+        await wait_for_instance(instance)
 
         env_obj    = self.init_environment()
         files_path = env_obj['path']
 
-        ssh_client = await connect_to_instance(self.config,updated_instance_info)
+        shash = scriptRuntimeInfo.get_hash()
+        uid   = scriptRuntimeInfo.get_uid()
+        pid   = scriptRuntimeInfo.get_pid()
 
-        cmd = files_path + "/tail.sh " + env_obj['name'] + " " + str(script_hash) + " " + str(uid) 
+        ssh_client = await connect_to_instance(instance)
+
+        cmd = files_path + "/tail.sh " + env_obj['name'] + " " + str(shash) + " " + str(uid) 
         debug(1,"Executing command",cmd)
         stdin, stdout, stderr = ssh_client.exec_command(cmd)
         return line_buffered(stdout) 

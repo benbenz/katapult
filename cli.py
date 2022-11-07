@@ -1,6 +1,6 @@
 import cloudrun as cr
 import asyncio
-from cloudrun import CloudRunError , CloudRunCommandState
+from cloudrun import CloudRunError , CloudRunCommandState , CloudRunScriptRuntimeInfo
 import sys
 
 if len(sys.argv)<2:
@@ -29,17 +29,20 @@ except ModuleNotFoundError as mnfe:
 # get client 
 cr_client = cr.get_client(config)
 
-async def tail_loop(script_hash,uid):
+async def tail_loop(scriptRuntimeInfo):
 
-    generator = await cr_client.tail(script_hash,uid) 
+    generator = await cr_client.tail(scriptRuntimeInfo) 
     for line in generator:
         print(line)
 
 if command=="wait":
     # run main loop
-    asyncio.run( cr_client.wait_for_script_state(CloudRunCommandState.DONE|CloudRunCommandState.ABORTED,sys.argv[2],sys.argv[3]))
+    scriptRuntime = CloudRunScriptRuntimeInfo( sys.argv[2],sys.argv[3] )
+    asyncio.run( cr_client.wait_for_script_state(CloudRunCommandState.DONE|CloudRunCommandState.ABORTED,scriptRuntime))
 elif command=="getstate":
-    asyncio.run( cr_client.get_script_state(sys.argv[2],sys.argv[3]) )
+    scriptRuntime = CloudRunScriptRuntimeInfo( sys.argv[2],sys.argv[3] )
+    asyncio.run( cr_client.get_script_state(scriptRuntime) )
 elif command=="tail":
-    asyncio.run( tail_loop(sys.argv[2],sys.argv[3]) )
+    scriptRuntime = CloudRunScriptRuntimeInfo( sys.argv[2],sys.argv[3] )
+    asyncio.run( tail_loop(scriptRuntime) )
 
