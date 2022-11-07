@@ -23,8 +23,8 @@
     - [x] maestro        = 'local' | 'remote' (nano) | 'lambda'
 
   - [x] use new instances variables:
-        - [x] disk_size
-        - [x] disk_type
+    - [x] disk_size
+    - [x] disk_type
 
 3) Re-factorize classes / plurality / calls etc.
   - [x] improve script hash computation to use command and uploaded files list ...
