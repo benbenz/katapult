@@ -3,19 +3,19 @@
 #echo $$
 
 if (( $# < 6 )); then
-  echo "$0 ENV_NAME CMD IN_FILE OUT_FILE SCRIPT_HASH UID"
+  echo "$0 ENV_NAME CMD IN_FILE OUT_FILE JOB_HASH UID"
   exit 0
 else
   env_name="$1"; shift
   thecommand="$1"; shift
   input_file="$1"; shift
   output_file="$1"; shift
-  script_hash="$1"; shift
+  job_hash="$1"; shift
   uid="$1"; shift
 fi
 
 env_path="$HOME/run/$env_name"
-run_path="$HOME/run/$env_name/$script_hash/$uid"
+run_path="$HOME/run/$env_name/$job_hash/$uid"
 pid_file="$run_path/pid"
 
 # TODO: check if existing PID and PID running ... and throw warning, exit or do something ?

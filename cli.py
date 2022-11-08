@@ -1,6 +1,6 @@
 import cloudrun as cr
 import asyncio
-from cloudrun import CloudRunError , CloudRunCommandState , CloudRunScriptRuntimeInfo
+from cloudrun import CloudRunError , CloudRunCommandState , CloudRunJobRuntimeInfo
 import sys
 
 if len(sys.argv)<2:
@@ -9,14 +9,14 @@ if len(sys.argv)<2:
 
 command = sys.argv[1]
 
-if command=="wait" and len(sys.argv)<4:
-    print("USAGE: python3 cli.py wait SCRIPT_HASH UID")
+if command=="wait" and len(sys.argv)<3:
+    print("USAGE: python3 cli.py wait UID")
     sys.exit()
-elif command=="getstate" and len(sys.argv)<4:
-    print("USAGE: python3 cli.py getstate SCRIPT_HASH UID")
+elif command=="getstate" and len(sys.argv)<3:
+    print("USAGE: python3 cli.py getstate UID")
     sys.exit()
-elif command=="getstate" and len(sys.argv)<4:
-    print("USAGE: python3 cli.py tail SCRIPT_HASH UID")
+elif command=="getstate" and len(sys.argv)<3:
+    print("USAGE: python3 cli.py tail UID")
     sys.exit()
 
 try:
@@ -37,12 +37,12 @@ async def tail_loop(scriptRuntimeInfo):
 
 if command=="wait":
     # run main loop
-    scriptRuntime = CloudRunScriptRuntimeInfo( sys.argv[2],sys.argv[3] )
+    scriptRuntime = CloudRunJobRuntimeInfo( sys.argv[2] )
     asyncio.run( cr_client.wait_for_script_state(CloudRunCommandState.DONE|CloudRunCommandState.ABORTED,scriptRuntime))
 elif command=="getstate":
-    scriptRuntime = CloudRunScriptRuntimeInfo( sys.argv[2],sys.argv[3] )
+    scriptRuntime = CloudRunJobRuntimeInfo( sys.argv[2] )
     asyncio.run( cr_client.get_script_state(scriptRuntime) )
 elif command=="tail":
-    scriptRuntime = CloudRunScriptRuntimeInfo( sys.argv[2],sys.argv[3] )
+    scriptRuntime = CloudRunJobRuntimeInfo( sys.argv[2] )
     asyncio.run( tail_loop(scriptRuntime) )
 

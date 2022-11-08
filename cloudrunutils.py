@@ -167,22 +167,32 @@ def compute_environment_hash(env_obj):
     hash = hashlib.md5(env_json_canon).hexdigest()
     return hash[0:12]
 
-def compute_script_hash(config):
-    script_to_hash = ''
-    if 'run_script' in config and config['run_script'] is not None:
-        script_to_hash = 'script:' + config['run_script']
-    elif 'run_command' in config and config['run_command']:
-        script_to_hash = 'command:' + config['run_command']
+def compute_job_hash(config):
+    string_to_hash = ''
+    if config.get('run_script'):
+        script_args    = config['run_script'].split()
+        scriptfile     = path.realpath(script_args[0])
+        string_to_hash = 'script:' + scriptfile
+    elif config.get('run_command'):
+        # lets not do anything to commands ... its less known what can be in there ...
+        string_to_hash = 'command:' + config['run_command']
     else:
-        script_to_hash = 'unknown'
+        string_to_hash = 'unknown'
 
     # also add the upload files as part of the hash
     # this could mean the script will run with different multi inputs ... 
-    if 'upload_files' in config and config['upload_files'] is not None:
+    if config.get('upload_files'):
         files = config['upload_files']
         if isinstance(files,str):
-            files = [ files ] 
-        script_to_hash = script_to_hash + ":" + ",".join(files)
+            files = [ files ]
+        realfiles = []
+        for f in files.sort():
+            realfiles.append( path.realpath(f) )
+        string_to_hash = string_to_hash + ":" + ",".join(realfiles)
+
+    if config.get('input_file'):
+        inputpath = path.realpath(config.get('input_file'))
+        string_to_hash = string_to_hash + ":" + inputpath
 
     # also add the input file which should be pointing to a specific file 
     # so if this is different for some reason (but with all the same python file, args, and upload files)
@@ -192,15 +202,15 @@ def compute_script_hash(config):
     # this will be differentiated with the UID at run time
     # to mutualize more the upload files + script file ...
     # if 'input_files' in config and config['input_files'] is not None:
-    #    script_to_hash = script_to_hash + ':' + config['input_files']
+    #    string_to_hash = string_to_hash + ':' + config['input_files']
 
-    hash = hashlib.md5(script_to_hash.encode()).hexdigest()
+    hash = hashlib.md5(string_to_hash.encode()).hexdigest()
     return hash[0:12]
 
 def generate_unique_filename():
     return str(uuid.uuid4())
 
-def compute_script_command(script_dir,config):
+def compute_job_command(script_dir,config):
     script_command = ''
     if 'run_script' in config and config['run_script'] is not None:
         script_args = config['run_script'].split()

@@ -56,7 +56,7 @@ config = {
     # JOBS / SCRIPTS
     ################################################################################
 
-    'scripts' : [
+    'jobs' : [
         {
             'env_name'     : None ,                       # the environment to use (can be 'None' if solely one environment is provided above)
             'cpus_req'     : None ,                       # the CPU(s) requirements for the process (can be None)

@@ -1,22 +1,22 @@
 #!/usr/bin/bash
 
 if (( $# < 4 )); then
-    echo "$0 ENV_NAME SCRIPT_HASH UID PID OUT_FILE"
+    echo "$0 ENV_NAME JOB_HASH UID PID OUT_FILE"
     exit 0
 else
     env_name="$1"; shift
-    script_hash="$1"; shift
+    job_hash="$1"; shift
     uid="$1"; shift
     pid=$1; shift
     out_file="$1"; shift
 fi
 
-if [[ "$script_hash" == "None" ]]; then
+if [[ "$job_hash" == "None" ]]; then
     echo 'unknown(0)'
     exit
 fi
 
-run_path="$HOME/run/$env_name/$script_hash/$uid"
+run_path="$HOME/run/$env_name/$job_hash/$uid"
 cd $run_path 
 
 # this is running (by UID)
@@ -61,8 +61,8 @@ if [[ pid != "None" ]] && ! [[ pid -eq 0 ]]; then
 fi
 
 # check if we have a command state file
-if [[ "$script_hash" != "None" ]]; then
-    if [[ $(ps aux | grep "$env_name/$script_hash" | grep -v 'grep') ]]; then
+if [[ "$job_hash" != "None" ]]; then
+    if [[ $(ps aux | grep "$env_name/$job_hash" | grep -v 'grep') ]]; then
         echo "running(4)"
         exit
     fi
