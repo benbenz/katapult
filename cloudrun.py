@@ -5,6 +5,7 @@ import sys , json , os
 import paramiko
 import re
 import asyncio
+import copy
 
 
 cr_keypairName         = 'cloudrun-keypair'
@@ -119,16 +120,30 @@ class CloudRunEnvironment():
     def get_name(self):
         return self._name
 
-    def deploy(self,instance):
+    def get_path(self):
+        return self._env_obj['path']
 
-        env_obj = self._env_obj.copy()
-        env_obj['path_abs'] = "/home/" + instance.get_config('img_username') + '/run/' + self._name
+    def deploy(self,instance):
+        return CloudRunDeployedEnvironment(self,instance)
+
+    def json(self):
+        return json.dumps(self._env_obj)        
+
+class CloudRunDeployedEnvironment(CloudRunEnvironment):
+
+    def __init__(self, env, instance):
+        self._config   = copy.deepcopy(env._config)
+        self._env_obj  = copy.deepcopy(env._env_obj)
+        self._hash     = env._hash
+        self._name     = env._name
+        #env_obj = self._env_obj.copy()
+        self._env_obj['path_abs'] = "/home/" + instance.get_config('img_username') + '/run/' + self._name
         # replace __REQUIREMENTS_TXT_LINK__ with the actual requirements.txt path (dependent of config and env hash)
         # the file needs to be absolute
-        env_obj = cloudrunutils.update_requirements_path(env_obj,env_obj['path_abs'])
+        self._env_obj = cloudrunutils.update_requirements_path(self._env_obj,self._env_obj['path_abs'])
 
-        return env_obj
-
+    def get_path_abs(self):
+        return env_obj['path_abs']
 
 
 class CloudRunJob():
@@ -137,7 +152,6 @@ class CloudRunJob():
         self._config  = job_cfg
         self._hash    = cloudrunutils.compute_job_hash(self._config)
         self._env     = None
-        self._runtime = None
         if (not 'input_file' in self._config) or (not 'output_file' in self._config) or not isinstance(self._config['input_file'],str) or not isinstance(self._config['output_file'],str):
             print("\n\n\033[91mConfiguration requires an input and output file names\033[0m\n\n")
             raise CloudRunError() 
@@ -145,9 +159,6 @@ class CloudRunJob():
     def attach_env(self,env):
         self._env = env 
         self._config['env_name'] = env.get_name()
-
-    def attach_process(self,runtimeInfo):
-        self._runtime = runtimeInfo 
 
     def get_hash(self):
         return self._hash
@@ -158,8 +169,29 @@ class CloudRunJob():
     def get_env(self):
         return self._env
 
-    def get_command(self,job_path):
-        return cloudrunutils.compute_job_command(job_path,self._config)
+    def deploy(self,dpl_env):
+        return CloudRunDeployedJob(self,dpl_env)
+
+
+class CloudRunDeployedJob(CloudRunJob):
+
+    def __init__(self,job,dpl_env):
+        self._config  = copy.deepcopy(job._config)
+        self._hash    = job._hash
+        self._env     = dpl_env
+        self._runtime = None
+        self._path = dpl_env.get_path_abs() + '/' + self.get_hash()
+        self._command = cloudrunutils.compute_job_command(self._path,self._config)
+
+    def attach_process(self,runtimeInfo):
+        self._runtime = runtimeInfo 
+
+    def get_path(self):
+        return self._path
+
+    def get_command(self):
+        return self._command
+
 
 class CloudRunJobRuntimeInfo():
 
@@ -329,24 +361,22 @@ class CloudRunProvider(ABC):
 
         # FOR NOW
         job      = self._jobs[0]        # retrieve default script
-        env      = job.get_env()     # get its environment
-        env_obj  = env.deploy(instance) # "deploy" the environment to the instance and get the json object
-        job_path = env_obj['path_abs'] + '/' + job.get_hash()
-        job_hash = job.get_hash()
+        env      = job.get_env()        # get its environment
+        dpl_env  = env.deploy(instance) # "deploy" the environment to the instance and get a DeployedEnvironment
+        dpl_job  = job.deploy(dpl_env)
 
         # init environment object
-        self.debug(2,json.dumps(env_obj))
+        self.debug(2,dpl_env.json())
 
         ssh_client = await self._connect_to_instance(instance)
 
-        files_path = env_obj['path']
+        files_path = dpl_env.get_path()
 
         # generate unique PID file
         uid = cloudrunutils.generate_unique_filename() 
         
-        run_path   = job_path + '/' + uid
-
-        job_command = job.get_command(job_path)
+        run_path    = dpl_job.get_path() + '/' + uid
+        job_command = dpl_job.get_command()
 
         self.debug(1,"creating directories ...")
         stdin0, stdout0, stderr0 = ssh_client.exec_command("mkdir -p "+files_path+" "+run_path)
@@ -371,10 +401,10 @@ class CloudRunProvider(ABC):
         global_path = "$HOME/run" # more robust
 
         # change to env dir
-        ftp_client.chdir(env_obj['path_abs'])
-        remote_config = 'config-'+env_obj['name']+'.json'
+        ftp_client.chdir(dpl_env.get_path_abs())
+        remote_config = 'config-'+dpl_env.get_name()+'.json'
         with open(remote_config,'w') as cfg_file:
-            cfg_file.write(json.dumps(env_obj))
+            cfg_file.write(dpl_env.json())
             cfg_file.close()
             ftp_client.put(remote_config,'config.json')
             os.remove(remote_config)
@@ -427,9 +457,9 @@ class CloudRunProvider(ABC):
             # setup envs according to current config files state
             # NOTE: make sure to let out = True or bootstraping is not executed properly 
             # TODO: INVESTIGATE THIS
-            { 'cmd': global_path+"/bootstrap.sh \"" + env_obj['name'] + "\" " + ("1" if self._config['dev'] else "0") + " &", 'out': True },  
+            { 'cmd': global_path+"/bootstrap.sh \"" + dpl_env.get_name() + "\" " + ("1" if self._config['dev'] else "0") + " &", 'out': True },  
             # execute main script (spawn) (this will wait for bootstraping)
-            { 'cmd': global_path+"/run.sh \"" + env_obj['name'] + "\" \""+job_command+"\" " + job.get_config('input_file') + " " + job.get_config('output_file') + " " + job_hash+" "+uid, 'out' : False }
+            { 'cmd': global_path+"/run.sh \"" + dpl_env.get_name() + "\" \""+job_command+"\" " + job.get_config('input_file') + " " + job.get_config('output_file') + " " + job.get_hash()+" "+uid, 'out' : False }
         ]
         for command in commands:
             self.debug(1,"Executing ",format( command['cmd'] ),"output",command['out'])
@@ -472,7 +502,7 @@ class CloudRunProvider(ABC):
 
         ssh_client.close()
 
-        self.debug(1,"UID =",uid,", PID =",pid,", JOB_HASH =",job_hash) 
+        self.debug(1,"UID =",uid,", PID =",pid,", JOB_HASH =",job.get_hash()) 
 
         # make sure we stop the instance to avoid charges !
         #stop_instance(instance)
