@@ -172,19 +172,25 @@ class CloudRunJob():
     def deploy(self,dpl_env):
         return CloudRunDeployedJob(self,dpl_env)
 
+    def __repr__(self):
+        return "{0}: HASH = {1}".format(type(self).__name__,self._hash)
+        
+    def __str__(self):
+        return "{0}: HASH = {1}".format(type(self).__name__,self._hash)
+
 
 class CloudRunDeployedJob(CloudRunJob):
 
     def __init__(self,job,dpl_env):
-        self._config  = copy.deepcopy(job._config)
-        self._hash    = job._hash
-        self._env     = dpl_env
-        self._runtime = None
-        self._path    = dpl_env.get_path_abs() + '/' + self.get_hash()
-        self._command = cloudrunutils.compute_job_command(self._path,self._config)
+        self._config    = copy.deepcopy(job._config)
+        self._hash      = job._hash
+        self._env       = dpl_env
+        self._processes = dict()
+        self._path      = dpl_env.get_path_abs() + '/' + self.get_hash()
+        self._command   = cloudrunutils.compute_job_command(self._path,self._config)
 
     def attach_process(self,runtimeInfo):
-        self._runtime = runtimeInfo 
+        self._processes[runtimeInfo.get_uid()] = runtimeInfo 
 
     def get_path(self):
         return self._path
@@ -193,30 +199,34 @@ class CloudRunDeployedJob(CloudRunJob):
         return self._command
 
 
-class CloudRunJobRuntimeInfo():
+class CloudRunProcess():
 
-    def __init__(self,uid,pid=None):
-        self.__uid   = uid
-        self.__pid   = pid
-        self.__state = CloudRunCommandState.UNKNOWN
+    def __init__(self,dpl_job,uid,pid=None):
+        self._job    = dpl_job
+        self._uid   = uid
+        self._pid   = pid
+        self._state = CloudRunCommandState.UNKNOWN
     
     def get_uid(self):
-        return self.__uid
+        return self._uid
 
     def get_pid(self):
-        return self.__pid
+        return self._pid
 
     def get_state(self):
-        return self.__state
+        return self._state
     
     def set_state(self,value):
-        self.__state = value
+        self._state = value
+
+    def get_job(self):
+        return self._job 
 
     def __repr__(self):
-        return "CloudRunJobRuntimeInfo: uid={1},pid={2},state={3}".format(self.__uid,self.__pid,self.__state)
+        return "CloudRunProcess: job = {0} , UID = {1} , PID = {2} , STATE = {3}".format(self._job,self._uid,self._pid,self._state)
         
     def __str__(self):
-        return "CloudRunJobRuntimeInfo: uid={1},pid={2},state={3}".format(self.__uid,self.__pid,self.__state)
+        return "CloudRunProcess: job = {0} , UID = {1} , PID = {2} , STATE = {3}".format(self._job,self._uid,self._pid,self._state)
 
 
 class CloudRunProvider(ABC):
@@ -501,15 +511,17 @@ class CloudRunProvider(ABC):
 
         ssh_client.close()
 
-        self.debug(1,"UID =",uid,", PID =",pid,", JOB_HASH =",job.get_hash()) 
-
         # make sure we stop the instance to avoid charges !
         #stop_instance(instance)
+        process = CloudRunProcess( dpl_job , uid , pid )
+        dpl_job.attach_process( process )
 
-        return CloudRunJobRuntimeInfo( uid , pid )
+        self.debug(1,process) 
+
+        return process
 
     # this allow any external process to wait for a specific job
-    async def get_script_state( self, scriptRuntimeInfo ):
+    async def get_script_state( self, processObj ):
 
         instance = self.get_instance()
 
@@ -519,21 +531,18 @@ class CloudRunProvider(ABC):
 
         await self._wait_for_instance(instance)
 
-        # FOR NOW
-        script      = self._jobs[0]        # retrieve default script
-        env         = script.get_env()     # get its environment
-        dpl_env     = env.deploy(instance) # "deploy" the environment to the instance 
-
-        files_path = dpl_env.get_path()
+        job         = processObj.get_job() # deployed job
+        dpl_env     = job.get_env() # deployed job has a deployed environment
+        files_path  = dpl_env.get_path()
         global_path = "$HOME/run"
 
         ssh_client = await self._connect_to_instance(instance)
 
-        shash = scriptRuntimeInfo.get_hash()
-        uid   = scriptRuntimeInfo.get_uid()
-        pid   = scriptRuntimeInfo.get_pid()
+        shash = processObj.get_hash()
+        uid   = processObj.get_uid()
+        pid   = processObj.get_pid()
 
-        cmd = global_path + "/state.sh " + env_obj['name'] + " " + str(shash) + " " + str(uid) + " " + str(pid) + " " + self._config['output_file']
+        cmd = global_path + "/state.sh " + dpl_env.get_name() + " " + str(shash) + " " + str(uid) + " " + str(pid) + " " + self._config['output_file']
         self.debug(1,"Executing command",cmd)
         stdin, stdout, stderr = ssh_client.exec_command(cmd)
 
@@ -542,6 +551,8 @@ class CloudRunProvider(ABC):
         statestr = re.sub(r'\([0-9]+\)','',statestr)
         try:
             state = CloudRunCommandState[statestr.upper()]
+            process.set_state(state)
+            self.debug(1,process)
         except:
             print("\nUnhandled state received by state.sh!!!\n")
             state = CloudRunCommandState.UNKNOWN
@@ -550,7 +561,7 @@ class CloudRunProvider(ABC):
 
         return state
 
-    async def wait_for_script_state( self, script_state , scriptRuntimeInfo ):    
+    async def wait_for_script_state( self, script_state , process ):    
         instance = self.get_instance()
 
         if instance is None:
@@ -559,23 +570,20 @@ class CloudRunProvider(ABC):
 
         await self._wait_for_instance(instance)
 
-        # FOR NOW
-        script      = self._jobs[0]        # retrieve default script
-        env         = script.get_env()     # get its environment
-        dpl_env     = env.deploy(instance) # "deploy" the environment to the instance 
-
-        files_path = dpl_env.get_path()
+        job         = process.get_job() # deployed job
+        dpl_env     = job.get_env()        # deployed job has a deployed environment
+        files_path  = dpl_env.get_path()
         global_path = "$HOME/run"
+        shash       = job.get_hash()
+        uid         = process.get_uid()
+        pid         = process.get_pid()
 
         ssh_client = await self._connect_to_instance(instance)
 
-        shash = script.get_hash()
-        uid   = scriptRuntimeInfo.get_uid()
-        pid   = scriptRuntimeInfo.get_pid()
 
         while True:
 
-            cmd = global_path + "/state.sh " + dpl_env.get_name() + " " + str(shash) + " " + str(uid) + " " + str(pid) + " " + str(script.get_config('output_file'))
+            cmd = global_path + "/state.sh " + dpl_env.get_name() + " " + str(shash) + " " + str(uid) + " " + str(pid) + " " + str(job.get_config('output_file'))
             self.debug(1,"Executing command",cmd)
             stdin, stdout, stderr = ssh_client.exec_command(cmd)
 
@@ -585,6 +593,8 @@ class CloudRunProvider(ABC):
 
             try:
                 state = CloudRunCommandState[statestr.upper()]
+                process.set_state(state)
+                self.debug(1,process)
             except:
                 print("\nUnhandled state received by state.sh!!!",statestr,"\n")
                 state = CloudRunCommandState.UNKNOWN

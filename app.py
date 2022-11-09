@@ -34,13 +34,13 @@ async def mainloop():
 
     print("\n== RUN ==\n")
         
-    # run the script
-    scriptRuntime = await cr_client.run_script() 
+    # run the script and get a process back
+    process = await cr_client.run_script() 
 
     print("\n== WAIT ==\n")
 
     print("Waiting for DONE or ABORTED ...")
-    await cr_client.wait_for_script_state(CloudRunCommandState.DONE|CloudRunCommandState.ABORTED,scriptRuntime)
+    await cr_client.wait_for_script_state(CloudRunCommandState.DONE|CloudRunCommandState.ABORTED,process)
 
     # print("\n== WAIT and TAIL ==\n")
 
