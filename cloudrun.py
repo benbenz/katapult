@@ -1,8 +1,11 @@
 from enum import IntFlag
 from abc import ABC , abstractmethod
 import cloudrunutils
-import sys
+import sys , json , os
 import paramiko
+import re
+import asyncio
+
 
 cr_keypairName         = 'cloudrun-keypair'
 cr_secGroupName        = 'cloudrun-sec-group-allow-ssh'
@@ -135,6 +138,9 @@ class CloudRunJob():
         self._hash    = cloudrunutils.compute_job_hash(self._config)
         self._env     = None
         self._runtime = None
+        if (not 'input_file' in self._config) or (not 'output_file' in self._config) or not isinstance(self._config['input_file'],str) or not isinstance(self._config['output_file'],str):
+            print("\n\n\033[91mConfiguration requires an input and output file names\033[0m\n\n")
+            raise CloudRunError() 
 
     def attach_env(self,env):
         self._env = env 
@@ -143,11 +149,17 @@ class CloudRunJob():
     def attach_process(self,runtimeInfo):
         self._runtime = runtimeInfo 
 
+    def get_hash(self):
+        return self._hash
+
     def get_config(self,key):
         return self._config.get(key)
 
     def get_env(self):
         return self._env
+
+    def get_command(self,job_path):
+        return cloudrunutils.compute_job_command(job_path,self._config)
 
 class CloudRunJobRuntimeInfo():
 
@@ -178,23 +190,22 @@ class CloudRunJobRuntimeInfo():
 class CloudRunProvider(ABC):
 
     def __init__(self, conf):
-        self.config  = conf
+        self._config  = conf
         self._load_objects()
         self._preprocess_instances()
         self._preprocess_jobs()
         self._sanity_checks()
-        if 'debug' in conf:
-            self.DBG_LVL = conf['debug']
+        self.DBG_LVL = conf.get('debug',1)
 
     def debug(self,level,*args):
-    if level <= self.DBG_LVL:
-        print(*args)
+        if level <= self.DBG_LVL:
+            print(*args)
 
     def _load_objects(self):
-        projectName = self.config.get('project')
-        env_cfgs    = self.config.get('environments')
-        job_cfgs    = self.config.get('jobs')
-        dev         = self.config.get('dev')
+        projectName = self._config.get('project')
+        env_cfgs    = self._config.get('environments')
+        job_cfgs    = self._config.get('jobs')
+        dev         = self._config.get('dev')
 
         self._environments = [ ] 
         if env_cfgs:
@@ -205,7 +216,6 @@ class CloudRunProvider(ABC):
         self._jobs = [ ] 
         if job_cfgs:
             for job_cfg in job_cfgs:
-                if not job_cfg.get('env_name')
                 job = CloudRunJob(job_cfg)
                 self._jobs.append(job)
 
@@ -248,10 +258,11 @@ class CloudRunProvider(ABC):
         # get the public DNS info when instance actually started (todo: check actual state)
         waitFor = True
         while waitFor:
-            updated_instance = aws_get_instance_info(instance)
-            lookForDNS       = updated_instance.get_dns_addr() is None 
-            lookForIP        = updated_instance.get_ip_addr() is None
-            instanceState    = updated_instamce.get_state()
+            self.update_instance_info(instance)
+
+            lookForDNS       = instance.get_dns_addr() is None 
+            lookForIP        = instance.get_ip_addr() is None
+            instanceState    = instance.get_state()
 
             lookForState = True
             # 'pending'|'running'|'shutting-down'|'terminated'|'stopping'|'stopped'
@@ -281,16 +292,13 @@ class CloudRunProvider(ABC):
                 
                 await asyncio.sleep(10)
 
-        debug(2,updated_instance_info)    
-
-        # interchange the objects
-        instance = udpated_instance   
+        self.debug(2,instance)    
 
     async def _connect_to_instance(self,instance):
         # ssh into instance and run the script from S3/local? (or sftp)
         region = instance.get_region()
         if region is None:
-            self.get_user_region()
+            region = self.get_user_region()
         k = paramiko.RSAKey.from_private_key_file('cloudrun-'+str(region)+'.pem')
         ssh_client = paramiko.SSHClient()
         ssh_client.set_missing_host_key_policy(paramiko.AutoAddPolicy())
@@ -314,17 +322,13 @@ class CloudRunProvider(ABC):
 
     async def run_script(self):
 
-        if (not 'input_file' in self.config) or (not 'output_file' in self.config) or not isinstance(self.config['input_file'],str) or not isinstance(self.config['output_file'],str):
-            print("\n\nConfiguration requires an input and output file names\n\n")
-            raise CloudRunError() 
-
         # CHECK EVERY TIME !
         instance , created = self.start_instance()
 
-        await self.wait_for_instance(instance)
+        await self._wait_for_instance(instance)
 
         # FOR NOW
-        job      = this._jobs[0]        # retrieve default script
+        job      = self._jobs[0]        # retrieve default script
         env      = job.get_env()     # get its environment
         env_obj  = env.deploy(instance) # "deploy" the environment to the instance and get the json object
         job_path = env_obj['path_abs'] + '/' + job.get_hash()
@@ -333,7 +337,7 @@ class CloudRunProvider(ABC):
         # init environment object
         self.debug(2,json.dumps(env_obj))
 
-        ssh_client = await connect_to_instance(instance)
+        ssh_client = await self._connect_to_instance(instance)
 
         files_path = env_obj['path']
 
@@ -342,7 +346,7 @@ class CloudRunProvider(ABC):
         
         run_path   = job_path + '/' + uid
 
-        job_command = cloudrunutils.compute_job_command(job_path,self.config)
+        job_command = job.get_command(job_path)
 
         self.debug(1,"creating directories ...")
         stdin0, stdout0, stderr0 = ssh_client.exec_command("mkdir -p "+files_path+" "+run_path)
@@ -375,20 +379,33 @@ class CloudRunProvider(ABC):
             ftp_client.put(remote_config,'config.json')
             os.remove(remote_config)
         
-        # change to run dir
+        # change to job hash dir
         ftp_client.chdir(job_path)
-        if 'run_script' in self.config and self.config['run_script']:
-            filename = os.path.basename(self.config['run_script'])
-            ftp_client.put(self.config['run_script'],filename)
-        if 'upload_files' in self.config and self.config['upload_files'] is not None:
-            if isinstance( self.config['upload_files'],str):
-                self.config['upload_files'] = [ self.config['upload_files']  ]
-            for upfile in self.config['upload_files']:
+        if job.get_config('run_script'):
+            filename = os.path.basename(job.get_config('run_script'))
+            try:
+                ftp_client.put(job.get_config('run_script'),filename)
+            except:
+                self.debug(1,"You defined an script that is not available",job.get_config('run_script'))
+        if job.get_config('upload_files'):
+            files = job.get_config('upload_files')
+            if isinstance( files,str):
+                files = [ files ] 
+            for upfile in files:
                 try:
-                    ftp_client.put(upfile,os.path.basename(upfile))
+                    try:
+                        ftp_client.put(upfile,os.path.basename(upfile))
+                    except:
+                        self.debug(1,"You defined an upload file that is not available",upfile)
                 except Exception as e:
                     print("Error while uploading file",upfile)
                     print(e)
+        if job.get_config('input_file'):
+            filename = os.path.basename(job.get_config('run_script'))
+            try:
+                ftp_client.put(job.get_config('input_file'),filename)
+            except:
+                self.debug(1,"You defined an input file that is not available:",job.get_config('input_file'))
 
         ftp_client.close()
 
@@ -410,9 +427,9 @@ class CloudRunProvider(ABC):
             # setup envs according to current config files state
             # NOTE: make sure to let out = True or bootstraping is not executed properly 
             # TODO: INVESTIGATE THIS
-            { 'cmd': global_path+"/bootstrap.sh \"" + env_obj['name'] + "\" " + ("1" if self.config['dev'] else "0") + " &", 'out': True },  
+            { 'cmd': global_path+"/bootstrap.sh \"" + env_obj['name'] + "\" " + ("1" if self._config['dev'] else "0") + " &", 'out': True },  
             # execute main script (spawn) (this will wait for bootstraping)
-            { 'cmd': global_path+"/run.sh \"" + env_obj['name'] + "\" \""+job_command+"\" " + self.config['input_file'] + " " + self.config['output_file'] + " " + job_hash+" "+uid, 'out' : False }
+            { 'cmd': global_path+"/run.sh \"" + env_obj['name'] + "\" \""+job_command+"\" " + job.get_config('input_file') + " " + job.get_config('output_file') + " " + job_hash+" "+uid, 'out' : False }
         ]
         for command in commands:
             self.debug(1,"Executing ",format( command['cmd'] ),"output",command['out'])
@@ -471,10 +488,10 @@ class CloudRunProvider(ABC):
             print("get_command_state: instance is not available!")
             return CloudRunCommandState.UNKNOWN
 
-        await wait_for_instance(instance)
+        await self._wait_for_instance(instance)
 
         # FOR NOW
-        script      = this._jobs[0]        # retrieve default script
+        script      = self._jobs[0]        # retrieve default script
         env         = script.get_env()     # get its environment
         env_obj     = env.deploy(instance) # "deploy" the environment to the instance and get the json object
         script_path = env_obj['path_abs'] + '/' + script.get_hash()
@@ -482,13 +499,13 @@ class CloudRunProvider(ABC):
         files_path = env_obj['path']
         global_path = "$HOME/run"
 
-        ssh_client = await connect_to_instance(instance)
+        ssh_client = await self._connect_to_instance(instance)
 
         shash = scriptRuntimeInfo.get_hash()
         uid   = scriptRuntimeInfo.get_uid()
         pid   = scriptRuntimeInfo.get_pid()
 
-        cmd = global_path + "/state.sh " + env_obj['name'] + " " + str(shash) + " " + str(uid) + " " + str(pid) + " " + self.config['output_file']
+        cmd = global_path + "/state.sh " + env_obj['name'] + " " + str(shash) + " " + str(uid) + " " + str(pid) + " " + self._config['output_file']
         self.debug(1,"Executing command",cmd)
         stdin, stdout, stderr = ssh_client.exec_command(cmd)
 
@@ -512,10 +529,10 @@ class CloudRunProvider(ABC):
             print("get_command_state: instance is not available!")
             return CloudRunCommandState.UNKNOWN
 
-        await wait_for_instance(instance)
+        await self._wait_for_instance(instance)
 
         # FOR NOW
-        script      = this._jobs[0]        # retrieve default script
+        script      = self._jobs[0]        # retrieve default script
         env         = script.get_env()     # get its environment
         env_obj     = env.deploy(instance) # "deploy" the environment to the instance and get the json object
         script_path = env_obj['path_abs'] + '/' + script.get_hash()
@@ -523,15 +540,15 @@ class CloudRunProvider(ABC):
         files_path = env_obj['path']
         global_path = "$HOME/run"
 
-        ssh_client = await connect_to_instance(instance)
+        ssh_client = await self._connect_to_instance(instance)
 
-        shash = scriptRuntimeInfo.get_hash()
+        shash = script.get_hash()
         uid   = scriptRuntimeInfo.get_uid()
         pid   = scriptRuntimeInfo.get_pid()
 
         while True:
 
-            cmd = global_path + "/state.sh " + env_obj['name'] + " " + str(shash) + " " + str(uid) + " " + str(pid) + " " + self.config['output_file']
+            cmd = global_path + "/state.sh " + env_obj['name'] + " " + str(shash) + " " + str(uid) + " " + str(pid) + " " + str(script.get_config('output_file'))
             self.debug(1,"Executing command",cmd)
             stdin, stdout, stderr = ssh_client.exec_command(cmd)
 
@@ -587,7 +604,7 @@ class CloudRunProvider(ABC):
         pass
 
     @abstractmethod
-    async def run_script(self):
+    def update_instance_info(self,instance):
         pass
 
 def get_client(config):
@@ -606,7 +623,7 @@ def get_client(config):
 
         raise CloudRunError()
 
-def init_instance_name(instance_config,dev==False):
+def init_instance_name(instance_config,dev=False):
     if dev==True:
         return cr_instanceNameRoot
     else:
@@ -621,3 +638,23 @@ def init_instance_name(instance_config,dev==False):
             return cr_instanceNameRoot + '-' + instance_config['project'] + '-' + instance_rank + '-' + instance_hash
         else:
             return cr_instanceNameRoot + '-' + instance_config['rank'] + '-' + instance_hash    
+
+def line_buffered(f):
+    line_buf = ""
+    doContinue = True
+    try :
+        while doContinue and not f.channel.exit_status_ready():
+            try:
+                line_buf += f.read(16).decode("utf-8")
+                if line_buf.endswith('\n'):
+                    yield line_buf
+                    line_buf = ''
+            except Exception as e:
+                #errmsg = str(e)
+                #debug(1,"error (1) while buffering line",errmsg)
+                pass 
+                #doContinue = False
+    except Exception as e0:
+        debug(1,"error (2) while buffering line",str(e0))
+        #doContinue = False
+

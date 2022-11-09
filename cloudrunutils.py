@@ -186,7 +186,7 @@ def compute_job_hash(config):
         if isinstance(files,str):
             files = [ files ]
         realfiles = []
-        for f in files.sort():
+        for f in sorted(files):
             realfiles.append( path.realpath(f) )
         string_to_hash = string_to_hash + ":" + ",".join(realfiles)
 
@@ -225,7 +225,7 @@ def compute_job_command(script_dir,config):
         else:
             script_command = "echo 'SCRIPT NOT HANDLED'"
     elif 'run_command' in config and config['run_command']:
-        script_command = script_dir + '/' + config['run_command']
+        script_command = config['run_command'] #script_dir + '/' + config['run_command']
     else:
         script_command = "echo 'NO SCRIPT DEFINED'" 
 
