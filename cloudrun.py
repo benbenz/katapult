@@ -6,6 +6,7 @@ import paramiko
 import re
 import asyncio
 import copy
+import math
 
 
 cr_keypairName         = 'cloudrun-keypair'
@@ -28,22 +29,22 @@ class CloudRunCommandState(IntFlag):
 
 class CloudRunInstance():
 
-    def __init__(self,region,name,id,config,proprietaryData=None):
+    def __init__(self,config,id,proprietaryData=None):
         # instance region
-        self._region = region
+        self._region   = config.get('region')
         # naming
-        self._name = name 
-        self._id = id 
-        self._rank = 1 
+        self._name     = init_instance_name(config)
+        self._id       = id 
+        self._rank     = "1.1" 
         # IP / DNS
         self._ip_addr  = None
         self._dns_addr = None
         # state
-        self._state = None
+        self._state    = None
         # the config the instance has been created on
-        self._config = config 
+        self._config   = config 
         # dict data associated with it (AWS response data e.g.)
-        self._data = proprietaryData
+        self._data     = proprietaryData
             
 
     def get_region(self):
@@ -89,6 +90,11 @@ class CloudRunInstance():
             return None
         return self._config.get(key,None)
 
+    def __repr__(self):
+        return "{0}: REGION = {1} , ID = {2} , NAME = {3} , IP = {4}".format(type(self).__name__,self._region,self._id,self._name,self._ip_addr)
+
+    def __str__(self):
+        return "{0}: REGION = {1} , ID = {2} , NAME = {3} , IP = {4}".format(type(self).__name__,self._region,self._id,self._name,self._ip_addr)
 
 class CloudRunEnvironment():
 
@@ -234,10 +240,11 @@ class CloudRunProvider(ABC):
     def __init__(self, conf):
         self._config  = conf
         self._load_objects()
-        self._preprocess_instances()
         self._preprocess_jobs()
         self._sanity_checks()
         self.DBG_LVL = conf.get('debug',1)
+        global DBG_LVL
+        DBG_LVL = conf.get('debug',1)
 
     def debug(self,level,*args):
         if level <= self.DBG_LVL:
@@ -245,9 +252,52 @@ class CloudRunProvider(ABC):
 
     def _load_objects(self):
         projectName = self._config.get('project')
+        inst_cfgs   = self._config.get('instance_types')
         env_cfgs    = self._config.get('environments')
         job_cfgs    = self._config.get('jobs')
         dev         = self._config.get('dev')
+
+        self._instances = [ ]
+        if inst_cfgs:
+            for inst_cfg in inst_cfgs:
+                # virtually demultiply according to 'number' and 'explode'
+                for i in range(inst_cfg.get('number',1)):
+                    CPU_SPLIT = 16
+                    total_inst_cpus = inst_cfg.get('cpus',1)
+                    if type(total_inst_cpus) != int and type(total_inst_cpus) != float:
+                        print("WARNING: setting default CPUs number to 1 for an instance")
+                        total_inst_cpus = 1
+                    if inst_cfg.get('explode'):
+                        num_sub_instances = math.floor( total_inst_cpus / CPU_SPLIT ) # we target CPUs with 16 cores...
+                        if num_sub_instances == 0:
+                            cpu_inc = total_inst_cpus
+                            num_sub_instances = 1
+                        else:
+                            cpu_inc = CPU_SPLIT 
+                    else:
+                        num_sub_instances = 1
+                        cpu_inc = total_inst_cpus
+                    cpus_created = 0  
+                    for j in range(num_sub_instances):
+                        rank = "{0}.{1}".format(i,j)
+                        if j == num_sub_instances-1: # for the last one we're completing the cpus with whatever
+                            inst_cpus = total_inst_cpus - cpus_created
+                        else:
+                            inst_cpus = cpu_inc
+                        real_inst_cfg = copy.deepcopy(inst_cfg)
+                        real_inst_cfg.pop('number',None)  # provide default value to avoid KeyError
+                        real_inst_cfg.pop('explode',None) # provide default value to avoid KeyError
+                        real_inst_cfg['cpus'] = inst_cpus
+                        real_inst_cfg['rank'] = rank
+
+                        # starts calling the Service here !
+                        # instance , created = self.start_instance( real_inst_cfg )
+                        # let's put some dummy instances for now ...
+                        instance = CloudRunInstance( real_inst_cfg , None, None )
+                        self._instances.append( instance )
+
+                        cpus_created = cpus_created + inst_cpus
+        print(self._instances)
 
         self._environments = [ ] 
         if env_cfgs:
@@ -261,13 +311,6 @@ class CloudRunProvider(ABC):
                 job = CloudRunJob(job_cfg)
                 self._jobs.append(job)
 
-    # process the instance_types section:
-    # - multiply instances according to plurality ('number' and 'explode')
-    # - change cpus value according to distribution
-    # - adds a 'rank' attribute to the instances configurations
-    def _preprocess_instances(self):
-        pass
-        
     # fill up the jobs names if not present (and we have only 1 environment defined)
     # link the jobs objects with an environment object
     def _preprocess_jobs(self):
@@ -666,13 +709,12 @@ def init_instance_name(instance_config,dev=False):
     else:
         instance_hash = cloudrunutils.compute_instance_hash(instance_config)
 
-        # if 'rank' not in instance_config:
-        #     debug(1,"\033[93mDeveloper: you need to set dynamically a 'rank' attribute in the config for the new instance\033[0m")
-        #     sys.exit(300) # this is a developer error, this should never happen so we can use exit here
-        instance_rank = str(1) #instance_config['rank']
-
+        if 'rank' not in instance_config:
+            debug(1,"\033[93mDeveloper: you need to set dynamically a 'rank' attribute in the config for the new instance\033[0m")
+            sys.exit(300) # this is a developer error, this should never happen so we can use exit here
+        
         if 'project' in instance_config:
-            return cr_instanceNameRoot + '-' + instance_config['project'] + '-' + instance_rank + '-' + instance_hash
+            return cr_instanceNameRoot + '-' + instance_config['project'] + '-' + instance_config['rank'] + '-' + instance_hash
         else:
             return cr_instanceNameRoot + '-' + instance_config['rank'] + '-' + instance_hash    
 
@@ -694,4 +736,12 @@ def line_buffered(f):
     except Exception as e0:
         debug(1,"error (2) while buffering line",str(e0))
         #doContinue = False
+
+
+
+DBG_LVL=1
+
+def debug(level,*args):
+    if level <= DBG_LVL:
+        print(*args)
 

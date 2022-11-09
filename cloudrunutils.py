@@ -9,22 +9,22 @@ from os import path
 cr_instance_keys       = [ 'region'  , 'cloud_id' , 'img_id' , 'size' , 'cpus' , 'gpu' , 'disk_size' , 'disk_type' , 'eco' , 'max_bid' ] 
 cr_environment_keys    = [ 'env_pypi' , 'env_conda' , 'env_apt-get' ]
 
-def compute_instance_hash(config):
-    instance_config = { your_key: config[your_key] for your_key in cr_instance_keys }
+def compute_instance_hash(instance_cfg):
+    instance_config = { your_key: instance_cfg[your_key] for your_key in cr_instance_keys }
     instance_config_canon = jcs.canonicalize(instance_config)
     #instance_hash = str(hash(instance_config_canon))
     hash = hashlib.md5(instance_config_canon).hexdigest()
     return hash[0:12]
 
 
-def add_pip_dependency_to_conda(env_obj):
-    if not 'dependencies' in env_obj['env_conda']:
-        env_obj['env_conda']['dependencies'] = [] 
+def add_pip_dependency_to_conda(env_dict):
+    if not 'dependencies' in env_dict['env_conda']:
+        env_dict['env_conda']['dependencies'] = [] 
     added = False
     pipIndex = -1 
-    for i,dep in enumerate(env_obj['env_conda']['dependencies']):
+    for i,dep in enumerate(env_dict['env_conda']['dependencies']):
         if dep == 'pip':
-            env_obj['env_conda']['dependencies'][i] = { 'pip' : ['-r __REQUIREMENTS_TXT_LINK__'] }
+            env_dict['env_conda']['dependencies'][i] = { 'pip' : ['-r __REQUIREMENTS_TXT_LINK__'] }
             added = True
             pipIndex = i 
             break
@@ -41,30 +41,30 @@ def add_pip_dependency_to_conda(env_obj):
     # add the requirements dependecy (it was not found)
     if added is False:
         if pipIndex != -1:
-            env_obj['env_conda']['dependencies'][pipIndex]['pip'].append('-r __REQUIREMENTS_TXT_LINK__')
+            env_dict['env_conda']['dependencies'][pipIndex]['pip'].append('-r __REQUIREMENTS_TXT_LINK__')
         else:
-            env_obj['env_conda']['dependencies'].append({'pip':['-r __REQUIREMENTS_TXT_LINK__']})
+            env_dict['env_conda']['dependencies'].append({'pip':['-r __REQUIREMENTS_TXT_LINK__']})
 
-def update_requirements_path(envobj,path):
-    if isinstance(envobj,dict):
-        for k,v in envobj.items():
-            envobj[k] = update_requirements_path(v,path)
+def update_requirements_path(env_dict,path):
+    if isinstance(env_dict,dict):
+        for k,v in env_dict.items():
+            env_dict[k] = update_requirements_path(v,path)
         
 
-    elif isinstance(envobj,list):
-        for i,v in enumerate(envobj):
-            envobj[i] = update_requirements_path(v,path)
+    elif isinstance(env_dict,list):
+        for i,v in enumerate(env_dict):
+            env_dict[i] = update_requirements_path(v,path)
     
-    elif isinstance(envobj,str):
-        if '__REQUIREMENTS_TXT_LINK__' in envobj:
-            envobj = envobj.replace('__REQUIREMENTS_TXT_LINK__',path+'/requirements.txt')
+    elif isinstance(env_dict,str):
+        if '__REQUIREMENTS_TXT_LINK__' in env_dict:
+            env_dict = env_dict.replace('__REQUIREMENTS_TXT_LINK__',path+'/requirements.txt')
         
-    return envobj
+    return env_dict
 
 # returns a JSON object that represents lists as in requirements.txt as well as YAML format (can be parsed by YAML module)
 # this object will be serialized and sent to remote host
 # this is also used to compute the hash for the environment
-def compute_environment_object(config):
+def compute_environment_object(env_config):
 
     environment_obj = {
         'env_aptget' : None , 
@@ -74,9 +74,9 @@ def compute_environment_object(config):
     
     # conda+pip: https://stackoverflow.com/questions/35245401/combining-conda-environment-yml-with-pip-requirements-txt
     
-    if 'env_aptget' in config and config['env_aptget'] is not None:
+    if env_config.get('env_aptget'):
 
-        env_apt_get = config['env_aptget']
+        env_apt_get = env_config['env_aptget']
 
         if isinstance(env_apt_get,list):
 
@@ -85,9 +85,9 @@ def compute_environment_object(config):
             environment_obj['env_aptget'] = env_apt_get
 
 
-    if 'env_conda' in config and config['env_conda'] is not None:
+    if env_config.get('env_conda'):
 
-        env_conda = config['env_conda']
+        env_conda = env_config['env_conda']
 
         if isinstance(env_conda,list):
         
@@ -121,9 +121,9 @@ def compute_environment_object(config):
             print("\033[93menv_conda is specified but the file or directory doesn't exist\033[0m")
 
 
-    if 'env_pypi' in config and config['env_pypi'] is not None:
+    if env_config.get('env_pypi'):
 
-        env_pypi = config['env_pypi']
+        env_pypi = env_config['env_pypi']
 
         #make sure we have the extra ref in the conda env, if conda env exists ...
         if environment_obj['env_conda'] is not None:
@@ -161,28 +161,28 @@ def compute_environment_object(config):
 
     return environment_obj      
 
-def compute_environment_hash(env_obj):
-    onv_obj_canon  = yaml.load(yaml.dump(env_obj, sort_keys=True),Loader=yaml.FullLoader)
+def compute_environment_hash(env_dict):
+    onv_obj_canon  = yaml.load(yaml.dump(env_dict, sort_keys=True),Loader=yaml.FullLoader)
     env_json_canon = jcs.canonicalize(onv_obj_canon)
     hash = hashlib.md5(env_json_canon).hexdigest()
     return hash[0:12]
 
-def compute_job_hash(config):
+def compute_job_hash(job_config):
     string_to_hash = ''
-    if config.get('run_script'):
-        script_args    = config['run_script'].split()
+    if job_config.get('run_script'):
+        script_args    = job_config['run_script'].split()
         scriptfile     = path.realpath(script_args[0])
         string_to_hash = 'script:' + scriptfile
-    elif config.get('run_command'):
+    elif job_config.get('run_command'):
         # lets not do anything to commands ... its less known what can be in there ...
-        string_to_hash = 'command:' + config['run_command']
+        string_to_hash = 'command:' + job_config['run_command']
     else:
         string_to_hash = 'unknown'
 
     # also add the upload files as part of the hash
     # this could mean the script will run with different multi inputs ... 
-    if config.get('upload_files'):
-        files = config['upload_files']
+    if job_config.get('upload_files'):
+        files = job_config['upload_files']
         if isinstance(files,str):
             files = [ files ]
         realfiles = []
@@ -190,8 +190,8 @@ def compute_job_hash(config):
             realfiles.append( path.realpath(f) )
         string_to_hash = string_to_hash + ":" + ",".join(realfiles)
 
-    if config.get('input_file'):
-        inputpath = path.realpath(config.get('input_file'))
+    if job_config.get('input_file'):
+        inputpath = path.realpath(job_config.get('input_file'))
         string_to_hash = string_to_hash + ":" + inputpath
 
     # also add the input file which should be pointing to a specific file 
@@ -201,8 +201,8 @@ def compute_job_hash(config):
     # NO! 
     # this will be differentiated with the UID at run time
     # to mutualize more the upload files + script file ...
-    # if 'input_files' in config and config['input_files'] is not None:
-    #    string_to_hash = string_to_hash + ':' + config['input_files']
+    # if 'input_files' in job_config and job_config['input_files'] is not None:
+    #    string_to_hash = string_to_hash + ':' + job_config['input_files']
 
     hash = hashlib.md5(string_to_hash.encode()).hexdigest()
     return hash[0:12]
@@ -210,10 +210,10 @@ def compute_job_hash(config):
 def generate_unique_filename():
     return str(uuid.uuid4())
 
-def compute_job_command(script_dir,config):
+def compute_job_command(script_dir,job_config):
     script_command = ''
-    if 'run_script' in config and config['run_script'] is not None:
-        script_args = config['run_script'].split()
+    if 'run_script' in job_config and job_config['run_script'] is not None:
+        script_args = job_config['run_script'].split()
         filename = os.path.basename(script_args[0])
         file_ext = os.path.splitext(filename)[1]
         script_args.pop(0)
@@ -224,8 +224,8 @@ def compute_job_command(script_dir,config):
             script_command = "julia " + script_dir + '/' + filename + " " + " ".join(script_args)
         else:
             script_command = "echo 'SCRIPT NOT HANDLED'"
-    elif 'run_command' in config and config['run_command']:
-        script_command = config['run_command'] #script_dir + '/' + config['run_command']
+    elif 'run_command' in job_config and job_config['run_command']:
+        script_command = job_config['run_command'] #script_dir + '/' + job_config['run_command']
     else:
         script_command = "echo 'NO SCRIPT DEFINED'" 
 

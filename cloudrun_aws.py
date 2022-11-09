@@ -1,19 +1,12 @@
 import boto3
 import os
 import cloudrunutils
-from cloudrun import CloudRunError , CloudRunInstance , CloudRunProvider
+from cloudrun import CloudRunError , CloudRunInstance , CloudRunProvider , debug
 from cloudrun import cr_keypairName , cr_secGroupName , cr_bucketName , cr_vpcName , init_instance_name
 from botocore.exceptions import ClientError
 from datetime import datetime , timedelta
 from botocore.config import Config
 import asyncio
-
-DBG_LVL=1
-
-def debug(level,*args):
-    if level <= DBG_LVL:
-        print(*args)
-
 
 def aws_get_config(region):
     if region is None:
@@ -252,10 +245,10 @@ def aws_find_instance(instance_config):
     )
 
     if len(existing['Reservations']) > 0 and len(existing['Reservations'][0]['Instances']) >0 :
-        instance = existing['Reservations'][0]['Instances'][0]
-        debug(1,"Found exisiting instance !",instance['InstanceId'])
-        debug(2,instance)
-        instance = CloudRunInstance( region , instanceName , instance['InstanceId'] , instance_config, instance )
+        instance_data = existing['Reservations'][0]['Instances'][0]
+        debug(1,"Found exisiting instance !",instance_data['InstanceId'])
+        debug(2,instance_data)
+        instance = CloudRunInstance( instance_config , instance['InstanceId'] , instance_data )
         return instance 
     
     else:
@@ -297,10 +290,10 @@ def aws_create_instance(instance_config,vpc,subnet,secGroup):
     created = False
 
     if len(existing['Reservations']) > 0 and len(existing['Reservations'][0]['Instances']) >0 :
-        instance = existing['Reservations'][0]['Instances'][0]
-        debug(1,"Found exisiting instance !",instance['InstanceId'])
-        debug(2,instance)
-        instance = CloudRunInstance( region , instanceName , instance['InstanceId'] , instance_config, instance )
+        instance_data = existing['Reservations'][0]['Instances'][0]
+        debug(1,"Found exisiting instance !",instance_data['InstanceId'])
+        debug(2,instance_data)
+        instance = CloudRunInstance( instance_config, instance['InstanceId'] , instance_data )
         return instance , created
 
     if instance_config.get('cpus') is not None:
@@ -395,7 +388,7 @@ def aws_create_instance(instance_config,vpc,subnet,secGroup):
 
     debug(2,instances["Instances"][0])
 
-    instance = CloudRunInstance( region , instanceName , instances["Instances"][0]["InstanceId"] , instance_config, instances["Instances"][0] )
+    instance = CloudRunInstance( instance_config, instances["Instances"][0]["InstanceId"] , instances["Instances"][0] )
 
     return instance , created
 
@@ -472,19 +465,17 @@ class AWSCloudRunProvider(CloudRunProvider):
 
     def __init__(self, conf):
         CloudRunProvider.__init__(self,conf)
-        global DBG_LVL
-        DBG_LVL = conf.get('debug',1)
 
     def get_instance(self):
 
-        return aws_find_instance(self._config)
+        return aws_find_instance(self._config['instance_types'][0])
 
     def start_instance(self):
 
-        instance = aws_find_instance(self._config)
+        instance = aws_find_instance(self._config['instance_types'][0])
 
         if instance is None:
-            instance , created = aws_create_instance_objects(self._config)
+            instance , created = aws_create_instance_objects(self._config['instance_types'][0])
         else:
             created = False
 
