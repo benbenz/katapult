@@ -300,7 +300,7 @@ def aws_create_instance(instance_config,vpc,subnet,secGroup):
         cpus_spec = {
             'CoreCount': instance_config['cpus'],
             'ThreadsPerCore': 1
-        },
+        }
     else:
         cpus_spec = { }  
 
@@ -468,14 +468,16 @@ class AWSCloudRunProvider(CloudRunProvider):
 
     def get_instance(self):
 
-        return aws_find_instance(self._config['instance_types'][0])
+        inst_cfg = self._instances[0].get_config_DIRTY()
+        return aws_find_instance(inst_cfg)
 
     def start_instance(self):
 
-        instance = aws_find_instance(self._config['instance_types'][0])
+        inst_cfg = self._instances[0].get_config_DIRTY()
+        instance = aws_find_instance(inst_cfg)
 
         if instance is None:
-            instance , created = aws_create_instance_objects(self._config['instance_types'][0])
+            instance , created = aws_create_instance_objects(inst_cfg)
         else:
             created = False
 

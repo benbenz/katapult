@@ -35,7 +35,7 @@ class CloudRunInstance():
         # naming
         self._name     = init_instance_name(config)
         self._id       = id 
-        self._rank     = "1.1" 
+        self._rank     = config.get('rank',"1.1")
         # IP / DNS
         self._ip_addr  = None
         self._dns_addr = None
@@ -45,7 +45,6 @@ class CloudRunInstance():
         self._config   = config 
         # dict data associated with it (AWS response data e.g.)
         self._data     = proprietaryData
-            
 
     def get_region(self):
         return self._region
@@ -64,6 +63,9 @@ class CloudRunInstance():
 
     def get_dns_addr(self):
         return self._dns_addr 
+
+    def get_cpus(self):
+        return self._config.get('cpus')
 
     def set_ip_addr(self,value):
         self._ip_addr = value
@@ -90,11 +92,14 @@ class CloudRunInstance():
             return None
         return self._config.get(key,None)
 
+    def get_config_DIRTY(self):
+        return self._config
+
     def __repr__(self):
-        return "{0}: REGION = {1} , ID = {2} , NAME = {3} , IP = {4}".format(type(self).__name__,self._region,self._id,self._name,self._ip_addr)
+        return "{0}: REGION = {1} , ID = {2} , NAME = {3} , IP = {4} , CPUS = {5} , RANK = {6}".format(type(self).__name__,self._region,self._id,self._name,self._ip_addr,self.get_cpus(),self._rank)
 
     def __str__(self):
-        return "{0}: REGION = {1} , ID = {2} , NAME = {3} , IP = {4}".format(type(self).__name__,self._region,self._id,self._name,self._ip_addr)
+        return "{0}: REGION = {1} , ID = {2} , NAME = {3} , IP = {4} , CPUS = {5} , RANK = {6}".format(type(self).__name__,self._region,self._id,self._name,self._ip_addr,self.get_cpus(),self._rank)
 
 class CloudRunEnvironment():
 
@@ -252,7 +257,7 @@ class CloudRunProvider(ABC):
 
     def _load_objects(self):
         projectName = self._config.get('project')
-        inst_cfgs   = self._config.get('instance_types')
+        inst_cfgs   = self._config.get('instances_types')
         env_cfgs    = self._config.get('environments')
         job_cfgs    = self._config.get('jobs')
         dev         = self._config.get('dev')
@@ -274,12 +279,13 @@ class CloudRunProvider(ABC):
                             num_sub_instances = 1
                         else:
                             cpu_inc = CPU_SPLIT 
+                            num_sub_instances = num_sub_instances + 1
                     else:
                         num_sub_instances = 1
                         cpu_inc = total_inst_cpus
                     cpus_created = 0  
                     for j in range(num_sub_instances):
-                        rank = "{0}.{1}".format(i,j)
+                        rank = "{0}.{1}".format(i+1,j+1)
                         if j == num_sub_instances-1: # for the last one we're completing the cpus with whatever
                             inst_cpus = total_inst_cpus - cpus_created
                         else:
@@ -289,6 +295,9 @@ class CloudRunProvider(ABC):
                         real_inst_cfg.pop('explode',None) # provide default value to avoid KeyError
                         real_inst_cfg['cpus'] = inst_cpus
                         real_inst_cfg['rank'] = rank
+                        # [!important!] also copy global information that are used for the name generation ...
+                        real_inst_cfg['dev']  = self._config.get('dev',False)
+                        real_inst_cfg['project']  = self._config.get('project',None)
 
                         # starts calling the Service here !
                         # instance , created = self.start_instance( real_inst_cfg )
@@ -297,7 +306,7 @@ class CloudRunProvider(ABC):
                         self._instances.append( instance )
 
                         cpus_created = cpus_created + inst_cpus
-        print(self._instances)
+        debug(2,self._instances)
 
         self._environments = [ ] 
         if env_cfgs:
