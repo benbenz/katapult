@@ -6,7 +6,7 @@ from os import path
 # keys used for hash computation
 # Note: we include market options (SPOT ON/OFF e.g.) for the instance because it defines how the 'hardware' will run 
 #       so it's considered part of the intrinsic characteristics of the machine
-cr_instance_keys       = [ 'region'  , 'cloud_id' , 'img_id' , 'size' , 'cpus' , 'gpu' , 'disk_size' , 'disk_type' , 'eco' , 'max_bid' ] 
+cr_instance_keys       = [ 'region'  , 'cloud_id' , 'img_id' , 'type' , 'cpus' , 'gpu' , 'disk_size' , 'disk_type' , 'eco' , 'max_bid' ] 
 cr_environment_keys    = [ 'env_pypi' , 'env_conda' , 'env_apt-get' ]
 
 def compute_instance_hash(instance_cfg):

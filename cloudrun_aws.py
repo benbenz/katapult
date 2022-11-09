@@ -7,6 +7,7 @@ from botocore.exceptions import ClientError
 from datetime import datetime , timedelta
 from botocore.config import Config
 import asyncio
+import csv 
 
 def aws_get_config(region):
     if region is None:
@@ -248,7 +249,7 @@ def aws_find_instance(instance_config):
         instance_data = existing['Reservations'][0]['Instances'][0]
         debug(1,"Found exisiting instance !",instance_data['InstanceId'])
         debug(2,instance_data)
-        instance = CloudRunInstance( instance_config , instance['InstanceId'] , instance_data )
+        instance = CloudRunInstance( instance_config , instance_data['InstanceId'] , instance_data )
         return instance 
     
     else:
@@ -293,7 +294,7 @@ def aws_create_instance(instance_config,vpc,subnet,secGroup):
         instance_data = existing['Reservations'][0]['Instances'][0]
         debug(1,"Found exisiting instance !",instance_data['InstanceId'])
         debug(2,instance_data)
-        instance = CloudRunInstance( instance_config, instance['InstanceId'] , instance_data )
+        instance = CloudRunInstance( instance_config, instance_data['InstanceId'] , instance_data )
         return instance , created
 
     if instance_config.get('cpus') is not None:
@@ -353,7 +354,7 @@ def aws_create_instance(instance_config,vpc,subnet,secGroup):
                 ImageId = instance_config['img_id'],
                 MinCount = 1,
                 MaxCount = 1,
-                InstanceType = instance_config['size'],
+                InstanceType = instance_config['type'],
                 KeyName = cr_keypairName,
                 SecurityGroupIds=[secGroup['GroupId']],
                 SubnetId = subnet['SubnetId'],
@@ -495,5 +496,22 @@ class AWSCloudRunProvider(CloudRunProvider):
     def get_user_region(self):
         my_session = boto3.session.Session()
         region = my_session.region_name     
-        return region         
+        return region     
+
+    def get_recommended_cpus(self,inst_cfg):
+        with open('instancetypes-aws.csv', newline='') as csvfile:
+            self._csv_reader = csv.DictReader(csvfile)
+            for row in self._csv_reader:
+                if row['Instance type'] == inst_cfg.get('type'):
+                    arr = row['Valid cores'].split(',')
+                    res = [ ]
+                    for x in arr:
+                        try:
+                            res.append(int(x))
+                        except: 
+                            pass
+                    if len(res)==0:
+                        return None
+                    return res
+        return None
 

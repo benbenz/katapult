@@ -243,13 +243,14 @@ class CloudRunProcess():
 class CloudRunProvider(ABC):
 
     def __init__(self, conf):
+        self.DBG_LVL = conf.get('debug',1)
+        global DBG_LVL
+        DBG_LVL = conf.get('debug',1)
+
         self._config  = conf
         self._load_objects()
         self._preprocess_jobs()
         self._sanity_checks()
-        self.DBG_LVL = conf.get('debug',1)
-        global DBG_LVL
-        DBG_LVL = conf.get('debug',1)
 
     def debug(self,level,*args):
         if level <= self.DBG_LVL:
@@ -257,7 +258,7 @@ class CloudRunProvider(ABC):
 
     def _load_objects(self):
         projectName = self._config.get('project')
-        inst_cfgs   = self._config.get('instances_types')
+        inst_cfgs   = self._config.get('instances')
         env_cfgs    = self._config.get('environments')
         job_cfgs    = self._config.get('jobs')
         dev         = self._config.get('dev')
@@ -267,34 +268,21 @@ class CloudRunProvider(ABC):
             for inst_cfg in inst_cfgs:
                 # virtually demultiply according to 'number' and 'explode'
                 for i in range(inst_cfg.get('number',1)):
-                    CPU_SPLIT = 16
-                    total_inst_cpus = inst_cfg.get('cpus',1)
-                    if type(total_inst_cpus) != int and type(total_inst_cpus) != float:
-                        print("WARNING: setting default CPUs number to 1 for an instance")
-                        total_inst_cpus = 1
-                    if inst_cfg.get('explode'):
-                        num_sub_instances = math.floor( total_inst_cpus / CPU_SPLIT ) # we target CPUs with 16 cores...
-                        if num_sub_instances == 0:
-                            cpu_inc = total_inst_cpus
-                            num_sub_instances = 1
-                        else:
-                            cpu_inc = CPU_SPLIT 
-                            num_sub_instances = num_sub_instances + 1
+                    rec_cpus = self.get_recommended_cpus(inst_cfg)
+                    if rec_cpus is None:
+                        self.debug(1,"WARNING: could not set recommended CPU size for instance type:",inst_cfg.get('type'))
+                        cpu_split = None
                     else:
-                        num_sub_instances = 1
-                        cpu_inc = total_inst_cpus
-                    cpus_created = 0  
-                    for j in range(num_sub_instances):
-                        rank = "{0}.{1}".format(i+1,j+1)
-                        if j == num_sub_instances-1: # for the last one we're completing the cpus with whatever
-                            inst_cpus = total_inst_cpus - cpus_created
-                        else:
-                            inst_cpus = cpu_inc
+                        cpu_split = rec_cpus[len(rec_cpus)-1]
+
+                    if cpu_split is None:
+                        self.debug(1,"WARNING: removing CPU reqs for instance type:",inst_cfg.get('type'))
                         real_inst_cfg = copy.deepcopy(inst_cfg)
                         real_inst_cfg.pop('number',None)  # provide default value to avoid KeyError
                         real_inst_cfg.pop('explode',None) # provide default value to avoid KeyError
-                        real_inst_cfg['cpus'] = inst_cpus
-                        real_inst_cfg['rank'] = rank
+
+                        real_inst_cfg['cpus'] = None
+                        real_inst_cfg['rank'] = "{0}.{1}".format(i+1,1)
                         # [!important!] also copy global information that are used for the name generation ...
                         real_inst_cfg['dev']  = self._config.get('dev',False)
                         real_inst_cfg['project']  = self._config.get('project',None)
@@ -304,8 +292,45 @@ class CloudRunProvider(ABC):
                         # let's put some dummy instances for now ...
                         instance = CloudRunInstance( real_inst_cfg , None, None )
                         self._instances.append( instance )
+                    else:
+                        total_inst_cpus = inst_cfg.get('cpus',1)
+                        if type(total_inst_cpus) != int and type(total_inst_cpus) != float:
+                            print("WARNING: setting default CPUs number to 1 for an instance")
+                            total_inst_cpus = 1
+                        if inst_cfg.get('explode'):
+                            num_sub_instances = math.floor( total_inst_cpus / cpu_split ) # we target CPUs with 16 cores...
+                            if num_sub_instances == 0:
+                                cpu_inc = total_inst_cpus
+                                num_sub_instances = 1
+                            else:
+                                cpu_inc = cpu_split 
+                                num_sub_instances = num_sub_instances + 1
+                        else:
+                            num_sub_instances = 1
+                            cpu_inc = total_inst_cpus
+                        cpus_created = 0  
+                        for j in range(num_sub_instances):
+                            rank = "{0}.{1}".format(i+1,j+1)
+                            if j == num_sub_instances-1: # for the last one we're completing the cpus with whatever
+                                inst_cpus = total_inst_cpus - cpus_created
+                            else:
+                                inst_cpus = cpu_inc
+                            real_inst_cfg = copy.deepcopy(inst_cfg)
+                            real_inst_cfg.pop('number',None)  # provide default value to avoid KeyError
+                            real_inst_cfg.pop('explode',None) # provide default value to avoid KeyError
+                            real_inst_cfg['cpus'] = inst_cpus
+                            real_inst_cfg['rank'] = rank
+                            # [!important!] also copy global information that are used for the name generation ...
+                            real_inst_cfg['dev']  = self._config.get('dev',False)
+                            real_inst_cfg['project']  = self._config.get('project',None)
 
-                        cpus_created = cpus_created + inst_cpus
+                            # starts calling the Service here !
+                            # instance , created = self.start_instance( real_inst_cfg )
+                            # let's put some dummy instances for now ...
+                            instance = CloudRunInstance( real_inst_cfg , None, None )
+                            self._instances.append( instance )
+
+                            cpus_created = cpus_created + inst_cpus
         debug(2,self._instances)
 
         self._environments = [ ] 
@@ -674,6 +699,10 @@ class CloudRunProvider(ABC):
 
     @abstractmethod
     def get_user_region(self):
+        pass
+
+    @abstractmethod
+    def get_recommended_cpus(self,inst_cfg):
         pass
 
     @abstractmethod

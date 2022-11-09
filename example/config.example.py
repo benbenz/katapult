@@ -4,7 +4,7 @@ config = {
     # GLOBALS
     ################################################################################
 
-    'project'      : 'test' ,                             # this will be concatenated with the instance & env hashes (if not None) 
+    'project'      : 'test' ,                             # this will be concatenated with the instance hashes (if not None) 
     'dev'          : False ,                              # When True, this will ensure the same instance and dev environement are being used (while working on building up the project) 
     'debug'        : 1 ,                                  # debug level (0...3)
     'maestro'      : 'local' ,                            # where the 'maestro' resides: local' | 'remote' (nano instance) | 'lambda'
@@ -14,14 +14,14 @@ config = {
     # INSTANCES / HARDWARE
     ################################################################################
 
-    'instances_types' : [
+    'instances' : [
         { 
             'region'       : None ,                       # can be None or has to be valid. Overrides AWS user region configuration.
             'cloud_id'     : None ,                       # can be None, or even wrong/non-existing - then the default one is used
             'img_id'       : 'ami-077fd75cd229c811b' ,    # OS image: has to be valid and available for the profile (user/region)
             'img_username' : 'ubuntu' ,                   # the SSH user for the image
-            'size'         : 't2.micro' ,                 # proprietary size spec (has to be valid)
-            'cpus'         : 1 ,                          # number of CPU cores
+            'type'         : 't2.micro' ,                 # proprietary size spec (has to be valid)
+            'cpus'         : None ,                       # number of CPU cores
             'gpu'          : None ,                       # the proprietary type of the GPU 
             'disk_size'    : None ,                       # the disk size of this instance type (in GB)
             'disk_type'    : None ,                       # the proprietary disk type of this instance type: 'standard', 'io1', 'io2', 'st1', etc
