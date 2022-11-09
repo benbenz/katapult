@@ -6,7 +6,9 @@ import paramiko
 import re
 import asyncio
 import copy
-import math
+import math , random
+
+random.seed()
 
 
 cr_keypairName         = 'cloudrun-keypair'
@@ -95,6 +97,17 @@ class CloudRunInstance():
     def get_config_DIRTY(self):
         return self._config
 
+    def update_from_instance(self,instance):
+        self._region   = instance._region
+        self._name     = instance._name
+        self._id       = instance._id 
+        self._rank     = instance._rank
+        self._ip_addr  = instance._ip_addr
+        self._dns_addr = instance._dns_addr
+        self._state    = instance._state
+        self._config   = copy.deepcopy(instance._config)
+        self._data     = copy.deepcopy(instance._data)        
+
     def __repr__(self):
         return "{0}: REGION = {1} , ID = {2} , NAME = {3} , IP = {4} , CPUS = {5} , RANK = {6}".format(type(self).__name__,self._region,self._id,self._name,self._ip_addr,self.get_cpus(),self._rank)
 
@@ -103,8 +116,9 @@ class CloudRunInstance():
 
 class CloudRunEnvironment():
 
-    def __init__(self,projectName,env_config,dev=False):
+    def __init__(self,projectName,env_config):
         self._config   = env_config
+        self._project  = projectName
         self._env_obj  = cloudrunutils.compute_environment_object(env_config)
         self._hash     = cloudrunutils.compute_environment_hash(self._env_obj)
 
@@ -138,15 +152,20 @@ class CloudRunEnvironment():
         return CloudRunDeployedEnvironment(self,instance)
 
     def json(self):
-        return json.dumps(self._env_obj)        
+        return json.dumps(self._env_obj)  
+
+
+# "Temporary" objects used when starting scripts      
 
 class CloudRunDeployedEnvironment(CloudRunEnvironment):
 
     def __init__(self, env, instance):
+        super().__init__( env._project , env._config )
         self._config   = copy.deepcopy(env._config)
         self._env_obj  = copy.deepcopy(env._env_obj)
         self._hash     = env._hash
         self._name     = env._name
+        self._instance = instance
         #env_obj = self._env_obj.copy()
         self._env_obj['path_abs'] = "/home/" + instance.get_config('img_username') + '/run/' + self._name
         # replace __REQUIREMENTS_TXT_LINK__ with the actual requirements.txt path (dependent of config and env hash)
@@ -156,13 +175,17 @@ class CloudRunDeployedEnvironment(CloudRunEnvironment):
     def get_path_abs(self):
         return self._env_obj['path_abs']
 
+    def get_instance(self):
+        return self._instance
+
 
 class CloudRunJob():
 
     def __init__(self,job_cfg):
-        self._config  = job_cfg
-        self._hash    = cloudrunutils.compute_job_hash(self._config)
-        self._env     = None
+        self._config   = job_cfg
+        self._hash     = cloudrunutils.compute_job_hash(self._config)
+        self._env      = None
+        self._instance = None 
         if (not 'input_file' in self._config) or (not 'output_file' in self._config) or not isinstance(self._config['input_file'],str) or not isinstance(self._config['output_file'],str):
             print("\n\n\033[91mConfiguration requires an input and output file names\033[0m\n\n")
             raise CloudRunError() 
@@ -174,28 +197,38 @@ class CloudRunJob():
     def get_hash(self):
         return self._hash
 
-    def get_config(self,key):
-        return self._config.get(key)
+    def get_config(self,key,defaultVal=None):
+        return self._config.get(key,defaultVal)
 
     def get_env(self):
         return self._env
 
+    def get_instance(self):
+        return self._instance
+
     def deploy(self,dpl_env):
         return CloudRunDeployedJob(self,dpl_env)
 
+    def set_instance(self,instance):
+        self._instance = instance
+
     def __repr__(self):
-        return "{0}: HASH = {1}".format(type(self).__name__,self._hash)
+        return "{0}: HASH = {1} , INSTANCE = {2}".format(type(self).__name__,self._hash,self._instance)
         
     def __str__(self):
-        return "{0}: HASH = {1}".format(type(self).__name__,self._hash)
+        return "{0}: HASH = {1} , INSTANCE = {2}".format(type(self).__name__,self._hash,self._instance)
 
+
+# "Temporary" objects used when starting scripts      
 
 class CloudRunDeployedJob(CloudRunJob):
 
     def __init__(self,job,dpl_env):
+        super().__init__( job._config )
         self._config    = copy.deepcopy(job._config)
         self._hash      = job._hash
         self._env       = dpl_env
+        self._instance  = job._instance
         self._processes = dict()
         self._path      = dpl_env.get_path_abs() + '/' + self.get_hash()
         self._command   = cloudrunutils.compute_job_command(self._path,self._config)
@@ -208,7 +241,6 @@ class CloudRunDeployedJob(CloudRunJob):
 
     def get_command(self):
         return self._command
-
 
 class CloudRunProcess():
 
@@ -261,7 +293,6 @@ class CloudRunProvider(ABC):
         inst_cfgs   = self._config.get('instances')
         env_cfgs    = self._config.get('environments')
         job_cfgs    = self._config.get('jobs')
-        dev         = self._config.get('dev')
 
         self._instances = [ ]
         if inst_cfgs:
@@ -324,8 +355,6 @@ class CloudRunProvider(ABC):
                             real_inst_cfg['dev']  = self._config.get('dev',False)
                             real_inst_cfg['project']  = self._config.get('project',None)
 
-                            # starts calling the Service here !
-                            # instance , created = self.start_instance( real_inst_cfg )
                             # let's put some dummy instances for now ...
                             instance = CloudRunInstance( real_inst_cfg , None, None )
                             self._instances.append( instance )
@@ -336,7 +365,9 @@ class CloudRunProvider(ABC):
         self._environments = [ ] 
         if env_cfgs:
             for env_cfg in env_cfgs:
-                env = CloudRunEnvironment(projectName,env_cfg,dev)
+                # copy the dev global paramter to the environment configuration (will be used for names)
+                env_cfg['dev']  = self._config.get('dev',False)
+                env = CloudRunEnvironment(projectName,env_cfg)
                 self._environments.append(env)
 
         self._jobs = [ ] 
@@ -439,15 +470,38 @@ class CloudRunProvider(ABC):
 
         return ssh_client
 
-    async def run_script(self):
+    def get_job(self,index):
+
+        return self._jobs[index] 
+
+    def assign_jobs_to_instances(self):
+
+        # DUMMY algorithm for now 
+        for job in self._jobs:
+            if job.get_instance():
+                continue 
+           
+            instance = random.choice( self._instances )
+            
+            job.set_instance(instance)
+
+    async def run_job(self,job):
+
+        if not job.get_instance():
+            debug(1,"The job",job,"has not been assigned to an instance!")
+            return None
+
+        instance = job.get_instance()
 
         # CHECK EVERY TIME !
-        instance , created = self.start_instance()
+        new_instance , created = self.start_instance(job.get_instance())
+        
+        # make sure we update the instance with the new instance data
+        instance.update_from_instance(new_instance)
 
         await self._wait_for_instance(instance)
 
         # FOR NOW
-        job      = self._jobs[0]        # retrieve default script
         env      = job.get_env()        # get its environment
         dpl_env  = env.deploy(instance) # "deploy" the environment to the instance and get a DeployedEnvironment
         dpl_job  = job.deploy(dpl_env)
@@ -598,20 +652,19 @@ class CloudRunProvider(ABC):
         return process
 
     # this allow any external process to wait for a specific job
-    async def get_script_state( self, processObj ):
-
-        instance = self.get_instance()
-
-        if instance is None:
-            print("get_command_state: instance is not available!")
-            return CloudRunCommandState.UNKNOWN
-
-        await self._wait_for_instance(instance)
+    async def get_process_state( self, processObj ):
 
         job         = processObj.get_job() # deployed job
+        instance    = job.get_instance()
         dpl_env     = job.get_env() # deployed job has a deployed environment
         files_path  = dpl_env.get_path()
         global_path = "$HOME/run"
+
+        if instance is None:
+            print("get_process_state: instance is not available!")
+            return CloudRunCommandState.UNKNOWN
+
+        await self._wait_for_instance(instance)
 
         ssh_client = await self._connect_to_instance(instance)
 
@@ -639,15 +692,16 @@ class CloudRunProvider(ABC):
         return state
 
     async def wait_for_script_state( self, script_state , process ):    
-        instance = self.get_instance()
+
+        job         = process.get_job()   # deployed job
+        instance    = job.get_instance()
 
         if instance is None:
-            print("get_command_state: instance is not available!")
+            print("wait_for_script_state: instance is not available!")
             return CloudRunCommandState.UNKNOWN
 
         await self._wait_for_instance(instance)
 
-        job         = process.get_job() # deployed job
         dpl_env     = job.get_env()        # deployed job has a deployed environment
         files_path  = dpl_env.get_path()
         global_path = "$HOME/run"
@@ -710,15 +764,15 @@ class CloudRunProvider(ABC):
         pass
 
     @abstractmethod
-    def start_instance(self):
+    def start_instance(self,instance):
         pass
 
     @abstractmethod
-    def stop_instance(self):
+    def stop_instance(self,instance):
         pass
 
     @abstractmethod
-    def terminate_instance(self):
+    def terminate_instance(self,instance):
         pass
 
     @abstractmethod
@@ -741,8 +795,8 @@ def get_client(config):
 
         raise CloudRunError()
 
-def init_instance_name(instance_config,dev=False):
-    if dev==True:
+def init_instance_name(instance_config):
+    if instance_config.get('dev',False)==True:
         return cr_instanceNameRoot
     else:
         instance_hash = cloudrunutils.compute_instance_hash(instance_config)

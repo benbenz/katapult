@@ -26,16 +26,18 @@ async def mainloop():
 
     # create the instance
     try:
-        cr_client.start_instance()
+        cr_client.start_instance(cr_client.get_instance())
     except Exception as e:
         traceback.print_exc()
         print("Aborting mainloop()",str(e))
         return
 
     print("\n== RUN ==\n")
+
+    cr_client.assign_jobs_to_instances()
         
     # run the script and get a process back
-    process = await cr_client.run_script() 
+    process = await cr_client.run_job(cr_client.get_job(0)) 
 
     print("\n== WAIT ==\n")
 

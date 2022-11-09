@@ -29,20 +29,20 @@ except ModuleNotFoundError as mnfe:
 # get client 
 cr_client = cr.get_client(config)
 
-async def tail_loop(scriptRuntimeInfo):
+async def tail_loop(process):
 
-    generator = await cr_client.tail(scriptRuntimeInfo) 
+    generator = await cr_client.tail(process) 
     for line in generator:
         print(line)
 
 if command=="wait":
     # run main loop
-    scriptRuntime = CloudRunJobRuntimeInfo( sys.argv[2] )
-    asyncio.run( cr_client.wait_for_script_state(CloudRunCommandState.DONE|CloudRunCommandState.ABORTED,scriptRuntime))
+    process = CloudRunProcess( sys.argv[2] )
+    asyncio.run( cr_client.wait_for_script_state(CloudRunCommandState.DONE|CloudRunCommandState.ABORTED,process))
 elif command=="getstate":
-    scriptRuntime = CloudRunJobRuntimeInfo( sys.argv[2] )
+    process = CloudRunProcess( sys.argv[2] )
     asyncio.run( cr_client.get_script_state(scriptRuntime) )
 elif command=="tail":
-    scriptRuntime = CloudRunJobRuntimeInfo( sys.argv[2] )
+    process = CloudRunProcess( sys.argv[2] )
     asyncio.run( tail_loop(scriptRuntime) )
 

@@ -472,9 +472,9 @@ class AWSCloudRunProvider(CloudRunProvider):
         inst_cfg = self._instances[0].get_config_DIRTY()
         return aws_find_instance(inst_cfg)
 
-    def start_instance(self):
+    def start_instance(self,instance):
 
-        inst_cfg = self._instances[0].get_config_DIRTY()
+        inst_cfg = instance.get_config_DIRTY()
         instance = aws_find_instance(inst_cfg)
 
         if instance is None:
@@ -484,11 +484,11 @@ class AWSCloudRunProvider(CloudRunProvider):
 
         return instance , created
 
-    def stop_instance(self):
-        aws_stop_instance(self.get_instance())
+    def stop_instance(self,instance):
+        aws_stop_instance(instance)
 
     def terminate_instance(self):
-        aws_terminate_instance(self.get_instance())
+        aws_terminate_instance(instance)
 
     def update_instance_info(self,instance):
         aws_update_instance_info(instance)
