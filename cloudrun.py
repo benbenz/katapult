@@ -143,7 +143,7 @@ class CloudRunDeployedEnvironment(CloudRunEnvironment):
         self._env_obj = cloudrunutils.update_requirements_path(self._env_obj,self._env_obj['path_abs'])
 
     def get_path_abs(self):
-        return env_obj['path_abs']
+        return self._env_obj['path_abs']
 
 
 class CloudRunJob():
@@ -180,7 +180,7 @@ class CloudRunDeployedJob(CloudRunJob):
         self._hash    = job._hash
         self._env     = dpl_env
         self._runtime = None
-        self._path = dpl_env.get_path_abs() + '/' + self.get_hash()
+        self._path    = dpl_env.get_path_abs() + '/' + self.get_hash()
         self._command = cloudrunutils.compute_job_command(self._path,self._config)
 
     def attach_process(self,runtimeInfo):
@@ -376,7 +376,6 @@ class CloudRunProvider(ABC):
         uid = cloudrunutils.generate_unique_filename() 
         
         run_path    = dpl_job.get_path() + '/' + uid
-        job_command = dpl_job.get_command()
 
         self.debug(1,"creating directories ...")
         stdin0, stdout0, stderr0 = ssh_client.exec_command("mkdir -p "+files_path+" "+run_path)
@@ -410,7 +409,7 @@ class CloudRunProvider(ABC):
             os.remove(remote_config)
         
         # change to job hash dir
-        ftp_client.chdir(job_path)
+        ftp_client.chdir(dpl_job.get_path())
         if job.get_config('run_script'):
             filename = os.path.basename(job.get_config('run_script'))
             try:
@@ -459,7 +458,7 @@ class CloudRunProvider(ABC):
             # TODO: INVESTIGATE THIS
             { 'cmd': global_path+"/bootstrap.sh \"" + dpl_env.get_name() + "\" " + ("1" if self._config['dev'] else "0") + " &", 'out': True },  
             # execute main script (spawn) (this will wait for bootstraping)
-            { 'cmd': global_path+"/run.sh \"" + dpl_env.get_name() + "\" \""+job_command+"\" " + job.get_config('input_file') + " " + job.get_config('output_file') + " " + job.get_hash()+" "+uid, 'out' : False }
+            { 'cmd': global_path+"/run.sh \"" + dpl_env.get_name() + "\" \""+dpl_job.get_command()+"\" " + job.get_config('input_file') + " " + job.get_config('output_file') + " " + job.get_hash()+" "+uid, 'out' : False }
         ]
         for command in commands:
             self.debug(1,"Executing ",format( command['cmd'] ),"output",command['out'])
@@ -523,10 +522,9 @@ class CloudRunProvider(ABC):
         # FOR NOW
         script      = self._jobs[0]        # retrieve default script
         env         = script.get_env()     # get its environment
-        env_obj     = env.deploy(instance) # "deploy" the environment to the instance and get the json object
-        script_path = env_obj['path_abs'] + '/' + script.get_hash()
+        dpl_env     = env.deploy(instance) # "deploy" the environment to the instance 
 
-        files_path = env_obj['path']
+        files_path = dpl_env.get_path()
         global_path = "$HOME/run"
 
         ssh_client = await self._connect_to_instance(instance)
@@ -564,10 +562,9 @@ class CloudRunProvider(ABC):
         # FOR NOW
         script      = self._jobs[0]        # retrieve default script
         env         = script.get_env()     # get its environment
-        env_obj     = env.deploy(instance) # "deploy" the environment to the instance and get the json object
-        script_path = env_obj['path_abs'] + '/' + script.get_hash()
+        dpl_env     = env.deploy(instance) # "deploy" the environment to the instance 
 
-        files_path = env_obj['path']
+        files_path = dpl_env.get_path()
         global_path = "$HOME/run"
 
         ssh_client = await self._connect_to_instance(instance)
@@ -578,7 +575,7 @@ class CloudRunProvider(ABC):
 
         while True:
 
-            cmd = global_path + "/state.sh " + env_obj['name'] + " " + str(shash) + " " + str(uid) + " " + str(pid) + " " + str(script.get_config('output_file'))
+            cmd = global_path + "/state.sh " + dpl_env.get_name() + " " + str(shash) + " " + str(uid) + " " + str(pid) + " " + str(script.get_config('output_file'))
             self.debug(1,"Executing command",cmd)
             stdin, stdout, stderr = ssh_client.exec_command(cmd)
 
