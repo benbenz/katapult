@@ -320,8 +320,8 @@ def aws_create_instance(instance_config,vpc,subnet,secGroup):
         market_options = {
             'MarketType': 'spot',
             'SpotOptions': {
-                'SpotInstanceType': 'persistent', #one-time'|'persistent',
-                'InstanceInterruptionBehavior': 'stop' #'hibernate'|'stop'|'terminate'
+                'SpotInstanceType': 'one-time', #one-time'|'persistent',
+                'InstanceInterruptionBehavior': 'terminate' #'hibernate'|'stop'|'terminate'
             }
         }     
         if 'eco_life' in instance_config and isinstance(instance_config['eco_life'],timedelta):
@@ -472,6 +472,7 @@ class AWSCloudRunProvider(CloudRunProvider):
 
     def __init__(self, conf):
         CloudRunProvider.__init__(self,conf)
+        global DBG_LVL
         DBG_LVL = conf.get('debug',1)
 
     def get_instance(self):
