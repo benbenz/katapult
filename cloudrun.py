@@ -711,7 +711,8 @@ class CloudRunProvider(ABC):
 
         statestr = stdout.read().decode("utf-8").strip()
         self.debug(1,"State=",statestr)
-        statestr = re.sub(r'\([0-9]+\)','',statestr)
+        stateinfo = statestr.split(',')
+        statestr = re.sub(r'\([0-9]+\)','',stateinfo[2])
         try:
             state = CloudRunCommandState[statestr.upper()]
             process.set_state(state)
@@ -753,7 +754,8 @@ class CloudRunProvider(ABC):
 
             statestr = stdout.read().decode("utf-8").strip()
             self.debug(1,"State=",statestr)
-            statestr = re.sub(r'\([0-9]+\)','',statestr)
+            stateinfo = statestr.split(',')
+            statestr = re.sub(r'\([0-9]+\)','',stateinfo[2])
 
             try:
                 state = CloudRunCommandState[statestr.upper()]

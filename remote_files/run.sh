@@ -17,10 +17,13 @@ fi
 env_path="$HOME/run/$env_name"
 run_path="$HOME/run/$env_name/$job_hash/$uid"
 pid_file="$run_path/pid"
+cmd_file="$run_path/cmd"
 
 # TODO: check if existing PID and PID running ... and throw warning, exit or do something ?
 # we print the mother PID in the PID file (it used to be the one from microrun)
 printf '%s\n' $$ > $pid_file
+
+printf '%s\n%s\n' $thecommand $input_file > $cmd_file
 
 echo 'idle' > $run_path/state # used to check the state of a process
 rm -f output_file

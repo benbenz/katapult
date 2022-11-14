@@ -48,7 +48,12 @@
   - [x] create ClourRunJob with script hash
   - [x] change Script to Job ?
   - [x] put a lot more methods in CloudRun base class. Basically on create_objects and maybe wait_for ? But we could use class even for that ... 
+  - [x] save command in process directory
+  - [ ] make state.sh handle multiple uid/pid
+  - [ ] create a getByName state (using the command line)
+  - [ ] generate dynamically bash .sh file to start all the jobs ...
   - [ ] save uid of scripts in a json file 
+  - [ ] explode uploads between instance setup, env setup and run setup ...
   - [x] maybe we should not put the script arguments in the hash ? This is more a runtime thing 
   - [ ] allocate job to instance before doing anything (so we know where to retrieve state once for all)
   - [x] CloudRunInstance class stores the client once for all (for a region) >> it will store just the region
