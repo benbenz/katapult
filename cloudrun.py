@@ -28,6 +28,7 @@ class CloudRunCommandState(IntFlag):
     RUNNING   = 2
     DONE      = 4
     ABORTED   = 8
+    ANY       = 8 + 4 + 2 + 1 
 
 class CloudRunInstance():
 
@@ -519,7 +520,7 @@ class CloudRunProvider(ABC):
             job.set_instance(instance)
             self.debug(1,"Assigned job " + str(job) )
 
-    async def deploy(self):
+    async def start(self):
         pass
 
     async def run_job(self,job):
@@ -731,7 +732,7 @@ class CloudRunProvider(ABC):
 
         return state
 
-    async def __wait_for_jobs_state( self , job_state , processes_infos ):
+    async def __get_jobs_states_internal( self , processes_infos , doWait , job_state ):
         
         jobsinfo = ""
 
@@ -793,11 +794,15 @@ class CloudRunProvider(ABC):
             if retrieved and all( [ pinfo['test'] for pinfo in processes_infos.values()] ) :
                 break
 
-            await asyncio.sleep(2)
+            if doWait:
+                await asyncio.sleep(2)
+            else:
+                break
 
-        ssh_client.close()        
+        ssh_client.close() 
 
-    async def wait_for_jobs_state( self, job_state , processes ):    
+
+    async def __get_or_wait_jobs_state( self, processes , do_wait = False , job_state = CloudRunCommandState.ANY ):    
 
         if not isinstance(processes,list):
             processes = [ processes ]
@@ -827,10 +832,18 @@ class CloudRunProvider(ABC):
         # wait for each group of processes
         jobs_wait = [ ] 
         for instance_name , processes_infos in instances_processes.items():
-            jobs_wait.append( self.__wait_for_jobs_state( job_state , processes_infos ) )
+            jobs_wait.append( self.__get_jobs_states_internal( processes_infos , do_wait , job_state ) )
         await asyncio.gather( * jobs_wait )
 
         # done
+
+    async def wait_for_jobs_state(self,processes,job_state):
+
+        await self.__get_or_wait_jobs_state(processes,True,job_state)
+
+    async def get_jobs_states(self,processes):
+
+        await self.__get_or_wait_jobs_state(processes)
 
     def _tail_execute_command(self,ssh,files_path,uid,line_num):
         run_log = files_path + '/' + uid + '-run.log'
@@ -909,7 +922,7 @@ def line_buffered(f):
     try :
         while doContinue and not f.channel.exit_status_ready():
             try:
-                line_buf += f.read(16).decode("utf-8")
+                line_buf += f.read(1).decode("utf-8")
                 if line_buf.endswith('\n'):
                     yield line_buf
                     line_buf = ''

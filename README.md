@@ -98,7 +98,7 @@ config = {
             'run_command'  : None ,                       # the command to run
             'upload_files' : [ "example/uploaded.txt"] ,  # any file to upload (array or string) - will be put in the same directory
             'input_file'   : 'input.dat' ,                # the input file name (used by the script)
-            'output_file'  : 'output1.dat' ,              # the output file name (used by the script)
+            'output_file'  : 'output.dat' ,               # the output file name (used by the script)
         } ,
         {
             'env_name'     : None ,                       # the environment to use (can be 'None' if solely one environment is provided above)
@@ -107,7 +107,7 @@ config = {
             'run_command'  : None ,                       # the command to run
             'upload_files' : [ "example/uploaded.txt"] ,  # any file to upload (array or string) - will be put in the same directory
             'input_file'   : 'input.dat' ,                # the input file name (used by the script)
-            'output_file'  : 'output2.dat' ,              # the output file name (used by the script)
+            'output_file'  : 'output.dat' ,               # the output file name (used by the script)
         }
     ]
 }

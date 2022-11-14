@@ -37,10 +37,10 @@ async def mainloop():
     # distribute the jobs on the instances (dummy algo for now)
     cr_client.assign_jobs_to_instances()
 
-    print("\n== DEPLOY ==\n")
+    print("\n== START/DEPLOY ==\n")
 
     # pre-deploy instance and environments
-    await cr_client.deploy()
+    await cr_client.start()
     print("deployed")
 
     print("\n== RUN ==\n")
@@ -52,7 +52,12 @@ async def mainloop():
     print("\n== WAIT ==\n")
 
     print("Waiting for DONE or ABORTED ...")
-    await cr_client.wait_for_jobs_state(CloudRunCommandState.DONE|CloudRunCommandState.ABORTED,[process1,process2])
+    await cr_client.wait_for_jobs_state([process1,process2],CloudRunCommandState.DONE|CloudRunCommandState.ABORTED)
+
+    print("\n== GET STATE ==\n")
+
+    # just to show the API ...
+    await cr_client.get_jobs_states([process1,process2])
 
     # print("\n== WAIT and TAIL ==\n")
 
