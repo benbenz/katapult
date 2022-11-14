@@ -1,4 +1,4 @@
-import numpy , time
+import numpy , time , sys
 
 a = numpy.arange(15).reshape(3, 5)
 
@@ -8,11 +8,10 @@ a = numpy.arange(15).reshape(3, 5)
 # file.close()
 
 print(a,flush=True)
-
 c=1
-while c<15:
+while c<int(sys.argv[2]):
     time.sleep(2)
-    print("sleep")
+    print("sleep",c)
     c=c+1
 
 f = open("output.dat", "a")

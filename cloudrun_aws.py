@@ -469,8 +469,9 @@ class AWSCloudRunProvider(CloudRunProvider):
 
     def get_instance(self):
 
-        inst_cfg = self._instances[0].get_config_DIRTY()
-        return aws_find_instance(inst_cfg)
+        #inst_cfg = self._instances[0].get_config_DIRTY()
+        #return aws_find_instance(inst_cfg)
+        return self._instances[0]
 
     def start_instance(self,instance):
 

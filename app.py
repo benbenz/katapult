@@ -32,17 +32,27 @@ async def mainloop():
         print("Aborting mainloop()",str(e))
         return
 
+    print("\n== ALLOCATE JOBS ==\n")
+
+    # distribute the jobs on the instances (dummy algo for now)
+    cr_client.assign_jobs_to_instances()
+
+    print("\n== DEPLOY ==\n")
+
+    # pre-deploy instance and environments
+    await cr_client.deploy()
+    print("deployed")
+
     print("\n== RUN ==\n")
 
-    cr_client.assign_jobs_to_instances()
-        
-    # run the script and get a process back
-    process = await cr_client.run_job(cr_client.get_job(0)) 
+    # run the scripts and get a process back
+    process1 = await cr_client.run_job(cr_client.get_job(0)) 
+    process2 = await cr_client.run_job(cr_client.get_job(1)) 
 
     print("\n== WAIT ==\n")
 
     print("Waiting for DONE or ABORTED ...")
-    await cr_client.wait_for_script_state(CloudRunCommandState.DONE|CloudRunCommandState.ABORTED,process)
+    await cr_client.wait_for_jobs_state(CloudRunCommandState.DONE|CloudRunCommandState.ABORTED,[process1,process2])
 
     # print("\n== WAIT and TAIL ==\n")
 

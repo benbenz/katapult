@@ -471,7 +471,7 @@ class CloudRunProvider(ABC):
                     if lookForIP:
                         debug(1,"waiting for state ...",instanceState)
                     else:
-                        debug(1,"waiting for state ...",instanceState," IP =",updated_instance.get_ip_addr())
+                        debug(1,"waiting for state ...",instanceState," IP =",instance.get_ip_addr())
                  
                 await asyncio.sleep(10)
 
@@ -517,6 +517,10 @@ class CloudRunProvider(ABC):
             instance = random.choice( self._instances )
              
             job.set_instance(instance)
+            self.debug(1,"Assigned job " + str(job) )
+
+    async def deploy(self):
+        pass
 
     async def run_job(self,job):
 
@@ -585,11 +589,13 @@ class CloudRunProvider(ABC):
         # change to job hash dir
         ftp_client.chdir(dpl_job.get_path())
         if job.get_config('run_script'):
-            filename = os.path.basename(job.get_config('run_script'))
+            script_args = job.get_config('run_script').split()
+            script_file = script_args[0]
+            filename = os.path.basename(script_file)
             try:
-                ftp_client.put(job.get_config('run_script'),filename)
+                ftp_client.put(os.path.abspath(script_file),filename)
             except:
-                self.debug(1,"You defined an script that is not available",job.get_config('run_script'))
+                self.debug(1,"You defined a script that is not available",job.get_config('run_script'))
         if job.get_config('upload_files'):
             files = job.get_config('upload_files')
             if isinstance( files,str):
@@ -725,54 +731,106 @@ class CloudRunProvider(ABC):
 
         return state
 
-    async def wait_for_script_state( self, script_state , process ):    
+    async def __wait_for_jobs_state( self , job_state , processes_infos ):
+        
+        jobsinfo = ""
 
-        job         = process.get_job()   # deployed job
-        instance    = job.get_instance()
-
-        if instance is None:
-            print("wait_for_script_state: instance is not available!")
-            return CloudRunCommandState.UNKNOWN
-
-        await self._wait_for_instance(instance)
-
-        dpl_env     = job.get_env()        # deployed job has a deployed environment
-        files_path  = dpl_env.get_path()
-        global_path = "$HOME/run"
-        shash       = job.get_hash()
-        uid         = process.get_uid()
-        pid         = process.get_pid()
+        for uid , process_info in processes_infos.items():
+            process     = process_info['process']
+            job         = process.get_job()    # deployed job
+            dpl_env     = job.get_env()        # deployed job has a deployed environment
+            shash       = job.get_hash()
+            uid         = process.get_uid()
+            pid         = process.get_pid()
+            if jobsinfo:
+                jobsinfo = jobsinfo + " " + dpl_env.get_name() + " " + str(shash) + " " + str(uid) + " " + str(pid) + " \"" + str(job.get_config('output_file')) + "\""
+            else:
+                jobsinfo = dpl_env.get_name() + " " + str(shash) + " " + str(uid) + " " + str(pid) + " \"" + str(job.get_config('output_file')) + "\""
+            
+            instance    = job.get_instance() # should be the same for all jobs
 
         ssh_client = await self._connect_to_instance(instance)
 
+        global_path = "$HOME/run"
 
         while True:
-
-            cmd = global_path + "/state.sh " + dpl_env.get_name() + " " + str(shash) + " " + str(uid) + " " + str(pid) + " " + str(job.get_config('output_file'))
+            cmd = global_path + "/state.sh " + jobsinfo
             self.debug(1,"Executing command",cmd)
             stdin, stdout, stderr = ssh_client.exec_command(cmd)
 
-            statestr = stdout.read().decode("utf-8").strip()
-            self.debug(1,"State=",statestr)
-            stateinfo = statestr.split(',')
-            statestr = re.sub(r'\([0-9]+\)','',stateinfo[2])
+            while True: 
+                lines = stdout.readlines()
+                for line in lines:           
+                    statestr = line.strip() #line.decode("utf-8").strip()
+                    self.debug(1,"State=",statestr)
+                    stateinfo = statestr.split(',')
+                    statestr  = re.sub(r'\([0-9]+\)','',stateinfo[2])
+                    uid       = stateinfo[0]
 
-            try:
-                state = CloudRunCommandState[statestr.upper()]
-                process.set_state(state)
-                self.debug(1,process)
-            except:
-                print("\nUnhandled state received by state.sh!!!",statestr,"\n")
-                state = CloudRunCommandState.UNKNOWN
+                    if uid in processes_infos:
+                        process = processes_infos[uid]['process']
+                        try:
+                            state = CloudRunCommandState[statestr.upper()]
+                            process.set_state(state)
+                            self.debug(1,process)
+                            processes_infos[uid]['retrieved'] = True
+                            processes_infos[uid]['test']      = job_state & state 
+                        except Exception as e:
+                            debug(1,"\nUnhandled state received by state.sh!!!",statestr,"\n")
+                            debug(2,e)
+                            state = CloudRunCommandState.UNKNOWN
 
-            if state & script_state:
+                    else:
+                        debug(2,"Received UID info that was not requested")
+                        pass
+
+                if not lines or len(lines)==0:
+                    break
+
+            # all retrived attributes need to be true
+            retrieved = all( [ pinfo['retrieved'] for pinfo in processes_infos.values()] )
+
+            if retrieved and all( [ pinfo['test'] for pinfo in processes_infos.values()] ) :
                 break
 
             await asyncio.sleep(2)
 
-        ssh_client.close()
+        ssh_client.close()        
 
-        return state
+    async def wait_for_jobs_state( self, job_state , processes ):    
+
+        if not isinstance(processes,list):
+            processes = [ processes ]
+
+        # organize by instance
+        instances_processes = dict()
+        instances_list      = dict()
+        for process in processes:
+            job         = process.get_job()   # deployed job
+            instance    = job.get_instance()
+            if instance is None:
+                print("wait_for_job_state: instance is not available!")
+                return 
+            # initialize the collection dict
+            if instance.get_name() not in instances_processes:
+                instances_processes[instance.get_name()] = dict()
+                instances_list[instance.get_name()]      = instance
+            if process.get_uid() not in instances_processes[instance.get_name()]:
+                instances_processes[instance.get_name()][process.get_uid()] = { 'process' : process , 'retrieved' : False  , 'test' : False }
+
+        # wait for instances to be ready (concurrently)
+        instances_wait = [ ]
+        for instance in instances_list.values():
+            instances_wait.append( self._wait_for_instance(instance))
+        await asyncio.gather( *instances_wait ) 
+
+        # wait for each group of processes
+        jobs_wait = [ ] 
+        for instance_name , processes_infos in instances_processes.items():
+            jobs_wait.append( self.__wait_for_jobs_state( job_state , processes_infos ) )
+        await asyncio.gather( * jobs_wait )
+
+        # done
 
     def _tail_execute_command(self,ssh,files_path,uid,line_num):
         run_log = files_path + '/' + uid + '-run.log'
