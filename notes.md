@@ -21,7 +21,6 @@
     - [x] script_info    = { existing script info + 'cpus_req' option + 'env_name' (optional) }
   - [x] new global options:
     - [x] maestro        = 'local' | 'remote' (nano) | 'lambda'
-
   - [x] use new instances variables:
     - [x] disk_size
     - [x] disk_type
@@ -50,7 +49,6 @@
   - [x] change Script to Job ?
   - [x] put a lot more methods in CloudRun base class. Basically on create_objects and maybe wait_for ? But we could use class even for that ... 
   - [ ] save uid of scripts in a json file 
-
   - [x] maybe we should not put the script arguments in the hash ? This is more a runtime thing 
   - [ ] allocate job to instance before doing anything (so we know where to retrieve state once for all)
   - [x] CloudRunInstance class stores the client once for all (for a region) >> it will store just the region
