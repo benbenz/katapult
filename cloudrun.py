@@ -564,7 +564,7 @@ class CloudRunProvider(ABC):
         stdin0, stdout0, stderr0 = ssh_client.exec_command("[[ -f "+file_test+" ]] && echo \"ok\" || echo \"not_ok\";")
         result = stdout0.read()
         if "not_ok" in result.decode():
-            debug(1,"Forcing re-upload of files ...")
+            debug(1,"re-upload of files ...")
             re_upload = True
         return re_upload
 
@@ -700,7 +700,7 @@ class CloudRunProvider(ABC):
                     # setup envs according to current config files state
                     # NOTE: make sure to let out = True or bootstraping is not executed properly 
                     # TODO: INVESTIGATE THIS
-                    { 'cmd': global_path+"/bootstrap.sh \"" + dpl_env.get_name() + "\" " + ("1" if self._config['dev'] else "0") + " &", 'out': True },  
+                    { 'cmd': global_path+"/bootstrap.sh \"" + dpl_env.get_name() + "\" " + ("1" if self._config['dev'] else "0") , 'out': True },  
                 ]
 
                 self._run_ssh_commands(ssh_client,commands)
@@ -1146,7 +1146,7 @@ class CloudRunProvider(ABC):
             # setup envs according to current config files state
             # NOTE: make sure to let out = True or bootstraping is not executed properly 
             # TODO: INVESTIGATE THIS
-            { 'cmd': global_path+"/bootstrap.sh \"" + dpl_env.get_name() + "\" " + ("1" if self._config['dev'] else "0") + " &", 'out': True },  
+            { 'cmd': global_path+"/bootstrap.sh \"" + dpl_env.get_name() + "\" " + ("1" if self._config['dev'] else "0") , 'out': True },  
             # execute main script (spawn) (this will wait for bootstraping)
             { 'cmd': global_path+"/run.sh \"" + dpl_env.get_name() + "\" \""+dpl_job.get_command()+"\" " + job.get_config('input_file') + " " + job.get_config('output_file') + " " + job.get_hash()+" "+uid, 'out' : False }
         ]
@@ -1156,8 +1156,13 @@ class CloudRunProvider(ABC):
                 stdin , stdout, stderr = ssh_client.exec_command(command['cmd'])
                 #print(stdout.read())
                 if command['out']:
-                    for l in line_buffered(stdout):
+                    while True:
+                        l = stdout.readline()
                         self.debug(1,l)
+                        if l is None:
+                            break 
+                    #for l in line_buffered(stdout):
+                    #    self.debug(1,l)
 
                     errmsg = stderr.read()
                     dbglvl = 1 if errmsg else 2
@@ -1294,7 +1299,7 @@ class CloudRunProvider(ABC):
                         debug(2,"Received UID info that was not requested")
                         pass
 
-                if not lines or len(lines)==0:
+                if lines is None or len(lines)==0:
                     break
 
             # all retrived attributes need to be true
