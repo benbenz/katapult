@@ -22,26 +22,16 @@ async def tail_loop(script_hash,uid):
 
 async def mainloop():
 
-    print("\n== START ==\n")
-
-    # create the instance
-    try:
-        cr_client.start_instance(cr_client.get_instance())
-    except Exception as e:
-        traceback.print_exc()
-        print("Aborting mainloop()",str(e))
-        return
-
     print("\n== ALLOCATE JOBS ==\n")
 
     # distribute the jobs on the instances (dummy algo for now)
     cr_client.assign_jobs_to_instances()
 
-    print("\n== START/DEPLOY ==\n")
+    print("\n== DEPLOY ==\n")
 
-    # pre-deploy instance and environments
-    await cr_client.start()
-    print("deployed")
+    # pre-deploy instance , environments and job files
+    # it is strongly recommended to wait here
+    await cr_client.deploy()
 
     print("\n== RUN ==\n")
 

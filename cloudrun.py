@@ -7,6 +7,8 @@ import re
 import asyncio
 import copy
 import math , random
+from io import BytesIO
+
 
 random.seed()
 
@@ -48,6 +50,10 @@ class CloudRunInstance():
         self._config   = config 
         # dict data associated with it (AWS response data e.g.)
         self._data     = proprietaryData
+        # jobs list
+        self._jobs     = [ ]
+        # env dict
+        self._envs     = dict()
 
     def get_region(self):
         return self._region
@@ -94,6 +100,17 @@ class CloudRunInstance():
         if not self._config:
             return None
         return self._config.get(key,None)
+
+    def append_job(self,job):
+        self._jobs.append(job)
+        env = job.get_env()
+        self._envs[env.get_name()] = env 
+
+    def get_environments(self):
+        return self._envs.values()
+
+    def get_jobs(self):
+        return self._jobs
 
     def get_config_DIRTY(self):
         return self._config
@@ -215,6 +232,7 @@ class CloudRunJob():
 
     def set_instance(self,instance):
         self._instance = instance
+        instance.append_job(self)
 
     def __repr__(self):
         return "{0}: HASH = {1} , INSTANCE = {2}".format(type(self).__name__,self.get_hash(),self.get_instance())
@@ -520,8 +538,326 @@ class CloudRunProvider(ABC):
             job.set_instance(instance)
             self.debug(1,"Assigned job " + str(job) )
 
-    async def start(self):
-        pass
+    # def start(self):
+    #     for instance in self._instances:
+    #         # create the instance
+    #         try:
+    #             self.start_instance(instance)
+    #         except Exception as e:
+    #             traceback.print_exc()
+    #             pass
+
+    async def _start_and_wait_for_instance(self,instance):
+        # CHECK EVERY TIME !
+        new_instance , created = self.start_instance(instance)
+         
+        # make sure we update the instance with the new instance data
+        instance.update_from_instance(new_instance)
+
+        # wait for the instance to be ready
+        await self._wait_for_instance(instance)
+
+        return created
+
+    def _test_reupload(self,instance,file_test,ssh_client):
+        re_upload = False
+        stdin0, stdout0, stderr0 = ssh_client.exec_command("[[ -f "+file_test+" ]] && echo \"ok\" || echo \"not_ok\";")
+        result = stdout0.read()
+        if "not_ok" in result.decode():
+            debug(1,"Forcing re-upload of files ...")
+            re_upload = True
+        return re_upload
+
+    async def _deploy_instance(self,instance,deploy_states,close_clients=False):
+
+        # make sure we got the instance ready
+        created = await self._start_and_wait_for_instance(instance)
+
+        # connect to instance
+        ssh_client = await self._connect_to_instance(instance)
+
+        # last file uploaded ...
+        re_upload  = self._test_reupload(instance,"$HOME/run/ready", ssh_client)
+
+        debug(1,"created",created,"re_upload",re_upload)
+
+        if created or re_upload:
+
+            self.debug(1,"creating instance's directories ...")
+            stdin0, stdout0, stderr0 = ssh_client.exec_command("mkdir -p $HOME/run")
+            self.debug(1,"directories created")
+
+            self.debug(1,"uploading instance's files ... ")
+
+            # upload the install file, the env file and the script file
+            ftp_client = ssh_client.open_sftp()
+
+            # change dir to global dir (should be done once)
+            global_path = "/home/" + instance.get_config('img_username') + '/run/'
+            ftp_client.chdir(global_path)
+            ftp_client.put('remote_files/config.py','config.py')
+            ftp_client.put('remote_files/bootstrap.sh','bootstrap.sh')
+            ftp_client.put('remote_files/run.sh','run.sh')
+            ftp_client.put('remote_files/microrun.sh','microrun.sh')
+            ftp_client.put('remote_files/state.sh','state.sh')
+            ftp_client.put('remote_files/tail.sh','tail.sh')
+            ftp_client.put('remote_files/getpid.sh','getpid.sh')
+
+            self.debug(1,"Installing PyYAML for newly created instance ...")
+            stdin , stdout, stderr = ssh_client.exec_command("pip install pyyaml")
+            self.debug(2,stdout.read())
+            self.debug(2, "Errors")
+            self.debug(2,stderr.read())
+
+            commands = [ 
+                # make bootstrap executable
+                { 'cmd': "chmod +x "+global_path+"/*.sh ", 'out' : True },              
+            ]
+
+            self._run_ssh_commands(ssh_client,commands)
+
+            ftp_client.putfo(BytesIO("".encode()), 'ready')
+
+            if close_clients:
+                ftp_client.close()
+                ftp_client = None
+
+            self.debug(1,"files uploaded.")
+
+        else:
+            ftp_client = None
+
+        if close_clients:
+            ssh_client.close()
+            ssh_client = None 
+
+        deploy_states[instance.get_name()] = { 'upload' : created or re_upload , 'ssh' : ssh_client , 'sftp' : ftp_client }
+
+    async def _deploy_environments(self,instance,deploy_states,start_wait=True):
+
+        # make sure we got the instance ready
+        # created will always be False at this stage ... ? 
+        if start_wait:
+            await self._start_and_wait_for_instance(instance)
+
+        re_upload_inst = deploy_states[instance.get_name()]['upload']
+
+        # connect to instance
+        if deploy_states[instance.get_name()].get('ssh'):
+            ssh_client = deploy_states[instance.get_name()]['ssh']
+            close_ssh = False
+        else:
+            ssh_client = await self._connect_to_instance(instance)
+            close_ssh = True
+        if deploy_states[instance.get_name()].get('sftp'):
+            ftp_client = deploy_states[instance.get_name()]['sftp']
+            close_ftp = False 
+        else:
+            ftp_client = ssh_client.open_sftp()
+            close_ftp = True
+
+        # scan the instances environment (those are set when assigning a job to an instance)
+        for environment in instance.get_environments():
+
+            # "deploy" the environment to the instance and get a DeployedEnvironment
+            dpl_env  = environment.deploy(instance) 
+
+            re_upload_env = self._test_reupload(instance,dpl_env.get_path_abs()+'/ready', ssh_client)
+
+            debug(1,"re_upload_instance",re_upload_inst,"re_upload_env",re_upload_env)
+
+            re_upload = re_upload_env or re_upload_inst
+
+            deploy_states[instance.get_name()][environment.get_name()] = { 'upload' : re_upload }
+
+            if re_upload:
+                files_path = dpl_env.get_path()
+                global_path = "$HOME/run" # more robust
+
+                self.debug(1,"creating environment directories ...")
+                stdin0, stdout0, stderr0 = ssh_client.exec_command("mkdir -p "+files_path)
+                self.debug(1,"directories created")
+
+                self.debug(1,"uploading files ... ")
+
+                # upload the install file, the env file and the script file
+                # change to env dir
+                ftp_client.chdir(dpl_env.get_path_abs())
+                remote_config = 'config-'+dpl_env.get_name()+'.json'
+                with open(remote_config,'w') as cfg_file:
+                    cfg_file.write(dpl_env.json())
+                    cfg_file.close()
+                    ftp_client.put(remote_config,'config.json')
+                    os.remove(remote_config)
+
+                self.debug(1,"uploaded.")                    
+
+                commands = [
+                    # recreate pip+conda files according to config
+                    { 'cmd': "cd " + files_path + " && python3 "+global_path+"/config.py" , 'out' : True },
+                    # setup envs according to current config files state
+                    # NOTE: make sure to let out = True or bootstraping is not executed properly 
+                    # TODO: INVESTIGATE THIS
+                    { 'cmd': global_path+"/bootstrap.sh \"" + dpl_env.get_name() + "\" " + ("1" if self._config['dev'] else "0") + " &", 'out': True },  
+                ]
+
+                self._run_ssh_commands(ssh_client,commands)
+
+                ftp_client.putfo(BytesIO("".encode()), 'ready')
+
+        
+        if close_ftp:
+            ftp_client.close()
+        if close_ssh:
+            ssh_client.close()
+
+    async def _deploy_jobs(self,instance,deploy_states,start_wait=True):
+
+        # make sure we got the instance ready
+        # created will always be False at this stage ... ? 
+        if start_wait:
+            await self._start_and_wait_for_instance(instance)
+
+        # connect to instance
+        # connect to instance
+        if deploy_states[instance.get_name()].get('ssh'):
+            ssh_client = deploy_states[instance.get_name()]['ssh']
+            close_ssh = False
+        else:
+            ssh_client = await self._connect_to_instance(instance)
+            close_ssh = True
+        if deploy_states[instance.get_name()].get('sftp'):
+            ftp_client = deploy_states[instance.get_name()]['sftp']
+            close_ftp = False 
+        else:
+            ftp_client = ssh_client.open_sftp()
+            close_ftp = True
+
+        # scan the instances environment (those are set when assigning a job to an instance)
+        for job in instance.get_jobs():
+            env      = job.get_env()        # get its environment
+            dpl_env  = env.deploy(instance) # "deploy" the environment to the instance and get a DeployedEnvironment
+            dpl_job  = job.deploy(dpl_env)
+
+            self.debug(1,"creating job directories ...")
+            stdin0, stdout0, stderr0 = ssh_client.exec_command("mkdir -p "+dpl_job.get_path())
+            self.debug(1,"directories created")
+
+            re_upload_env = deploy_states[instance.get_name()][env.get_name()]['upload']
+            re_upload = self._test_reupload(instance,dpl_job.get_path()+'/ready', ssh_client)
+
+            self.debug(1,"re_upload_env",re_upload_env,"re_upload",re_upload)
+
+            if re_upload or re_upload_env:
+
+                self.debug(1,"uploading job files ... ",dpl_job.get_hash())
+
+                global_path = "$HOME/run" # more robust
+
+                # change to job hash dir
+                ftp_client.chdir(dpl_job.get_path())
+                if job.get_config('run_script'):
+                    script_args = job.get_config('run_script').split()
+                    script_file = script_args[0]
+                    filename = os.path.basename(script_file)
+                    try:
+                        ftp_client.put(os.path.abspath(script_file),filename)
+                    except:
+                        self.debug(1,"You defined a script that is not available",job.get_config('run_script'))
+                if job.get_config('upload_files'):
+                    files = job.get_config('upload_files')
+                    if isinstance( files,str):
+                        files = [ files ] 
+                    for upfile in files:
+                        try:
+                            try:
+                                ftp_client.put(upfile,os.path.basename(upfile))
+                            except:
+                                self.debug(1,"You defined an upload file that is not available",upfile)
+                        except Exception as e:
+                            print("Error while uploading file",upfile)
+                            print(e)
+                if job.get_config('input_file'):
+                    filename = os.path.basename(job.get_config('run_script'))
+                    try:
+                        ftp_client.put(job.get_config('input_file'),filename)
+                    except:
+                        self.debug(1,"You defined an input file that is not available:",job.get_config('input_file'))
+                
+                # used to check if everything is uploaded
+                ftp_client.putfo(BytesIO("".encode()), 'ready')
+
+                self.debug(1,"uploaded.",dpl_job.get_hash())
+        
+        if close_ftp:
+            ftp_client.close()
+        if close_ssh:
+            ssh_client.close()
+
+
+    # deploys:
+    # - instances files
+    # - environments files
+    # - shared script files / upload / inputs ...
+    async def deploy(self):
+
+        deploy_states = dict()
+
+        self.debug(1,"-- deploy instances --")
+        
+        # wait for instance to be deployed
+        wait_list = [ ]
+        for instance in self._instances:
+            wait_list.append( self._deploy_instance(instance,deploy_states) )
+        await asyncio.gather(*wait_list)
+
+        self.debug(1,"-- deploy environments --")
+
+        # wait for environments to be bootstraped
+        wait_list = [ ]
+        for instance in self._instances:
+            wait_list.append( self._deploy_environments(instance,deploy_states,False) )
+        await asyncio.gather(*wait_list)
+
+        self.debug(1,"-- deploy jobs --")
+
+        # deploy the job files ...
+        # some script files / uploads / input files may be shared accross scripts that just differ by arguments....
+        # see how the hash of a job is computed 
+        wait_list = [ ]
+        for instance in self._instances:
+            wait_list.append( self._deploy_jobs(instance,deploy_states,False) )
+        await asyncio.gather(*wait_list)
+
+        # make sure we close the clients
+        for instance in self._instances:
+            if deploy_states[instance.get_name()].get('sftp'):
+                deploy_states[instance.get_name()]['sftp'].close()
+            if deploy_states[instance.get_name()].get('ssh'):
+                deploy_states[instance.get_name()]['ssh'].close()
+
+    def _run_ssh_commands(self,ssh_client,commands):
+        for command in commands:
+            self.debug(1,"Executing ",format( command['cmd'] ),"output",command['out'])
+            try:
+                stdin , stdout, stderr = ssh_client.exec_command(command['cmd'])
+                #print(stdout.read())
+                if command['out']:
+                    for l in line_buffered(stdout):
+                        self.debug(1,l)
+
+                    errmsg = stderr.read()
+                    dbglvl = 1 if errmsg else 2
+                    self.debug(dbglvl,"Errors")
+                    self.debug(dbglvl,errmsg)
+                else:
+                    pass
+                    #stdout.read()
+                    #pid = int(stdout.read().strip().decode("utf-8"))
+            except paramiko.ssh_exception.SSHException as sshe:
+                print("The SSH Client has been disconnected!")
+                print(sshe)
+                raise CloudRunError()    
 
     async def run_job(self,job):
 
@@ -532,8 +868,71 @@ class CloudRunProvider(ABC):
         instance = job.get_instance()
 
         # CHECK EVERY TIME !
-        new_instance , created = self.start_instance(job.get_instance())
+        await self._start_and_wait_for_instance(instance)
+
+        # FOR NOW
+        env      = job.get_env()        # get its environment
+        # "deploy" the environment to the instance and get a DeployedEnvironment 
+        # note: this has already been done in deploy but it doesnt matter ... 
+        #       we dont store the deployed environments, and we base everything on remote state ...
+        # NOTE: this could change and we store every thing in memory
+        #       but this makes it less robust to states changes (especially remote....)
+        dpl_env  = env.deploy(instance)
+        dpl_job  = job.deploy(dpl_env)
+
+        # init environment object
+        self.debug(2,dpl_env.json())
+
+        ssh_client = await self._connect_to_instance(instance)
+
+        files_path = dpl_env.get_path()
+        global_path = "$HOME/run" # more robust
+
+        # generate unique PID file
+        uid = cloudrunutils.generate_unique_filename() 
          
+        run_path    = dpl_job.get_path() + '/' + uid
+
+        self.debug(1,"creating directories ...")
+        stdin0, stdout0, stderr0 = ssh_client.exec_command("mkdir -p "+run_path)
+        self.debug(1,"directories created")
+
+        # run
+        commands = [ 
+            # execute main script (spawn) (this will wait for bootstraping)
+            { 'cmd': global_path+"/run.sh \"" + dpl_env.get_name() + "\" \""+dpl_job.get_command()+"\" " + job.get_config('input_file') + " " + job.get_config('output_file') + " " + job.get_hash()+" "+uid, 'out' : False }
+        ]
+
+        self._run_ssh_commands(ssh_client,commands)
+
+        # retrieve PID (this will wait for PID file)
+        pid_file = run_path + "/pid"
+        getpid_cmd = global_path+"/getpid.sh \"" + pid_file + "\""
+         
+        self.debug(1,"Executing ",format( getpid_cmd ) )
+        stdin , stdout, stderr = ssh_client.exec_command(getpid_cmd)
+        pid = int(stdout.readline().strip())
+
+        ssh_client.close()
+
+        process = CloudRunProcess( dpl_job , uid , pid )
+        dpl_job.attach_process( process )
+
+        self.debug(1,process) 
+
+        return process
+
+    async def run_job_OLD(self,job):
+
+        if not job.get_instance():
+            debug(1,"The job",job,"has not been assigned to an instance!")
+            return None
+
+        instance = job.get_instance()
+
+        # CHECK EVERY TIME !
+        new_instance , created = self.start_instance(job.get_instance())
+          
         # make sure we update the instance with the new instance data
         instance.update_from_instance(new_instance)
 
@@ -553,7 +952,7 @@ class CloudRunProvider(ABC):
 
         # generate unique PID file
         uid = cloudrunutils.generate_unique_filename() 
-         
+          
         run_path    = dpl_job.get_path() + '/' + uid
 
         self.debug(1,"creating directories ...")
@@ -586,7 +985,7 @@ class CloudRunProvider(ABC):
             cfg_file.close()
             ftp_client.put(remote_config,'config.json')
             os.remove(remote_config)
-         
+          
         # change to job hash dir
         ftp_client.chdir(dpl_job.get_path())
         if job.get_config('run_script'):
@@ -616,6 +1015,9 @@ class CloudRunProvider(ABC):
                 ftp_client.put(job.get_config('input_file'),filename)
             except:
                 self.debug(1,"You defined an input file that is not available:",job.get_config('input_file'))
+
+        # used to check if everything is uploaded
+        ftp_client.putfo(BytesIO("".encode()), 'uploaded')
 
         ftp_client.close()
 
@@ -667,7 +1069,7 @@ class CloudRunProvider(ABC):
         pid_file = run_path + "/pid"
         #getpid_cmd = "tail "+pid_file #+" && cp "+pid_file+ " "+run_path+"/pid" # && rm -f "+pid_file
         getpid_cmd = global_path+"/getpid.sh \"" + pid_file + "\""
-         
+          
         self.debug(1,"Executing ",format( getpid_cmd ) )
         stdin , stdout, stderr = ssh_client.exec_command(getpid_cmd)
         pid = int(stdout.readline().strip())
@@ -689,7 +1091,7 @@ class CloudRunProvider(ABC):
 
         self.debug(1,process) 
 
-        return process
+        return process        
 
     # this allow any external process to wait for a specific job
     async def get_process_state( self, processObj ):
