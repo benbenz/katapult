@@ -259,8 +259,8 @@ class CloudRunDeployedJob(CloudRunJob):
         self._path      = dpl_env.get_path_abs() + '/' + self.get_hash()
         self._command   = cloudrunutils.compute_job_command(self._path,self._job._config)
 
-    def attach_process(self,runtimeInfo):
-        self._processes[runtimeInfo.get_uid()] = runtimeInfo 
+    def attach_process(self,process):
+        self._processes[process.get_uid()] = process 
 
     def get_path(self):
         return self._path
@@ -662,6 +662,8 @@ class CloudRunProvider(ABC):
             # "deploy" the environment to the instance and get a DeployedEnvironment
             dpl_env  = environment.deploy(instance) 
 
+            self.debug(2,dpl_env.json())
+
             re_upload_env = self._test_reupload(instance,dpl_env.get_path_abs()+'/ready', ssh_client)
 
             debug(1,"re_upload_instance",re_upload_inst,"re_upload_env",re_upload_env)
@@ -859,7 +861,112 @@ class CloudRunProvider(ABC):
                 print(sshe)
                 raise CloudRunError()    
 
-    async def run_job(self,job):
+    async def run_jobs(self,start_and_wait=False):
+
+        instances_runs = dict()
+
+        global_path = "$HOME/run" # more robust
+
+        dpl_jobs = dict()
+
+        for job in self._jobs:
+
+            if not job.get_instance():
+                debug(1,"The job",job,"has not been assigned to an instance!")
+                return None
+
+            instance = job.get_instance()
+
+            # CHECK EVERY TIME !
+            if not instances_runs.get(instance.get_name()):
+                if start_and_wait:
+                    await self._start_and_wait_for_instance(instance)
+                instances_runs[instance.get_name()] = { 'cmd_run':  "", 'cmd_pid': "" , 'cmd_run_pre':  "", 'instance': instance}
+
+            cmd_run = instances_runs[instance.get_name()]['cmd_run']
+            cmd_pid = instances_runs[instance.get_name()]['cmd_pid']
+            cmd_run_pre = instances_runs[instance.get_name()]['cmd_run_pre']
+
+            # FOR NOW
+            env      = job.get_env()        # get its environment
+            # "deploy" the environment to the instance and get a DeployedEnvironment 
+            # note: this has already been done in deploy but it doesnt matter ... 
+            #       we dont store the deployed environments, and we base everything on remote state ...
+            # NOTE: this could change and we store every thing in memory
+            #       but this makes it less robust to states changes (especially remote....)
+            dpl_env  = env.deploy(instance)
+            dpl_job  = job.deploy(dpl_env)
+
+            files_path  = dpl_env.get_path()
+
+            # generate unique PID file
+            uid = cloudrunutils.generate_unique_filename() 
+
+            dpl_jobs[uid] = dpl_job
+            
+            run_path    = dpl_job.get_path() + '/' + uid
+            # retrieve PID (this will wait for PID file)
+            pid_file   = run_path + "/pid"
+            state_file = run_path + "/state"
+
+            #cmd_run_pre = cmd_run_pre + "rm -f " + pid_file + "\n"
+            cmd_run_pre = cmd_run_pre + "echo 'idle' > " + state_file + "\n"
+            cmd_run = cmd_run + "mkdir -p "+run_path + " && "
+            cmd_run = cmd_run + global_path+"/run.sh \"" + dpl_env.get_name() + "\" \""+dpl_job.get_command()+"\" " + job.get_config('input_file') + " " + job.get_config('output_file') + " " + job.get_hash()+" "+uid
+            cmd_run = cmd_run + "\n"
+            cmd_pid = cmd_pid + global_path+"/getpid.sh \"" + pid_file + "\"\n"
+
+            instances_runs[instance.get_name()]['cmd_run'] = cmd_run
+            instances_runs[instance.get_name()]['cmd_pid'] = cmd_pid
+            instances_runs[instance.get_name()]['cmd_run_pre'] = cmd_run_pre
+        
+        batch_uid = cloudrunutils.generate_unique_filename()
+        
+        for instance_name , runinfo in instances_runs.items():
+            instance = runinfo.get('instance')
+            cmd_run  = runinfo.get('cmd_run')
+            cmd_pid  = runinfo.get('cmd_pid')
+            batch_run_file = 'batch_run-'+batch_uid+'.sh'
+            batch_pid_file = 'batch_pid-'+batch_uid+'.sh'
+            ssh_client = await self._connect_to_instance(instance)
+            ftp_client = ssh_client.open_sftp()
+            ftp_client.chdir('/home/'+instance.get_config('img_username')+'/run')
+            ftp_client.putfo(BytesIO(cmd_run_pre.encode()+cmd_run.encode()), batch_run_file)
+            ftp_client.putfo(BytesIO(cmd_pid.encode()), batch_pid_file)
+            # run
+            commands = [ 
+                { 'cmd': "chmod +x "+global_path+"/"+batch_run_file+" "+global_path+"/"+batch_pid_file, 'out' : False } ,  
+                # execute main script (spawn) (this will wait for bootstraping)
+                { 'cmd': global_path+"/"+batch_run_file , 'out' : False } 
+            ]
+            
+            self._run_ssh_commands(ssh_client,commands)
+
+            processes = []
+            
+            self.debug(1,"Executing ",format( global_path+"/"+batch_pid_file ) )
+            stdin , stdout, stderr = ssh_client.exec_command(global_path+"/"+batch_pid_file)
+            while True: 
+                lines = stdout.readlines()
+                for line in lines:     
+                    info    = line.strip().split(',')
+                    uid     = info[0]
+                    pid     = int(info[1])
+                    dpl_job = dpl_jobs[uid]
+                    process = CloudRunProcess( dpl_job , uid , pid )
+                    dpl_job.attach_process( process )
+                    self.debug(1,process) 
+                    processes.append(process)
+
+                if not lines or len(lines)==0:
+                    break
+
+            ssh_client.close()
+
+            return processes 
+
+        
+    async def run_job(self,job,start_and_wait=False):
 
         if not job.get_instance():
             debug(1,"The job",job,"has not been assigned to an instance!")
@@ -868,7 +975,8 @@ class CloudRunProvider(ABC):
         instance = job.get_instance()
 
         # CHECK EVERY TIME !
-        await self._start_and_wait_for_instance(instance)
+        if start_and_wait:
+            await self._start_and_wait_for_instance(instance)
 
         # FOR NOW
         env      = job.get_env()        # get its environment
@@ -879,9 +987,6 @@ class CloudRunProvider(ABC):
         #       but this makes it less robust to states changes (especially remote....)
         dpl_env  = env.deploy(instance)
         dpl_job  = job.deploy(dpl_env)
-
-        # init environment object
-        self.debug(2,dpl_env.json())
 
         ssh_client = await self._connect_to_instance(instance)
 
@@ -911,7 +1016,9 @@ class CloudRunProvider(ABC):
          
         self.debug(1,"Executing ",format( getpid_cmd ) )
         stdin , stdout, stderr = ssh_client.exec_command(getpid_cmd)
-        pid = int(stdout.readline().strip())
+        info = stdout.readline().strip().split(',')
+        pid = int(info[1])
+        #uid = info[0]
 
         ssh_client.close()
 
