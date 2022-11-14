@@ -909,7 +909,7 @@ class CloudRunProvider(ABC):
             pid_file   = run_path + "/pid"
             state_file = run_path + "/state"
 
-            #cmd_run_pre = cmd_run_pre + "rm -f " + pid_file + "\n"
+            cmd_run_pre = cmd_run_pre + "rm -f " + pid_file + " && "
             cmd_run_pre = cmd_run_pre + "echo 'idle' > " + state_file + "\n"
             cmd_run = cmd_run + "mkdir -p "+run_path + " && "
             cmd_run = cmd_run + global_path+"/run.sh \"" + dpl_env.get_name() + "\" \""+dpl_job.get_command()+"\" " + job.get_config('input_file') + " " + job.get_config('output_file') + " " + job.get_hash()+" "+uid
