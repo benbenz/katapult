@@ -143,13 +143,13 @@ class CloudRunEnvironment():
         if not self._config.get('env_name'):
             self._name = cr_environmentNameRoot
 
+            append_str = '-' + self._hash
             if env_config.get('dev') == True:
-                self._name = cr_environmentNameRoot
+                append_str = ''
+            if projectName:
+                self._name = cr_environmentNameRoot + '-' + projectName + append_str
             else:
-                if projectName:
-                    self._name = cr_environmentNameRoot + '-' + projectName + '-' + self._hash
-                else:
-                    self._name = cr_environmentNameRoot + '-' + self._hash    
+                self._name = cr_environmentNameRoot + append_str
         else:
             self._name = self._config.get('env_name')
 
@@ -568,16 +568,12 @@ class CloudRunProvider(ABC):
             re_upload = True
         return re_upload
 
-    async def _deploy_instance(self,instance,deploy_states,close_clients=False):
-
-        # make sure we got the instance ready
-        created = await self._start_and_wait_for_instance(instance)
-
-        # connect to instance
-        ssh_client = await self._connect_to_instance(instance)
+    def _deploy_instance(self,instance,deploy_states,ssh_client,ftp_client):
 
         # last file uploaded ...
         re_upload  = self._test_reupload(instance,"$HOME/run/ready", ssh_client)
+
+        created = deploy_states[instance.get_name()].get('created')
 
         debug(1,"created",created,"re_upload",re_upload)
 
@@ -618,43 +614,14 @@ class CloudRunProvider(ABC):
 
             ftp_client.putfo(BytesIO("".encode()), 'ready')
 
-            if close_clients:
-                ftp_client.close()
-                ftp_client = None
-
             self.debug(1,"files uploaded.")
 
-        else:
-            ftp_client = None
 
-        if close_clients:
-            ssh_client.close()
-            ssh_client = None 
+        deploy_states[instance.get_name()] = { 'upload' : created or re_upload } 
 
-        deploy_states[instance.get_name()] = { 'upload' : created or re_upload , 'ssh' : ssh_client , 'sftp' : ftp_client }
-
-    async def _deploy_environments(self,instance,deploy_states,start_wait=True):
-
-        # make sure we got the instance ready
-        # created will always be False at this stage ... ? 
-        if start_wait:
-            await self._start_and_wait_for_instance(instance)
+    def _deploy_environments(self,instance,deploy_states,ssh_client,ftp_client):
 
         re_upload_inst = deploy_states[instance.get_name()]['upload']
-
-        # connect to instance
-        if deploy_states[instance.get_name()].get('ssh'):
-            ssh_client = deploy_states[instance.get_name()]['ssh']
-            close_ssh = False
-        else:
-            ssh_client = await self._connect_to_instance(instance)
-            close_ssh = True
-        if deploy_states[instance.get_name()].get('sftp'):
-            ftp_client = deploy_states[instance.get_name()]['sftp']
-            close_ftp = False 
-        else:
-            ftp_client = ssh_client.open_sftp()
-            close_ftp = True
 
         # scan the instances environment (those are set when assigning a job to an instance)
         for environment in instance.get_environments():
@@ -706,34 +673,9 @@ class CloudRunProvider(ABC):
                 self._run_ssh_commands(ssh_client,commands)
 
                 ftp_client.putfo(BytesIO("".encode()), 'ready')
-
         
-        if close_ftp:
-            ftp_client.close()
-        if close_ssh:
-            ssh_client.close()
 
-    async def _deploy_jobs(self,instance,deploy_states,start_wait=True):
-
-        # make sure we got the instance ready
-        # created will always be False at this stage ... ? 
-        if start_wait:
-            await self._start_and_wait_for_instance(instance)
-
-        # connect to instance
-        # connect to instance
-        if deploy_states[instance.get_name()].get('ssh'):
-            ssh_client = deploy_states[instance.get_name()]['ssh']
-            close_ssh = False
-        else:
-            ssh_client = await self._connect_to_instance(instance)
-            close_ssh = True
-        if deploy_states[instance.get_name()].get('sftp'):
-            ftp_client = deploy_states[instance.get_name()]['sftp']
-            close_ftp = False 
-        else:
-            ftp_client = ssh_client.open_sftp()
-            close_ftp = True
+    def _deploy_jobs(self,instance,deploy_states,ssh_client,ftp_client):
 
         # scan the instances environment (those are set when assigning a job to an instance)
         for job in instance.get_jobs():
@@ -790,12 +732,34 @@ class CloudRunProvider(ABC):
                 ftp_client.putfo(BytesIO("".encode()), 'ready')
 
                 self.debug(1,"uploaded.",dpl_job.get_hash())
-        
-        if close_ftp:
-            ftp_client.close()
-        if close_ssh:
-            ssh_client.close()
 
+    async def _deploy_all(self,instance):
+
+        deploy_states = dict()
+
+        # make sure we got the instance ready
+        created = await self._start_and_wait_for_instance(instance)
+
+        deploy_states[instance.get_name()] = { 'created' : created }
+
+        # connect to instance
+        ssh_client = await self._connect_to_instance(instance)
+        ftp_client = ssh_client.open_sftp()
+
+        self.debug(1,"-- deploy instances --")
+
+        self._deploy_instance(instance,deploy_states,ssh_client,ftp_client)
+
+        self.debug(1,"-- deploy environments --")
+
+        self._deploy_environments(instance,deploy_states,ssh_client,ftp_client)
+
+        self.debug(1,"-- deploy jobs --")
+
+        self._deploy_jobs(instance,deploy_states,ssh_client,ftp_client) 
+
+        ftp_client.close()
+        ssh_client.close()
 
     # deploys:
     # - instances files
@@ -803,40 +767,12 @@ class CloudRunProvider(ABC):
     # - shared script files / upload / inputs ...
     async def deploy(self):
 
-        deploy_states = dict()
-
-        self.debug(1,"-- deploy instances --")
-        
         # wait for instance to be deployed
         wait_list = [ ]
         for instance in self._instances:
-            wait_list.append( self._deploy_instance(instance,deploy_states) )
+            wait_list.append( self._deploy_all(instance) )
         await asyncio.gather(*wait_list)
 
-        self.debug(1,"-- deploy environments --")
-
-        # wait for environments to be bootstraped
-        wait_list = [ ]
-        for instance in self._instances:
-            wait_list.append( self._deploy_environments(instance,deploy_states,False) )
-        await asyncio.gather(*wait_list)
-
-        self.debug(1,"-- deploy jobs --")
-
-        # deploy the job files ...
-        # some script files / uploads / input files may be shared accross scripts that just differ by arguments....
-        # see how the hash of a job is computed 
-        wait_list = [ ]
-        for instance in self._instances:
-            wait_list.append( self._deploy_jobs(instance,deploy_states,False) )
-        await asyncio.gather(*wait_list)
-
-        # make sure we close the clients
-        for instance in self._instances:
-            if deploy_states[instance.get_name()].get('sftp'):
-                deploy_states[instance.get_name()]['sftp'].close()
-            if deploy_states[instance.get_name()].get('ssh'):
-                deploy_states[instance.get_name()]['ssh'].close()
 
     def _run_ssh_commands(self,ssh_client,commands):
         for command in commands:
@@ -1417,18 +1353,18 @@ def get_client(config):
 
 def init_instance_name(instance_config):
     if instance_config.get('dev',False)==True:
-        return cr_instanceNameRoot
+        append_str = '' 
     else:
-        instance_hash = cloudrunutils.compute_instance_hash(instance_config)
+        append_str = '-' + cloudrunutils.compute_instance_hash(instance_config)
 
-        if 'rank' not in instance_config:
-            debug(1,"\033[93mDeveloper: you need to set dynamically a 'rank' attribute in the config for the new instance\033[0m")
-            sys.exit(300) # this is a developer error, this should never happen so we can use exit here
-         
-        if 'project' in instance_config:
-            return cr_instanceNameRoot + '-' + instance_config['project'] + '-' + instance_config['rank'] + '-' + instance_hash
-        else:
-            return cr_instanceNameRoot + '-' + instance_config['rank'] + '-' + instance_hash    
+    if 'rank' not in instance_config:
+        debug(1,"\033[93mDeveloper: you need to set dynamically a 'rank' attribute in the config for the new instance\033[0m")
+        sys.exit(300) # this is a developer error, this should never happen so we can use exit here
+        
+    if 'project' in instance_config:
+        return cr_instanceNameRoot + '-' + instance_config['project'] + '-' + instance_config['rank'] + append_str
+    else:
+        return cr_instanceNameRoot + '-' + instance_config['rank'] + append_str
 
 def line_buffered(f):
     line_buf = ""
