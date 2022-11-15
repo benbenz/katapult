@@ -1,12 +1,13 @@
 import cloudrun as cr
-import asyncio
+import asyncio , os , sys
 from cloudrun import CloudRunCommandState
 import traceback
 
 try:
+    sys.path.append(os.path.abspath(os.getcwd()))    
     configModule = __import__("config")
     config = configModule.config
-except ModuleNotFoundError as mnfe:
+except ModuleNotFoundError as mfe:
     print("\n\033[91mYou need to create a config.py file (see 'example/config.example.py')\033[0m\n")
     raise mfe
 

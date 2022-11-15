@@ -533,24 +533,22 @@ class CloudRunProvider(ABC):
 
     def assign_jobs_to_instances(self):
 
-        # DUMMY algorithm for now 
-        for job in self._jobs:
-            if job.get_instance():
-                continue
-            
-            instance = random.choice( self._instances )
-             
-            job.set_instance(instance)
-            self.debug(1,"Assigned job " + str(job) )
+        assignation = self._config.get('job_assign')
+        
+        # DUMMY algorithm 
+        if assignation is None or assignation=='random':
+            for job in self._jobs:
+                if job.get_instance():
+                    continue
+                
+                instance = random.choice( self._instances )
+                
+                job.set_instance(instance)
+                self.debug(1,"Assigned job " + str(job) )
 
-    # def start(self):
-    #     for instance in self._instances:
-    #         # create the instance
-    #         try:
-    #             self.start_instance(instance)
-    #         except Exception as e:
-    #             traceback.print_exc()
-    #             pass
+        # knapsack / 2d packing / bin packing ...
+        elif assignation=='':
+            pass
 
     async def _start_and_wait_for_instance(self,instance):
         # CHECK EVERY TIME !
@@ -908,7 +906,7 @@ class CloudRunProvider(ABC):
                 self.debug(1,process) 
                 processes.append(process)
             
-            # useless .... most scripts are waiting so lets not even get the PIDs....
+            # useless .... most scripts are queuing (not actually running) so lets not even try to retrieve the PIDs....
 
             # self.debug(1,"Executing ",format( global_path+"/"+batch_pid_file ) )
             # stdin , stdout, stderr = ssh_client.exec_command(global_path+"/"+batch_pid_file)
