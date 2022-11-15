@@ -5,9 +5,15 @@ CloudRun is a Python package that allows you to run any script on a cloud servic
 ## Installation
 
 ```bash
+# from the repo
 python3 -m venv .venv
 source ./.venv/bin/activate
 python -m pip install -r requirements.txt
+
+# OR
+
+# from the repo
+poetry install
 ```
 
 ## Usage / Test runs
