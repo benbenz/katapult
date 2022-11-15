@@ -72,7 +72,7 @@ do
     #fi
 
     # check what is the environment state file
-    if [ -d "$HOME/run/$env_name" ]; then
+    if [ -z ${thestate+x} ] && [ -d "$HOME/run/$env_name" ]; then
         cd "$HOME/run/$env_name"
         if [ -z ${thestate+x} ] && [ -f state ]; then
             if [[ $(< state) == "bootstraping" ]]; then
@@ -90,6 +90,12 @@ do
     if [ -z ${thestate+x} ] ; then
         thestate="unknown(1)"
         #exit
+    fi
+
+    if [ $pid == "None" ] && [ -f "$run_path/pid" ] ; then
+        info_process=$(< "$run_path/pid")
+        arrIN=(${info_process//,/ })
+        pid=${arrIN[1]} 
     fi
 
     echo "$uid,$pid,$thestate"

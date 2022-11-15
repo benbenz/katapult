@@ -18,6 +18,8 @@ FILE_APTGET="$HOME/run/$env_name/aptget.sh"
 
 echo "bootstraping" > "$HOME/run/$env_name/state"
 
+rm -f "$HOME/run/$env_name/ready"
+
 if [ -f "$FILE_APTGET" ]; then
   $FILE_APTGET
 fi
@@ -115,5 +117,7 @@ if ([ -f "$FILE_PYPI" ] && ! [ -f "$FILE_CONDA" ]); then
 fi # FILE_PYPI
 
 echo "bootstraped" > "$HOME/run/$env_name/state"
+
+echo "" > "$HOME/run/$env_name/ready"
 
 #python3 $HOME/run_remote.py

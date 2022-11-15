@@ -316,6 +316,9 @@ class CloudRunProcess():
     def set_state(self,value):
         self._state = value
 
+    def set_pid(self,value):
+        self._pid = value 
+
     def get_job(self):
         return self._job 
 
@@ -582,7 +585,7 @@ class CloudRunProvider(ABC):
         if created or re_upload:
 
             self.debug(1,"creating instance's directories ...")
-            stdin0, stdout0, stderr0 = ssh_client.exec_command("mkdir -p $HOME/run")
+            stdin0, stdout0, stderr0 = ssh_client.exec_command("mkdir -p $HOME/run && rm -f $HOME/run/ready")
             self.debug(1,"directories created")
 
             self.debug(1,"uploading instance's files ... ")
@@ -637,7 +640,7 @@ class CloudRunProvider(ABC):
 
             debug(1,"re_upload_instance",re_upload_inst,"re_upload_env",re_upload_env)
 
-            re_upload = re_upload_env or re_upload_inst
+            re_upload = re_upload_env #or re_upload_inst
 
             deploy_states[instance.get_name()][environment.get_name()] = { 'upload' : re_upload }
 
@@ -646,7 +649,7 @@ class CloudRunProvider(ABC):
                 global_path = "$HOME/run" # more robust
 
                 self.debug(1,"creating environment directories ...")
-                stdin0, stdout0, stderr0 = ssh_client.exec_command("mkdir -p "+files_path)
+                stdin0, stdout0, stderr0 = ssh_client.exec_command("mkdir -p "+files_path+" && rm -f "+dpl_env.get_path_abs()+'/ready')
                 self.debug(1,"directories created")
 
                 self.debug(1,"uploading files ... ")
@@ -674,7 +677,8 @@ class CloudRunProvider(ABC):
 
                 self._run_ssh_commands(ssh_client,commands)
 
-                ftp_client.putfo(BytesIO("".encode()), 'ready')
+                # let bootstrap.sh do it ...
+                #ftp_client.putfo(BytesIO("".encode()), 'ready')
         
 
     def _deploy_jobs(self,instance,deploy_states,ssh_client,ftp_client):
@@ -692,9 +696,11 @@ class CloudRunProvider(ABC):
             re_upload_env = deploy_states[instance.get_name()][env.get_name()]['upload']
             re_upload = self._test_reupload(instance,dpl_job.get_path()+'/ready', ssh_client)
 
-            self.debug(1,"re_upload_env",re_upload_env,"re_upload",re_upload)
+            self.debug(2,"re_upload_env",re_upload_env,"re_upload",re_upload)
 
-            if re_upload or re_upload_env:
+            if re_upload: #or re_upload_env:
+
+                stdin0, stdout0, stderr0 = ssh_client.exec_command("rm -f "+dpl_job.get_path()+'/ready')
 
                 self.debug(1,"uploading job files ... ",dpl_job.get_hash())
 
@@ -858,7 +864,7 @@ class CloudRunProvider(ABC):
                 cmd_run_pre = cmd_run_pre + "echo 'wait' > " + state_file + "\n"
             else: # all other scripts will be queued
                 cmd_run_pre = cmd_run_pre + "echo 'queue' > " + state_file + "\n"
-            cmd_run = cmd_run + "mkdir -p "+run_path + " && "
+            #cmd_run = cmd_run + "mkdir -p "+run_path + " && "
             cmd_run = cmd_run + global_path+"/run.sh \"" + dpl_env.get_name() + "\" \""+dpl_job.get_command()+"\" " + job.get_config('input_file') + " " + job.get_config('output_file') + " " + job.get_hash()+" "+uid
             cmd_run = cmd_run + "\n"
             cmd_pid = cmd_pid + global_path+"/getpid.sh \"" + pid_file + "\"\n"
@@ -867,11 +873,15 @@ class CloudRunProvider(ABC):
             instances_runs[instance.get_name()]['cmd_pid'] = cmd_pid
             instances_runs[instance.get_name()]['cmd_run_pre'] = cmd_run_pre
         
+        # batch uid is shared accross instances
         batch_uid = cloudrunutils.generate_unique_filename()
+
+        processes = []
         
         for instance_name , runinfo in instances_runs.items():
             instance = runinfo.get('instance')
             cmd_run  = runinfo.get('cmd_run')
+            cmd_run_pre = runinfo.get('cmd_run_pre')
             cmd_pid  = runinfo.get('cmd_pid')
             batch_run_file = 'batch_run-'+batch_uid+'.sh'
             batch_pid_file = 'batch_pid-'+batch_uid+'.sh'
@@ -889,7 +899,6 @@ class CloudRunProvider(ABC):
             
             self._run_ssh_commands(ssh_client,commands)
 
-            processes = []
             for uid in runinfo.get('jobs'):
                 # we dont have the pid of everybody yet because its sequential
                 # lets leave it blank. it can work with the uid ...
@@ -920,7 +929,7 @@ class CloudRunProvider(ABC):
 
             ssh_client.close()
 
-            return processes 
+        return processes 
 
         
     async def run_job(self,job,start_and_wait=False):
@@ -1194,13 +1203,19 @@ class CloudRunProvider(ABC):
                 lines = stdout.readlines()
                 for line in lines:           
                     statestr = line.strip() #line.decode("utf-8").strip()
-                    self.debug(1,"State=",statestr)
+                    self.debug(1,"State=",statestr,"IP=",instance.get_ip_addr())
                     stateinfo = statestr.split(',')
                     statestr  = re.sub(r'\([0-9]+\)','',stateinfo[2])
                     uid       = stateinfo[0]
+                    pid       = stateinfo[1]
 
                     if uid in processes_infos:
                         process = processes_infos[uid]['process']
+
+                        # we don't have PIDs with batches
+                        # let's take the opportunity to update it here...
+                        if process.get_pid() is None and pid != "None":
+                            process.set_pid( int(pid) )
                         try:
                             state = CloudRunCommandState[statestr.upper()]
                             process.set_state(state)
