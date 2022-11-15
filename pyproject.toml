@@ -1,0 +1,30 @@
+[tool.poetry]
+name = "cloudrun"
+version = "0.1.0"
+description = "CloudRun is a Python package that allows you to run any script on a cloud service (for now AWS only)."
+authors = ["Your Name <you@example.com>"]
+license = "MIT"
+readme = "README.md"
+repository = "https://github.com/benbenz/cloudrun"
+
+[tool.poetry.dependencies]
+python = "^3.8"
+bcrypt = "3.1.5"
+cryptography = "3.1.1"
+boto3 = "1.23.10"
+jcs = "^0.2.1"
+pyyaml = "^6.0"
+paramiko = "^2.12.0"
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"
+
+[tool.poetry.scripts]
+demo = 'cloudrun.app:main'
+
+[tool.pytest.ini_options]
+asyncio_mode="strict"
+testpaths = [
+    "tests"
+]

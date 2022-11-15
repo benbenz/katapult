@@ -1,17 +1,7 @@
-import cloudrun as cr
+from cloudrun import core as cr
 import asyncio , os , sys
-from cloudrun import CloudRunCommandState
+from cloudrun.core import CloudRunCommandState
 import traceback
-
-try:
-    sys.path.append(os.path.abspath(os.getcwd()))    
-    configModule = __import__("config")
-    config = configModule.config
-except ModuleNotFoundError as mfe:
-    print("\n\033[91mYou need to create a config.py file (see 'example/config.example.py')\033[0m\n")
-    raise mfe
-
-cr_client = cr.get_client(config)
 
 async def tail_loop(script_hash,uid):
 
@@ -21,7 +11,7 @@ async def tail_loop(script_hash,uid):
         print(line)
 
 
-async def mainloop():
+async def mainloop(cr_client):
 
     print("\n== ALLOCATE JOBS ==\n")
 
@@ -63,4 +53,15 @@ async def mainloop():
     print("\n== DONE ==\n")
 
 # run main loop
-asyncio.run( mainloop() )
+def main():
+    try:
+        sys.path.append(os.path.abspath(os.getcwd()))    
+        configModule = __import__("config")
+        config = configModule.config
+    except ModuleNotFoundError as mfe:
+        print("\n\033[91mYou need to create a config.py file (see 'example/config.example.py')\033[0m\n")
+        raise mfe
+
+    cr_client = cr.get_client(config)
+
+    asyncio.run( mainloop(cr_client) )

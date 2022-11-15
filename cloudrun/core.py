@@ -1,6 +1,6 @@
 from enum import IntFlag
 from abc import ABC , abstractmethod
-import cloudrunutils
+import cloudrun.cloudrunutils as cloudrunutils
 import sys , json , os
 import paramiko
 import re
@@ -1333,9 +1333,9 @@ def get_client(config):
 
     if config['provider'] == 'aws':
 
-        craws  = __import__("cloudrun_aws")
+        craws  = __import__("cloudrun.cloudrun_aws")
 
-        client = craws.AWSCloudRunProvider(config)
+        client = craws.cloudrun_aws.AWSCloudRunProvider(config)
 
         return client
 
