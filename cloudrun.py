@@ -142,7 +142,7 @@ class CloudRunEnvironment():
         _env_obj       = cloudrunutils.compute_environment_object(env_config)
         self._hash     = cloudrunutils.compute_environment_hash(_env_obj)
 
-        if not self._config.get('env_name'):
+        if not self._config.get('name'):
             self._name = cr_environmentNameRoot
 
             append_str = '-' + self._hash
@@ -153,7 +153,7 @@ class CloudRunEnvironment():
             else:
                 self._name = cr_environmentNameRoot + append_str
         else:
-            self._name = self._config.get('env_name')
+            self._name = self._config.get('name')
 
         self._path     = "$HOME/run/" + self._name
 
@@ -456,7 +456,7 @@ class CloudRunProvider(ABC):
         pass
 
     def _get_environment(self,name):
-        for env in self._environment:
+        for env in self._environments:
             if env.get_name() == name:
                 return env
         return None
