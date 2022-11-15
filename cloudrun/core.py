@@ -547,7 +547,8 @@ class CloudRunProvider(ABC):
                 self.debug(1,"Assigned job " + str(job) )
 
         # knapsack / 2d packing / bin packing ...
-        elif assignation=='':
+        # https://developers.google.com/optimization/bin/multiple_knapsack
+        elif assignation=='multi_knapsack':
             pass
 
     async def _start_and_wait_for_instance(self,instance):
