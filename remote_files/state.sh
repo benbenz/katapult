@@ -20,33 +20,31 @@ do
     fi
 
     run_path="$HOME/run/$env_name/$job_hash/$uid"
-    cd $run_path 
 
-    # this is running (by UID)
-    if [ -z ${thestate+x} ] && [[ $uid != "None" ]]; then
-        if [[ $(ps aux | grep "$uid" | grep -v 'grep' | grep -v 'state.sh') ]] ; then
-            thestate="running(1)"
-            #exit
-        elif [ -f "state" ]; then
-            # it says its running but we didnt find the UID, the PID nor the command name >> this has been aborted
-            if [[ $(< state) == "running" ]]; then
-                thestate="aborted(1)"
-                #exit
-            # if state is done but we dont have the out file, this is probably aborted
-            # anyhow we cant do anything because we dont have an output file
-            elif [[ $(< state) == "done" ]]; then
-                if ! [ -f "$out_file" ]; then
+    if [ -d $run_path ]; then
+        cd $run_path 
+
+        # this is running (by UID)
+        if [ -z ${thestate+x} ] && [[ $uid != "None" ]]; then
+            if [ -f "state" ]; then
+                if [[ $(< state) == "running" ]] && ! [[ $(ps aux | grep "$uid" | grep -v 'grep' | grep -v 'state.sh') ]]; then
+                    # it says its running but we didnt find the UID, the PID nor the command name >> this has been aborted
+                    thestate="aborted(1)"
+                    #exit
+                # if state is done but we dont have the out file, this is probably aborted
+                # anyhow we cant do anything because we dont have an output file
+                elif [[ $(< state) == "done" ]] && ! [ -f "$out_file" ] ; then
                     thestate="aborted(2)" 
                     #exit
                 else
-                    thestate="done(1)"
+                    # just display this state
+                    thestate=$(< state)
+                    thestate="$thestate(0)"
+                    #tail state
                     #exit
                 fi
-            else
-                # just display this state
-                thestate=$(< state)
-                thestate="$thestate(99)"
-                #tail state
+            elif [[ $(ps aux | grep "$uid" | grep -v 'grep' | grep -v 'state.sh') ]] ; then
+                thestate="running(1)"
                 #exit
             fi
         fi
@@ -74,16 +72,18 @@ do
     #fi
 
     # check what is the environment state file
-    cd "$HOME/run/$env_name"
-    if [ -z ${thestate+x} ] && [ -f state ]; then
-        if [[ $(< state) == "bootstraping" ]]; then
-            thestate="idle(1)"
-            #exit
-        elif [[ $(< state) == "bootstraped" ]]; then
-            # the environment is bootstraped but we dont have state file nor the process in memory ...
-            # lets consider it aborted
-            thestate="aborted(3)"
-            #exit
+    if [ -d "$HOME/run/$env_name" ]; then
+        cd "$HOME/run/$env_name"
+        if [ -z ${thestate+x} ] && [ -f state ]; then
+            if [[ $(< state) == "bootstraping" ]]; then
+                thestate="wait(1)"
+                #exit
+            elif [[ $(< state) == "bootstraped" ]]; then
+                # the environment is bootstraped but we dont have state file nor the process in memory ...
+                # lets consider it aborted
+                thestate="aborted(3)"
+                #exit
+            fi
         fi
     fi
 

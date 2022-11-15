@@ -26,11 +26,13 @@ class CloudRunError(Exception):
 
 class CloudRunCommandState(IntFlag):
     UNKNOWN   = 0
-    IDLE      = 1
-    RUNNING   = 2
-    DONE      = 4
-    ABORTED   = 8
-    ANY       = 8 + 4 + 2 + 1 
+    WAIT      = 1  # waiting for bootstraping
+    QUEUE     = 2  # queued (for sequential scripts)
+    IDLE      = 4  # script about to start
+    RUNNING   = 8  # script running
+    DONE      = 16 # script has completed
+    ABORTED   = 32 # script has been aborted
+    ANY       = 32 + 16 + 8 + 4 + 2 + 1 
 
 class CloudRunInstance():
 
@@ -336,9 +338,9 @@ class CloudRunProvider(ABC):
         self._preprocess_jobs()
         self._sanity_checks()
 
-    def debug(self,level,*args):
+    def debug(self,level,*args,**kwargs):
         if level <= self.DBG_LVL:
-            print(*args)
+            print(*args,**kwargs)
 
     def _load_objects(self):
         projectName = self._config.get('project')
@@ -663,11 +665,11 @@ class CloudRunProvider(ABC):
 
                 commands = [
                     # recreate pip+conda files according to config
-                    { 'cmd': "cd " + files_path + " && python3 "+global_path+"/config.py" , 'out' : True },
+                    { 'cmd': "cd " + files_path + " && python3 "+global_path+"/config.py" , 'out' : False },
                     # setup envs according to current config files state
                     # NOTE: make sure to let out = True or bootstraping is not executed properly 
                     # TODO: INVESTIGATE THIS
-                    { 'cmd': global_path+"/bootstrap.sh \"" + dpl_env.get_name() + "\" " + ("1" if self._config['dev'] else "0") , 'out': True },  
+                    { 'cmd': global_path+"/bootstrap.sh \"" + dpl_env.get_name() + "\" " + ("1" if self._config['dev'] else "0") , 'out': False },  
                 ]
 
                 self._run_ssh_commands(ssh_client,commands)
@@ -778,18 +780,20 @@ class CloudRunProvider(ABC):
         for command in commands:
             self.debug(1,"Executing ",format( command['cmd'] ),"output",command['out'])
             try:
-                stdin , stdout, stderr = ssh_client.exec_command(command['cmd'])
                 #print(stdout.read())
                 if command['out']:
+                    stdin , stdout, stderr = ssh_client.exec_command(command['cmd'])
                     for l in line_buffered(stdout):
-                        self.debug(1,l)
+                        self.debug(1,l,end='')
 
                     errmsg = stderr.read()
                     dbglvl = 1 if errmsg else 2
                     self.debug(dbglvl,"Errors")
                     self.debug(dbglvl,errmsg)
                 else:
-                    pass
+                    transport = ssh_client.get_transport()
+                    channel   = transport.open_session()
+                    channel.exec_command(command['cmd']+" 1>/dev/null 2>&1 &")
                     #stdout.read()
                     #pid = int(stdout.read().strip().decode("utf-8"))
             except paramiko.ssh_exception.SSHException as sshe:
@@ -817,7 +821,7 @@ class CloudRunProvider(ABC):
             if not instances_runs.get(instance.get_name()):
                 if start_and_wait:
                     await self._start_and_wait_for_instance(instance)
-                instances_runs[instance.get_name()] = { 'cmd_run':  "", 'cmd_pid': "" , 'cmd_run_pre':  "", 'instance': instance}
+                instances_runs[instance.get_name()] = { 'cmd_run':  "", 'cmd_pid': "" , 'cmd_run_pre':  "", 'instance': instance , 'jobs' : [] }
 
             cmd_run = instances_runs[instance.get_name()]['cmd_run']
             cmd_pid = instances_runs[instance.get_name()]['cmd_pid']
@@ -839,14 +843,21 @@ class CloudRunProvider(ABC):
             uid = cloudrunutils.generate_unique_filename() 
 
             dpl_jobs[uid] = dpl_job
+            instances_runs[instance.get_name()]['jobs'].append(uid)
             
             run_path    = dpl_job.get_path() + '/' + uid
             # retrieve PID (this will wait for PID file)
             pid_file   = run_path + "/pid"
             state_file = run_path + "/state"
 
+            is_first = (cmd_run_pre=="")
+
             cmd_run_pre = cmd_run_pre + "rm -f " + pid_file + " && "
-            cmd_run_pre = cmd_run_pre + "echo 'idle' > " + state_file + "\n"
+            cmd_run_pre = cmd_run_pre + "mkdir -p " + run_path + " && "
+            if is_first: # first sequential script is waiting for bootstrap to be done by default
+                cmd_run_pre = cmd_run_pre + "echo 'wait' > " + state_file + "\n"
+            else: # all other scripts will be queued
+                cmd_run_pre = cmd_run_pre + "echo 'queue' > " + state_file + "\n"
             cmd_run = cmd_run + "mkdir -p "+run_path + " && "
             cmd_run = cmd_run + global_path+"/run.sh \"" + dpl_env.get_name() + "\" \""+dpl_job.get_command()+"\" " + job.get_config('input_file') + " " + job.get_config('output_file') + " " + job.get_hash()+" "+uid
             cmd_run = cmd_run + "\n"
@@ -879,23 +890,33 @@ class CloudRunProvider(ABC):
             self._run_ssh_commands(ssh_client,commands)
 
             processes = []
+            for uid in runinfo.get('jobs'):
+                # we dont have the pid of everybody yet because its sequential
+                # lets leave it blank. it can work with the uid ...
+                job = dpl_jobs[uid]
+                process = CloudRunProcess( job , uid , None ) 
+                job.attach_process( process )
+                self.debug(1,process) 
+                processes.append(process)
             
-            self.debug(1,"Executing ",format( global_path+"/"+batch_pid_file ) )
-            stdin , stdout, stderr = ssh_client.exec_command(global_path+"/"+batch_pid_file)
-            while True: 
-                lines = stdout.readlines()
-                for line in lines:     
-                    info    = line.strip().split(',')
-                    uid     = info[0]
-                    pid     = int(info[1])
-                    dpl_job = dpl_jobs[uid]
-                    process = CloudRunProcess( dpl_job , uid , pid )
-                    dpl_job.attach_process( process )
-                    self.debug(1,process) 
-                    processes.append(process)
+            # useless .... most scripts are waiting so lets not even get the PIDs....
 
-                if not lines or len(lines)==0:
-                    break
+            # self.debug(1,"Executing ",format( global_path+"/"+batch_pid_file ) )
+            # stdin , stdout, stderr = ssh_client.exec_command(global_path+"/"+batch_pid_file)
+            # while True: 
+            #     lines = stdout.readlines()
+            #     for line in lines:     
+            #         info    = line.strip().split(',')
+            #         uid     = info[0]
+            #         pid     = int(info[1])
+            #         dpl_job = dpl_jobs[uid]
+            #         process = CloudRunProcess( dpl_job , uid , pid )
+            #         dpl_job.attach_process( process )
+            #         self.debug(1,process) 
+            #         processes.append(process)
+
+            #     if not lines or len(lines)==0:
+            #         break
 
             ssh_client.close()
 
@@ -1141,46 +1162,6 @@ class CloudRunProvider(ABC):
 
         return process        
 
-    # this allow any external process to wait for a specific job
-    async def get_process_state( self, processObj ):
-
-        job         = processObj.get_job() # deployed job
-        instance    = job.get_instance()
-        dpl_env     = job.get_env() # deployed job has a deployed environment
-        files_path  = dpl_env.get_path()
-        global_path = "$HOME/run"
-
-        if instance is None:
-            print("get_process_state: instance is not available!")
-            return CloudRunCommandState.UNKNOWN
-
-        await self._wait_for_instance(instance)
-
-        ssh_client = await self._connect_to_instance(instance)
-
-        shash = processObj.get_hash()
-        uid   = processObj.get_uid()
-        pid   = processObj.get_pid()
-
-        cmd = global_path + "/state.sh " + dpl_env.get_name() + " " + str(shash) + " " + str(uid) + " " + str(pid) + " " + self._config['output_file']
-        self.debug(1,"Executing command",cmd)
-        stdin, stdout, stderr = ssh_client.exec_command(cmd)
-
-        statestr = stdout.read().decode("utf-8").strip()
-        self.debug(1,"State=",statestr)
-        stateinfo = statestr.split(',')
-        statestr = re.sub(r'\([0-9]+\)','',stateinfo[2])
-        try:
-            state = CloudRunCommandState[statestr.upper()]
-            process.set_state(state)
-            self.debug(1,process)
-        except:
-            print("\nUnhandled state received by state.sh!!!\n")
-            state = CloudRunCommandState.UNKNOWN
-
-        ssh_client.close()
-
-        return state
 
     async def __get_jobs_states_internal( self , processes_infos , doWait , job_state ):
         
@@ -1389,6 +1370,6 @@ def line_buffered(f):
 
 DBG_LVL=1
 
-def debug(level,*args):
+def debug(level,*args,**kwargs):
     if level <= DBG_LVL:
-        print(*args)
+        print(*args,**kwargs)

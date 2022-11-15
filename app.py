@@ -36,10 +36,10 @@ async def mainloop():
     print("\n== RUN ==\n")
 
     # run the scripts and get a process back
-    process1  = await cr_client.run_job(cr_client.get_job(0)) 
-    process2  = await cr_client.run_job(cr_client.get_job(1)) 
-    processes = [ process1 , process2 ]
-    #processes = await cr_client.run_jobs()
+    # process1  = await cr_client.run_job(cr_client.get_job(0)) 
+    # process2  = await cr_client.run_job(cr_client.get_job(1)) 
+    # processes = [ process1 , process2 ]
+    processes = await cr_client.run_jobs()
 
     print("\n== WAIT ==\n")
 

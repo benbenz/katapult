@@ -25,7 +25,7 @@ printf '%s,%s\n' $uid $$ > $pid_file
 
 printf '%s\n%s\n' $thecommand $input_file > $cmd_file
 
-echo 'idle' > $run_path/state # used to check the state of a process
+echo 'wait' > $run_path/state # used to check the state of a process
 rm -f output_file
 
 waittime=0
@@ -45,6 +45,8 @@ do
   fi
 done
 echo "Environment is bootstraped"
+
+echo 'idle' > $run_path/state # used to check the state of a process
 
 FILE_CONDA="$HOME/run/$env_name/environment.yml"
 FILE_PYPI="$HOME/run/$env_name/requirements.txt"
