@@ -61,6 +61,11 @@
   - [x] rewrite CloudRun to handle plurality / new config
   - [ ] run-dry to check CPUs settings compatibilty BEFORE job assignation 
   - [ ] online vs offline bin packing >> online bin packing used by the nano instance
+  - [ ] improve handling of uploaded files: 
+    - [ ] keep tree structure (what to do when absolute files?)
+    - [ ] define 'upload_base_path' in config
+    - [ ] add symbolic links under the run_dir to point to the job_dir where its uploaded (parent dir)
+    - [ ] if there is no directory involve we need to create a symbolic link for each file 
 
 4) local mode:
   - [ ] handle new config 
