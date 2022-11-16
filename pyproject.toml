@@ -9,19 +9,11 @@ repository = "https://github.com/benbenz/cloudrun"
 
 [tool.poetry.dependencies]
 python = "^3.8"
-bcrypt = { version = "3.1.5", markers = "sys_platform == 'darwin' and platform_release <= '13.4.0'" }
-cryptography = { version = "3.1.1", markers = "sys_platform == 'darwin' and platform_release <= '13.4.0'" }
-boto3 = [
-    { version = "1.23.10"   , markers = "sys_platform == 'darwin' and platform_release <= '13.4.0'" },
-    { version = "^1"        , markers = "sys_platform != 'darwin' or platform_release > '13.4.0'" }
-]
+boto3 = "^1"
 jcs = "^0.2.1"
 pyyaml = "^6.0"
 paramiko = "^2.12.0"
-ortools = [
-    { version = "9.0.9048"    , markers = "sys_platform == 'darwin' and platform_release <= '13.4.0'" },
-    { version = "^9"          , markers = "sys_platform != 'darwin' or platform_release > '13.4.0'" }
-]
+ortools = "^9"
 
 [build-system]
 requires = ["poetry-core"]

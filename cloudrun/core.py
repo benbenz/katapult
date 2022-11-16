@@ -631,13 +631,6 @@ class CloudRunProvider(ABC):
             # change dir to global dir (should be done once)
             global_path = "/home/" + instance.get_config('img_username') + '/run/'
             ftp_client.chdir(global_path)
-            # ftp_client.put('remote_files/config.py','config.py')
-            # ftp_client.put('remote_files/bootstrap.sh','bootstrap.sh')
-            # ftp_client.put('remote_files/run.sh','run.sh')
-            # ftp_client.put('remote_files/microrun.sh','microrun.sh')
-            # ftp_client.put('remote_files/state.sh','state.sh')
-            # ftp_client.put('remote_files/tail.sh','tail.sh')
-            # ftp_client.put('remote_files/getpid.sh','getpid.sh')
             ftp_client.putfo(self._get_resource_file('remote_files/config.py'),'config.py')
             ftp_client.putfo(self._get_resource_file('remote_files/bootstrap.sh'),'bootstrap.sh')
             ftp_client.putfo(self._get_resource_file('remote_files/run.sh'),'run.sh')
@@ -673,8 +666,10 @@ class CloudRunProvider(ABC):
         # scan the instances environment (those are set when assigning a job to an instance)
         #TODO: debug this
         # NOT SURE why we're missing an environment sometimes...
-        #for environment in instance.get_environments():
-        for environment in self._environments:
+        bootstrap_command = ""
+
+        for environment in instance.get_environments():
+        #for environment in self._environments:
 
             # "deploy" the environment to the instance and get a DeployedEnvironment
             dpl_env  = environment.deploy(instance) 
@@ -712,12 +707,7 @@ class CloudRunProvider(ABC):
                 # upload the install file, the env file and the script file
                 # change to env dir
                 ftp_client.chdir(dpl_env.get_path_abs())
-                remote_config = 'config-'+dpl_env.get_name()+'.json'
-                with open(remote_config,'w') as cfg_file:
-                    cfg_file.write(dpl_env.json())
-                    cfg_file.close()
-                    ftp_client.put(remote_config,'config.json')
-                    os.remove(remote_config)
+                ftp_client.putfo(io.StringIO(dpl_env.json()),'config.json')
 
                 self.debug(1,"uploaded.")        
 
@@ -727,15 +717,27 @@ class CloudRunProvider(ABC):
                     # recreate pip+conda files according to config
                     { 'cmd': "cd " + files_path + " && python3 "+global_path+"/config.py" , 'out' : False },
                     # setup envs according to current config files state
-                    # NOTE: make sure to let out = True or bootstraping is not executed properly 
-                    # TODO: INVESTIGATE THIS
-                    { 'cmd': global_path+"/bootstrap.sh \"" + dpl_env.get_name() + "\" " + ("1" if self._config['dev'] else "0") , 'out': print_deploy },  
+                    # FIX: mamba is not handling well concurrency
+                    # we run the mamba installs sequentially below
+                    #{ 'cmd': global_path+"/bootstrap.sh \"" + dpl_env.get_name() + "\" " + ("1" if self._config['dev'] else "0") , 'out': print_deploy , 'output': dpl_env.get_path()+'/bootstrap.log'},  
                 ]
 
-                self._run_ssh_commands(ssh_client,commands)
+                bootstrap_command = bootstrap_command + (" ; " if bootstrap_command else "") + global_path+"/bootstrap.sh \"" + dpl_env.get_name() + "\" " + ("1" if self._config['dev'] else "0")
 
+                self._run_ssh_commands(ssh_client,commands)
+                
                 # let bootstrap.sh do it ...
                 #ftp_client.putfo(BytesIO("".encode()), 'ready')
+
+        if bootstrap_command:
+            ftp_client.chdir('/home/'+instance.get_config('img_username')+'/run')
+            ftp_client.putfo(io.StringIO(bootstrap_command),'generate_envs.sh')
+            commands = [
+                {'cmd': 'chmod +x $HOME/run/generate_envs.sh' , 'out':False},
+                {'cmd': '$HOME/run/generate_envs.sh' , 'out':False, 'output': '$HOME/run/bootstrap.log'}
+                #{'cmd': bootstrap_command ,'out': print_deploy , 'output': '$HOME/run/bootstrap.log'}
+            ]
+            self._run_ssh_commands(ssh_client,commands)
         
 
     def _deploy_jobs(self,instance,deploy_states,ssh_client,ftp_client):
@@ -888,7 +890,8 @@ class CloudRunProvider(ABC):
                 else:
                     transport = ssh_client.get_transport()
                     channel   = transport.open_session()
-                    channel.exec_command(command['cmd']+" 1>/dev/null 2>&1 &")
+                    output = "$HOME/run/out.log" if not 'output' in command else command['output']
+                    channel.exec_command(command['cmd']+" 1>"+output+" 2>&1 &")
                     #stdout.read()
                     #pid = int(stdout.read().strip().decode("utf-8"))
             except paramiko.ssh_exception.SSHException as sshe:
@@ -1197,13 +1200,6 @@ class CloudRunProvider(ABC):
         # change dir to global dir (should be done once)
         global_path = "/home/" + instance.get_config('img_username') + '/run/'
         ftp_client.chdir(global_path)
-        # ftp_client.put('remote_files/config.py','config.py')
-        # ftp_client.put('remote_files/bootstrap.sh','bootstrap.sh')
-        # ftp_client.put('remote_files/run.sh','run.sh')
-        # ftp_client.put('remote_files/microrun.sh','microrun.sh')
-        # ftp_client.put('remote_files/state.sh','state.sh')
-        # ftp_client.put('remote_files/tail.sh','tail.sh')
-        # ftp_client.put('remote_files/getpid.sh','getpid.sh')
         ftp_client.putfo(self._get_resource_file('remote_files/config.py'),'config.py')
         ftp_client.putfo(self._get_resource_file('remote_files/bootstrap.sh'),'bootstrap.sh')
         ftp_client.putfo(self._get_resource_file('remote_files/run.sh'),'run.sh')
@@ -1416,7 +1412,7 @@ class CloudRunProvider(ABC):
                 break
 
             if doWait:
-                await asyncio.sleep(5)
+                await asyncio.sleep(15)
             else:
                 break
 
