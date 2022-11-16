@@ -7,7 +7,8 @@ from botocore.exceptions import ClientError
 from datetime import datetime , timedelta
 from botocore.config import Config
 import asyncio
-import csv 
+import csv , io
+import pkg_resources
 
 def aws_get_config(region):
     if region is None:
@@ -467,23 +468,14 @@ class AWSCloudRunProvider(CloudRunProvider):
     def __init__(self, conf):
         CloudRunProvider.__init__(self,conf)
 
-    def get_instance(self):
+    def create_instance_objects(self,config):
+        return aws_create_instance_objects(config)
 
-        #inst_cfg = self._instances[0].get_config_DIRTY()
-        #return aws_find_instance(inst_cfg)
-        return self._instances[0]
+    def find_instance(self,config):
+        return aws_find_instance(config)
 
     def start_instance(self,instance):
-
-        inst_cfg = instance.get_config_DIRTY()
-        instance = aws_find_instance(inst_cfg)
-
-        if instance is None:
-            instance , created = aws_create_instance_objects(inst_cfg)
-        else:
-            created = False
-
-        return instance , created
+        aws_start_instance(instance)
 
     def stop_instance(self,instance):
         aws_stop_instance(instance)
@@ -500,19 +492,32 @@ class AWSCloudRunProvider(CloudRunProvider):
         return region     
 
     def get_recommended_cpus(self,inst_cfg):
-        with open('instancetypes-aws.csv', newline='') as csvfile:
-            self._csv_reader = csv.DictReader(csvfile)
-            for row in self._csv_reader:
-                if row['Instance type'] == inst_cfg.get('type'):
-                    arr = row['Valid cores'].split(',')
-                    res = [ ]
-                    for x in arr:
-                        try:
-                            res.append(int(x))
-                        except: 
-                            pass
-                    if len(res)==0:
-                        return None
-                    return res
-        return None
+        return self._get_instancetypes_attribute(inst_cfg,"Valid cores")
 
+    def get_cpus_cores(self,inst_cfg):
+        return self._get_instancetypes_attribute(inst_cfg,"Cores")
+
+    def _get_instancetypes_attribute(self,inst_cfg,attr):
+
+        # Could be any dot-separated package/module name or a "Requirement"
+        resource_package = 'cloudrun'
+        resource_path = '/'.join(('resources', 'instancetypes-aws.csv'))  # Do not use os.path.join()
+        #template = pkg_resources.resource_string(resource_package, resource_path)
+        # or for a file-like stream:
+        #template = pkg_resources.resource_stream(resource_package, resource_path)        
+        #with open('instancetypes-aws.csv', newline='') as csvfile:
+        csvstr = pkg_resources.resource_string(resource_package, resource_path)
+        self._csv_reader = csv.DictReader(io.StringIO(csvstr.decode()))
+        for row in self._csv_reader:
+            if row['Instance type'] == inst_cfg.get('type'):
+                arr = row[attr].split(',')
+                res = [ ]
+                for x in arr:
+                    try:
+                        res.append(int(x))
+                    except: 
+                        pass
+                if len(res)==0:
+                    return None
+                return res
+        return 

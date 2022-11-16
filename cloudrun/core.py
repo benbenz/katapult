@@ -364,7 +364,9 @@ class CloudRunProvider(ABC):
                         cpu_split = rec_cpus[len(rec_cpus)-1]
 
                     if cpu_split is None:
-                        self.debug(1,"WARNING: removing CPU reqs for instance type:",inst_cfg.get('type'))
+                        if inst_cfg.get('cpus') is not None:
+                            oldcpu = inst_cfg.get('cpus')
+                            self.debug(1,"WARNING: removing CPU reqs for instance type:",inst_cfg.get('type'),"| from",oldcpu,">>> None")
                         real_inst_cfg = copy.deepcopy(inst_cfg)
                         real_inst_cfg.pop('number',None)  # provide default value to avoid KeyError
                         real_inst_cfg.pop('explode',None) # provide default value to avoid KeyError
@@ -383,8 +385,13 @@ class CloudRunProvider(ABC):
                     else:
                         total_inst_cpus = inst_cfg.get('cpus',1)
                         if type(total_inst_cpus) != int and type(total_inst_cpus) != float:
-                            print("WARNING: setting default CPUs number to 1 for an instance")
-                            total_inst_cpus = 1
+                            cpucore = self.get_cpus_cores(inst_cfg)
+                            total_inst_cpus = cpucore if cpucore is not None else 1
+                            self.debug(1,"WARNING: setting default CPUs number to",cpucore,"for instance",inst_cfg.get('type'))
+                        if not inst_cfg.get('explode') and total_inst_cpus > cpu_split:
+                            self.debug(1,"WARNING: forcing 'explode' to True because required number of CPUs",total_inst_cpus,' is superior to ',inst_cfg.get('type'),'max number of CPUs',cpu_split)
+                            inst_cfg.set('explode',True)
+
                         if inst_cfg.get('explode'):
                             num_sub_instances = math.floor( total_inst_cpus / cpu_split ) # we target CPUs with 16 cores...
                             if num_sub_instances == 0:
@@ -403,6 +410,13 @@ class CloudRunProvider(ABC):
                                 inst_cpus = total_inst_cpus - cpus_created
                             else:
                                 inst_cpus = cpu_inc
+                            if inst_cpus == 0:
+                                continue 
+
+                            if rec_cpus is not None and not inst_cpus in rec_cpus:
+                                self.debug(1,"ERROR: The total number of CPUs required causes a sub-number of CPUs ( =",inst_cpus,") to not be accepted by the type",inst_cfg.get('type'),"| list of valid cpus:",rec_cpus)
+                                sys.exit()
+
                             real_inst_cfg = copy.deepcopy(inst_cfg)
                             real_inst_cfg.pop('number',None)  # provide default value to avoid KeyError
                             real_inst_cfg.pop('explode',None) # provide default value to avoid KeyError
@@ -476,11 +490,11 @@ class CloudRunProvider(ABC):
             if instanceState == 'stopped' or instanceState == 'stopping':
                 try:
                     # restart the instance
-                    start_instance(instance)
+                    self.start_instance(instance)
                 except CloudRunError:
-                    terminate_instance(instance)
+                    self.terminate_instance(instance)
                     try :
-                        create_instance_objects(config)
+                        self._get_or_create_instance(instance)
                     except:
                         return None
 
@@ -554,7 +568,7 @@ class CloudRunProvider(ABC):
 
     async def _start_and_wait_for_instance(self,instance):
         # CHECK EVERY TIME !
-        new_instance , created = self.start_instance(instance)
+        new_instance , created = self._get_or_create_instance(instance)
          
         # make sure we update the instance with the new instance data
         instance.update_from_instance(new_instance)
@@ -1004,7 +1018,7 @@ class CloudRunProvider(ABC):
         instance = job.get_instance()
 
         # CHECK EVERY TIME !
-        new_instance , created = self.start_instance(job.get_instance())
+        new_instance , created = self._get_or_create_instance(job.get_instance())
           
         # make sure we update the instance with the new instance data
         instance.update_from_instance(new_instance)
@@ -1301,7 +1315,19 @@ class CloudRunProvider(ABC):
         return stdout_i.readlines()    
 
     def _tail_get_last_line_number(self,lines_i, line_num):
-        return int(lines_i[-1].split('\t')[0]) + 1 if lines_i else line_num            
+        return int(lines_i[-1].split('\t')[0]) + 1 if lines_i else line_num     
+
+    def _get_or_create_instance(self,instance):
+
+        inst_cfg = instance.get_config_DIRTY()
+        instance = self.find_instance(inst_cfg)
+
+        if instance is None:
+            instance , created = self.create_instance_objects(inst_cfg)
+        else:
+            created = False
+
+        return instance , created
 
     @abstractmethod
     def get_user_region(self):
@@ -1312,7 +1338,11 @@ class CloudRunProvider(ABC):
         pass
 
     @abstractmethod
-    def get_instance(self):
+    def create_instance_objects(self,config):
+        pass
+
+    @abstractmethod
+    def find_instance(self,config):
         pass
 
     @abstractmethod

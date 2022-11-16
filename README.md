@@ -163,40 +163,184 @@ config = {
 ## Python API
 
 ```python
-class CloudRunProvider:
+class CloudRunError(Exception):
+    pass
 
-    def __init__(config):
-       pass
 
-    def get_instance():
-       pass
+class CloudRunCommandState(IntFlag):
+    UNKNOWN   = 0
+    WAIT      = 1  # waiting for bootstraping
+    QUEUE     = 2  # queued (for sequential scripts)
+    IDLE      = 4  # script about to start
+    RUNNING   = 8  # script running
+    DONE      = 16 # script has completed
+    ABORTED   = 32 # script has been aborted
+    ANY       = 32 + 16 + 8 + 4 + 2 + 1 
 
-    def start_instance():
-       pass
+class CloudRunInstance():
 
-    def stop_instance():
-       pass
+    def get_region(self):
 
-    def terminate_instance():
-       pass
+    def get_id(self):
+     
+    def get_name(self):
 
-    async def run_script():
-       # return script_hash , uid , pid       
-       pass
+    def get_rank(self):
 
-    async def get_script_state( script_hash , uid , pid = None ):
-       # returns CloudRunCommandState
-       pass
+    def get_ip_addr(self):
 
-    async def wait_for_script_state( script_state , script_hash , uid , pid = None ):
-       pass
+    def get_dns_addr(self):
 
-    async def tail( self, script_hash , uid , pid = None ):
-       pass
+    def get_cpus(self):
+
+    def set_ip_addr(self,value):
+
+    def get_state(self):
+
+    def set_dns_addr(self,value):
+     
+    def set_state(self,value):
+
+    def set_data(self,data):
+
+    def get_data(self,key):
+     
+    def get_config(self,key):
+
+    def append_job(self,job):
+
+    def get_environments(self):
+
+    def get_jobs(self):
+
+    def get_config_DIRTY(self):
+
+    def update_from_instance(self,instance):
+
+class CloudRunEnvironment():
+
+    def get_name(self):
+
+    def get_path(self):
+
+    def deploy(self,instance):
+
+class CloudRunDeployedEnvironment(CloudRunEnvironment):
+
+    def get_path_abs(self):
+
+    def get_instance(self):
+
+    def json(self):
+
+class CloudRunJob():
+
+    def attach_env(self,env):
+
+    def get_hash(self):
+
+    def get_config(self,key,defaultVal=None):
+
+    def get_env(self):
+
+    def get_instance(self):
+
+    def deploy(self,dpl_env):
+
+    def set_instance(self,instance):
+
+class CloudRunDeployedJob(CloudRunJob):
+
+    def attach_process(self,process):
+
+    def get_path(self):
+
+    def get_command(self):
+
+    def attach_env(self,env):
+
+    def get_hash(self):
+
+    def get_config(self,key,defaultVal=None):
+
+    def get_env(self):
+
+    def get_instance(self):
+
+    def deploy(self,dpl_env):
+
+    def set_instance(self,instance):
+
+
+class CloudRunProcess():
+
+    def get_uid(self):
+
+    def get_pid(self):
+
+    def get_state(self):
+     
+    def set_state(self,value):
+
+    def set_pid(self,value):
+
+    def get_job(self):
+
+class CloudRunProvider(ABC):
+
+    def debug(self,level,*args,**kwargs):
+
+    def get_job(self,index):
+
+    def assign_jobs_to_instances(self):
+
+    async def deploy(self):
+
+    async def run_jobs(self,start_and_wait=False):
+
+    async def run_job(self,job,start_and_wait=False):
+
+    async def wait_for_jobs_state(self,processes,job_state):
+
+    async def get_jobs_states(self,processes):
+
+    @abstractmethod
+    def get_user_region(self):
+        pass
+
+    @abstractmethod
+    def get_recommended_cpus(self,inst_cfg):
+        pass
+
+    @abstractmethod
+    def create_instance_objects(self,config):
+        pass
+
+    @abstractmethod
+    def find_instance(self,config):
+        pass
+
+    @abstractmethod
+    def start_instance(self,instance):
+        pass
+
+    @abstractmethod
+    def stop_instance(self,instance):
+        pass
+
+    @abstractmethod
+    def terminate_instance(self,instance):
+        pass
+
+    @abstractmethod
+    def update_instance_info(self,instance):
+        pass
 
 def get_client(config):
-   pass       
- 
+
+def init_instance_name(instance_config):
+
+def debug(level,*args,**kwargs):
 ```
 
 ## Contributing
