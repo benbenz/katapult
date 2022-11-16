@@ -306,35 +306,27 @@ class CloudRunProvider(ABC):
 
     @abstractmethod
     def get_user_region(self):
-        pass
 
     @abstractmethod
     def get_recommended_cpus(self,inst_cfg):
-        pass
 
     @abstractmethod
     def create_instance_objects(self,config):
-        pass
 
     @abstractmethod
     def find_instance(self,config):
-        pass
 
     @abstractmethod
     def start_instance(self,instance):
-        pass
 
     @abstractmethod
     def stop_instance(self,instance):
-        pass
 
     @abstractmethod
     def terminate_instance(self,instance):
-        pass
 
     @abstractmethod
     def update_instance_info(self,instance):
-        pass
 
 def get_client(config):
 
