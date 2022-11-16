@@ -631,13 +631,20 @@ class CloudRunProvider(ABC):
             # change dir to global dir (should be done once)
             global_path = "/home/" + instance.get_config('img_username') + '/run/'
             ftp_client.chdir(global_path)
-            ftp_client.put('remote_files/config.py','config.py')
-            ftp_client.put('remote_files/bootstrap.sh','bootstrap.sh')
-            ftp_client.put('remote_files/run.sh','run.sh')
-            ftp_client.put('remote_files/microrun.sh','microrun.sh')
-            ftp_client.put('remote_files/state.sh','state.sh')
-            ftp_client.put('remote_files/tail.sh','tail.sh')
-            ftp_client.put('remote_files/getpid.sh','getpid.sh')
+            # ftp_client.put('remote_files/config.py','config.py')
+            # ftp_client.put('remote_files/bootstrap.sh','bootstrap.sh')
+            # ftp_client.put('remote_files/run.sh','run.sh')
+            # ftp_client.put('remote_files/microrun.sh','microrun.sh')
+            # ftp_client.put('remote_files/state.sh','state.sh')
+            # ftp_client.put('remote_files/tail.sh','tail.sh')
+            # ftp_client.put('remote_files/getpid.sh','getpid.sh')
+            ftp_client.putfo(self._get_resource_file('remote_files/config.py'),'config.py')
+            ftp_client.putfo(self._get_resource_file('remote_files/bootstrap.sh'),'bootstrap.sh')
+            ftp_client.putfo(self._get_resource_file('remote_files/run.sh'),'run.sh')
+            ftp_client.putfo(self._get_resource_file('remote_files/microrun.sh'),'microrun.sh')
+            ftp_client.putfo(self._get_resource_file('remote_files/state.sh'),'state.sh')
+            ftp_client.putfo(self._get_resource_file('remote_files/tail.sh'),'tail.sh')
+            ftp_client.putfo(self._get_resource_file('remote_files/getpid.sh'),'getpid.sh')
 
             self.debug(1,"Installing PyYAML for newly created instance ...")
             stdin , stdout, stderr = ssh_client.exec_command("pip install pyyaml")
@@ -664,7 +671,10 @@ class CloudRunProvider(ABC):
         re_upload_inst = deploy_states[instance.get_name()]['upload']
 
         # scan the instances environment (those are set when assigning a job to an instance)
-        for environment in instance.get_environments():
+        #TODO: debug this
+        # NOT SURE why we're missing an environment sometimes...
+        #for environment in instance.get_environments():
+        for environment in self._environments:
 
             # "deploy" the environment to the instance and get a DeployedEnvironment
             dpl_env  = environment.deploy(instance) 
@@ -709,7 +719,9 @@ class CloudRunProvider(ABC):
                     ftp_client.put(remote_config,'config.json')
                     os.remove(remote_config)
 
-                self.debug(1,"uploaded.")                    
+                self.debug(1,"uploaded.")        
+
+                print_deploy = self._config.get('print_deploy') == True
 
                 commands = [
                     # recreate pip+conda files according to config
@@ -717,7 +729,7 @@ class CloudRunProvider(ABC):
                     # setup envs according to current config files state
                     # NOTE: make sure to let out = True or bootstraping is not executed properly 
                     # TODO: INVESTIGATE THIS
-                    { 'cmd': global_path+"/bootstrap.sh \"" + dpl_env.get_name() + "\" " + ("1" if self._config['dev'] else "0") , 'out': False },  
+                    { 'cmd': global_path+"/bootstrap.sh \"" + dpl_env.get_name() + "\" " + ("1" if self._config['dev'] else "0") , 'out': print_deploy },  
                 ]
 
                 self._run_ssh_commands(ssh_client,commands)
@@ -734,8 +746,26 @@ class CloudRunProvider(ABC):
             dpl_env  = env.deploy(instance) # "deploy" the environment to the instance and get a DeployedEnvironment
             dpl_job  = job.deploy(dpl_env)
 
+            input_files = []
+            if job.get_config('upload_files'):
+                upload_files = job.get_config('upload_files')
+                if isinstance(upload_files,str):
+                    input_files.append(upload_files)
+                else:
+                    input_files.append(*upload_files)
+            if job.get_config('input_file'):
+                input_files.append(job.get_config('input_file'))
+            
+            mkdir_cmd = ""
+            for in_file in input_files:
+                dirname = os.path.dirname(in_file)
+                if dirname:
+                    mkdir_cmd = mkdir_cmd + (" && " if mkdir_cmd else "") + "mkdir -p " + dpl_job.get_path()+'/'+dirname
+
             self.debug(1,"creating job directories ...")
             stdin0, stdout0, stderr0 = ssh_client.exec_command("mkdir -p "+dpl_job.get_path())
+            if mkdir_cmd != "":
+                stdin0, stdout0, stderr0 = ssh_client.exec_command(mkdir_cmd)
             self.debug(1,"directories created")
 
             re_upload_env = deploy_states[instance.get_name()][env.get_name()]['upload']
@@ -761,6 +791,7 @@ class CloudRunProvider(ABC):
                         ftp_client.put(os.path.abspath(script_file),filename)
                     except:
                         self.debug(1,"You defined a script that is not available",job.get_config('run_script'))
+
                 if job.get_config('upload_files'):
                     files = job.get_config('upload_files')
                     if isinstance( files,str):
@@ -768,16 +799,17 @@ class CloudRunProvider(ABC):
                     for upfile in files:
                         try:
                             try:
-                                ftp_client.put(upfile,os.path.basename(upfile))
-                            except:
+                                ftp_client.put(upfile,upfile) #os.path.basename(upfile))
+                            except Exception as e:
                                 self.debug(1,"You defined an upload file that is not available",upfile)
+                                self.debug(1,e)
                         except Exception as e:
                             print("Error while uploading file",upfile)
                             print(e)
                 if job.get_config('input_file'):
-                    filename = os.path.basename(job.get_config('run_script'))
+                    filename = os.path.basename(job.get_config('input_file'))
                     try:
-                        ftp_client.put(job.get_config('input_file'),filename)
+                        ftp_client.put(job.get_config('input_file'),job.get_config('input_file')) #filename)
                     except:
                         self.debug(1,"You defined an input file that is not available:",job.get_config('input_file'))
                 
@@ -922,9 +954,10 @@ class CloudRunProvider(ABC):
             else: # all other scripts will be queued
                 cmd_run_pre = cmd_run_pre + "echo 'queue' > " + state_file + "\n"
 
-            ln_command = self._get_ln_command(dpl_job)
-            print(ln_command)
-            cmd_run_pre = cmd_run_pre + ln_command + "\n"
+            ln_command = self._get_ln_command(dpl_job,uid)
+            self.debug(2,ln_command)
+            if ln_command != "":
+                cmd_run_pre = cmd_run_pre + ln_command + "\n"
 
             #cmd_run = cmd_run + "mkdir -p "+run_path + " && "
             cmd_run = cmd_run + global_path+"/run.sh \"" + dpl_env.get_name() + "\" \""+dpl_job.get_command()+"\" " + job.get_config('input_file') + " " + job.get_config('output_file') + " " + job.get_hash()+" "+uid
@@ -1030,9 +1063,11 @@ class CloudRunProvider(ABC):
         stdin0, stdout0, stderr0 = ssh_client.exec_command("mkdir -p "+run_path)
         self.debug(1,"directories created")
 
-        ln_command = self._get_ln_command(dpl_job)
-        print(ln_command)
-        stdin0, stdout0, stderr0 = ssh_client.exec_command(ln_command)
+        ln_command = self._get_ln_command(dpl_job,uid)
+        self.debug(2,ln_command)
+        if ln_command != "":
+            stdin0, stdout0, stderr0 = ssh_client.exec_command(ln_command)
+            self.debug(2,stdout0.read())
 
         # run
         commands = [ 
@@ -1061,7 +1096,7 @@ class CloudRunProvider(ABC):
 
         return process
 
-    def _get_ln_command(self,dpl_job):
+    def _get_ln_command(self,dpl_job,uid):
         files_to_ln = []
         upload_files = dpl_job.get_config('upload_files')
         lnstr = ""
@@ -1070,10 +1105,16 @@ class CloudRunProvider(ABC):
         if dpl_job.get_config('input_file'):
             files_to_ln.append(dpl_job.get_config('input_file'))
         for upfile in files_to_ln:
-            filename = os.path.basename(upfile)
-            filedir  = os.path.dirname(upfile)
-            fulldir  = dpl_job.get_path() + '/' + filedir
-            lnstr = lnstr + (" && " if lnstr else "") + "mkdir -p " + fulldir + " && ln -sf ../" + filename + " " + fulldir + '/' + filename
+            filename  = os.path.basename(upfile)
+            filedir   = os.path.dirname(upfile)
+            if filedir and filedir != '/':
+                fulldir   = dpl_job.get_path() + '/' + uid + '/' + filedir
+                uploaddir = dpl_job.get_path() + '/' + filedir
+                lnstr = lnstr + (" && " if lnstr else "") + "mkdir -p " + fulldir + " && ln -sf " + uploaddir + '/' + filename + " " + fulldir + '/' + filename
+            else:
+                fulldir   = dpl_job.get_path() + '/' + uid
+                uploaddir = dpl_job.get_path()
+                lnstr = lnstr + (" && " if lnstr else "") + "ln -sf " + uploaddir + '/' + filename + " " + fulldir + '/' + filename
         return lnstr
 
     def _get_instancetypes_attribute(self,inst_cfg,resource_file,type_col,attr,return_type):
@@ -1156,13 +1197,21 @@ class CloudRunProvider(ABC):
         # change dir to global dir (should be done once)
         global_path = "/home/" + instance.get_config('img_username') + '/run/'
         ftp_client.chdir(global_path)
-        ftp_client.put('remote_files/config.py','config.py')
-        ftp_client.put('remote_files/bootstrap.sh','bootstrap.sh')
-        ftp_client.put('remote_files/run.sh','run.sh')
-        ftp_client.put('remote_files/microrun.sh','microrun.sh')
-        ftp_client.put('remote_files/state.sh','state.sh')
-        ftp_client.put('remote_files/tail.sh','tail.sh')
-        ftp_client.put('remote_files/getpid.sh','getpid.sh')
+        # ftp_client.put('remote_files/config.py','config.py')
+        # ftp_client.put('remote_files/bootstrap.sh','bootstrap.sh')
+        # ftp_client.put('remote_files/run.sh','run.sh')
+        # ftp_client.put('remote_files/microrun.sh','microrun.sh')
+        # ftp_client.put('remote_files/state.sh','state.sh')
+        # ftp_client.put('remote_files/tail.sh','tail.sh')
+        # ftp_client.put('remote_files/getpid.sh','getpid.sh')
+        ftp_client.putfo(self._get_resource_file('remote_files/config.py'),'config.py')
+        ftp_client.putfo(self._get_resource_file('remote_files/bootstrap.sh'),'bootstrap.sh')
+        ftp_client.putfo(self._get_resource_file('remote_files/run.sh'),'run.sh')
+        ftp_client.putfo(self._get_resource_file('remote_files/microrun.sh'),'microrun.sh')
+        ftp_client.putfo(self._get_resource_file('remote_files/state.sh'),'state.sh')
+        ftp_client.putfo(self._get_resource_file('remote_files/tail.sh'),'tail.sh')
+        ftp_client.putfo(self._get_resource_file('remote_files/getpid.sh'),'getpid.sh')
+
         global_path = "$HOME/run" # more robust
 
         # change to env dir
@@ -1284,7 +1333,18 @@ class CloudRunProvider(ABC):
 
         self.debug(1,process) 
 
-        return process        
+        return process  
+
+    def _get_resource_file(self,resource_file):
+        resource_package = 'cloudrun'
+        resource_path = '/'.join(('resources', resource_file))  # Do not use os.path.join()
+        #template = pkg_resources.resource_string(resource_package, resource_path)
+        # or for a file-like stream:
+        #template = pkg_resources.resource_stream(resource_package, resource_path)        
+        #with open('instancetypes-aws.csv', newline='') as csvfile:
+        #fileio = pkg_resources.resource_string(resource_package, resource_path)
+        #self._csv_reader = csv.DictReader(io.StringIO(csvstr.decode()))              
+        return pkg_resources.resource_stream(resource_package, resource_path)
 
 
     async def __get_jobs_states_internal( self , processes_infos , doWait , job_state ):
@@ -1356,7 +1416,7 @@ class CloudRunProvider(ABC):
                 break
 
             if doWait:
-                await asyncio.sleep(2)
+                await asyncio.sleep(5)
             else:
                 break
 

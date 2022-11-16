@@ -90,6 +90,7 @@ config = {
     'maestro'      : 'local' ,                            # where the 'maestro' resides: local' | 'remote' (nano instance) | 'lambda'
     'provider'     : 'aws' ,                              # the provider name ('aws' | 'azure' | ...)
     'job_assign'   : None ,                               # algorithm used for job assignation / task scheduling ('random' | 'multi_knapsack')
+    'print_deploy' : False ,                              # if True, this will cause the deploy stage to print more (and lock)
 
     ################################################################################
     # INSTANCES / HARDWARE
