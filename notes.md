@@ -60,14 +60,14 @@
   - [x] use instance class
   - [x] rewrite CloudRun to handle plurality / new config
   - [x] run-dry to check CPUs settings compatibilty BEFORE job assignation >> we separated start() and deploy()
-  - [ ] online vs offline bin packing >> online bin packing used by the nano instance
+  - [ ] online vs offline bin packing >> online bin packing used by the nano instance (use yield?)
   - [x] improve handling of uploaded files: 
     - [x] keep tree structure (what to do when absolute files?)
     - [ ] define 'upload_base_path' in config
     - [x] add symbolic links under the run_dir to point to the job_dir where its uploaded (parent dir)
     - [x] if there is no directory involve we need to create a symbolic link for each file 
   - [ ] fix bug with missing environment when using instance.get_environments() in _deploy_environments
-  - [ ] move remote_files as resources in package
+  - [x] move remote_files as resources in package
   - [ ] fix bug that co-routines are not concurrent in gather (visible with print_deploy = True) >> use concurrent.futures. run_in_executor OR https://stackoverflow.com/questions/28492103/how-to-combine-python-asyncio-with-threads
   - [ ] check why sometimes processes are considered aborted at the very beginning
 
