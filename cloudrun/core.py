@@ -172,6 +172,8 @@ class CloudRunEnvironment():
 
     def get_path(self):
         return self._path
+    def get_config(self,key):
+        return self._config.get(key)
 
     def deploy(self,instance):
         return CloudRunDeployedEnvironment(self,instance)
@@ -594,9 +596,12 @@ class CloudRunProvider(ABC):
             instance.set_invalid(True)
 
 
-    def _test_reupload(self,instance,file_test,ssh_client):
+    def _test_reupload(self,instance,file_test,ssh_client,isfile=True):
         re_upload = False
-        stdin0, stdout0, stderr0 = ssh_client.exec_command("[[ -f "+file_test+" ]] && echo \"ok\" || echo \"not_ok\";")
+        if isfile:
+            stdin0, stdout0, stderr0 = ssh_client.exec_command("[ -f "+file_test+" ] && echo \"ok\" || echo \"not_ok\";")
+        else:
+            stdin0, stdout0, stderr0 = ssh_client.exec_command("[ -d "+file_test+" ] && echo \"ok\" || echo \"not_ok\";")
         result = stdout0.read()
         if "not_ok" in result.decode():
             debug(1,"re-upload of files ...")
@@ -668,7 +673,17 @@ class CloudRunProvider(ABC):
 
             re_upload_env = self._test_reupload(instance,dpl_env.get_path_abs()+'/ready', ssh_client)
 
-            debug(1,"re_upload_instance",re_upload_inst,"re_upload_env",re_upload_env)
+            if not re_upload_env:
+                if dpl_env.get_config('env_conda') is not None:
+                    re_upload_env_mamba = self._test_reupload(instance,'$HOME/micromamba/envs/'+dpl_env.get_name(), ssh_client,True)
+                    re_upload_env = re_upload_env or re_upload_env_mamba
+                if dpl_env.get_config('env_pypi') is not None:
+                    re_upload_env_pip = self._test_reupload(instance,'$HOME/.'+dpl_env.get_name(), ssh_client, True)
+                    re_upload_env = re_upload_env or re_upload_env_pip
+                if dpl_env.get_config('env_aptget') is not None:
+                    re_upload_env = True
+
+            debug(1,"re_upload_instance",re_upload_inst,"re_upload_env",re_upload_env,"ENV",dpl_env.get_name())
 
             re_upload = re_upload_env #or re_upload_inst
 
@@ -906,6 +921,11 @@ class CloudRunProvider(ABC):
                 cmd_run_pre = cmd_run_pre + "echo 'wait' > " + state_file + "\n"
             else: # all other scripts will be queued
                 cmd_run_pre = cmd_run_pre + "echo 'queue' > " + state_file + "\n"
+
+            ln_command = self._get_ln_command(dpl_job)
+            print(ln_command)
+            cmd_run_pre = cmd_run_pre + ln_command + "\n"
+
             #cmd_run = cmd_run + "mkdir -p "+run_path + " && "
             cmd_run = cmd_run + global_path+"/run.sh \"" + dpl_env.get_name() + "\" \""+dpl_job.get_command()+"\" " + job.get_config('input_file') + " " + job.get_config('output_file') + " " + job.get_hash()+" "+uid
             cmd_run = cmd_run + "\n"
@@ -1010,6 +1030,10 @@ class CloudRunProvider(ABC):
         stdin0, stdout0, stderr0 = ssh_client.exec_command("mkdir -p "+run_path)
         self.debug(1,"directories created")
 
+        ln_command = self._get_ln_command(dpl_job)
+        print(ln_command)
+        stdin0, stdout0, stderr0 = ssh_client.exec_command(ln_command)
+
         # run
         commands = [ 
             # execute main script (spawn) (this will wait for bootstraping)
@@ -1036,6 +1060,21 @@ class CloudRunProvider(ABC):
         self.debug(1,process) 
 
         return process
+
+    def _get_ln_command(self,dpl_job):
+        files_to_ln = []
+        upload_files = dpl_job.get_config('upload_files')
+        lnstr = ""
+        if upload_files:
+            files_to_ln.append(*upload_files)
+        if dpl_job.get_config('input_file'):
+            files_to_ln.append(dpl_job.get_config('input_file'))
+        for upfile in files_to_ln:
+            filename = os.path.basename(upfile)
+            filedir  = os.path.dirname(upfile)
+            fulldir  = dpl_job.get_path() + '/' + filedir
+            lnstr = lnstr + (" && " if lnstr else "") + "mkdir -p " + fulldir + " && ln -sf ../" + filename + " " + fulldir + '/' + filename
+        return lnstr
 
     def _get_instancetypes_attribute(self,inst_cfg,resource_file,type_col,attr,return_type):
 
