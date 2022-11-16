@@ -9,6 +9,8 @@ import copy
 import math , random
 import cloudrun.combopt as combopt
 from io import BytesIO
+import csv , io
+import pkg_resources
 
 random.seed()
 
@@ -1009,6 +1011,40 @@ class CloudRunProvider(ABC):
 
         return process
 
+    def _get_instancetypes_attribute(self,inst_cfg,resource_file,type_col,attr,return_type):
+
+        # Could be any dot-separated package/module name or a "Requirement"
+        resource_package = 'cloudrun'
+        resource_path = '/'.join(('resources', resource_file))  # Do not use os.path.join()
+        #template = pkg_resources.resource_string(resource_package, resource_path)
+        # or for a file-like stream:
+        #template = pkg_resources.resource_stream(resource_package, resource_path)        
+        #with open('instancetypes-aws.csv', newline='') as csvfile:
+        csvstr = pkg_resources.resource_string(resource_package, resource_path)
+        self._csv_reader = csv.DictReader(io.StringIO(csvstr.decode()))
+        for row in self._csv_reader:
+            if row[type_col] == inst_cfg.get('type'):
+                if return_type == list:
+                    arr = row[attr].split(',')
+                    res = [ ]
+                    for x in arr:
+                        try:
+                            res.append(int(x))
+                        except: 
+                            pass
+                    if len(res)==0:
+                        return None
+                elif return_type == int:
+                    try:
+                        res = int(row[attr])
+                    except:
+                        return None
+                elif return_type == str:
+                    return row[attr]
+                else:
+                    return raw[attr]
+        return         
+
     async def run_job_OLD(self,job):
 
         if not job.get_instance():
@@ -1335,6 +1371,10 @@ class CloudRunProvider(ABC):
 
     @abstractmethod
     def get_recommended_cpus(self,inst_cfg):
+        pass
+
+    @abstractmethod
+    def get_cpus_cores(self,inst_cfg):
         pass
 
     @abstractmethod
