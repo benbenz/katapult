@@ -44,14 +44,13 @@ aws_secret_access_key = YOUR_SECRET_ACCESS_KEY
 ## Installation
 
 ```bash
-# from the repo
 python3 -m venv .venv
 source ./.venv/bin/activate
 python -m pip install -r requirements.txt
 
 # OR
 
-# from the repo
+curl -sSL https://install.python-poetry.org | python3.8 -
 poetry install
 ```
 

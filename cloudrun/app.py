@@ -54,6 +54,7 @@ async def mainloop(cr_client):
 
 # run main loop
 def main():
+
     try:
         sys.path.append(os.path.abspath(os.getcwd()))    
         configModule = __import__("config")
