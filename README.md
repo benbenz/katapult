@@ -23,7 +23,7 @@ See [https://docs.aws.amazon.com/cli/latest/userguide/cli-configure-quickstart.h
 1. Go to [the AWS Signup page](https://portal.aws.amazon.com/billing/signup#/start/email) and create an account
 2. In the AWS web console, [create a user with administrator privilege](https://docs.aws.amazon.com/streams/latest/dev/setting-up.html)
 3. In the AWS web console, under the AMI section, click on the new user and make sure you create an access key under the tab "Security Credentials". Make sure "Console Password" is Enabled as well
-4. Add your new user credentials manually, [in the credentials file] (https://docs.aws.amazon.com/cli/latest/userguide/cli-configure-profiles.html)
+4. Add your new user credentials manually, [in the credentials file](https://docs.aws.amazon.com/cli/latest/userguide/cli-configure-profiles.html)
 
 ##### example ~/.aws/config file
 
