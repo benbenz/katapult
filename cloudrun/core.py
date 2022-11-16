@@ -58,6 +58,8 @@ class CloudRunInstance():
         self._jobs     = [ ]
         # env dict
         self._envs     = dict()
+        # invalid
+        self._invalid  = False
 
     def get_region(self):
         return self._region
@@ -92,6 +94,9 @@ class CloudRunInstance():
     def set_state(self,value):
         self._state = value 
 
+    def set_invalid(self,val):
+        self._invalid = val
+
     def set_data(self,data):
         self._data = data 
 
@@ -118,6 +123,9 @@ class CloudRunInstance():
 
     def get_config_DIRTY(self):
         return self._config
+
+    def is_invalid(self):
+        return self._invalid
 
     def update_from_instance(self,instance):
         self._region   = instance._region
@@ -569,16 +577,22 @@ class CloudRunProvider(ABC):
                
 
     async def _start_and_wait_for_instance(self,instance):
-        # CHECK EVERY TIME !
-        new_instance , created = self._get_or_create_instance(instance)
-         
-        # make sure we update the instance with the new instance data
-        instance.update_from_instance(new_instance)
 
-        # wait for the instance to be ready
-        await self._wait_for_instance(instance)
+        try:
+            # CHECK EVERY TIME !
+            new_instance , created = self._get_or_create_instance(instance)
+            
+            # make sure we update the instance with the new instance data
+            instance.update_from_instance(new_instance)
 
-        return created
+            # wait for the instance to be ready
+            await self._wait_for_instance(instance)
+
+            return created
+        except CloudRunError as cre:
+
+            instance.set_invalid(True)
+
 
     def _test_reupload(self,instance,file_test,ssh_client):
         re_upload = False
@@ -594,11 +608,11 @@ class CloudRunProvider(ABC):
         # last file uploaded ...
         re_upload  = self._test_reupload(instance,"$HOME/run/ready", ssh_client)
 
-        created = deploy_states[instance.get_name()].get('created')
+        #created = deploy_states[instance.get_name()].get('created')
 
-        debug(1,"created",created,"re_upload",re_upload)
+        debug(1,"re_upload",re_upload)
 
-        if created or re_upload:
+        if re_upload:
 
             self.debug(1,"creating instance's directories ...")
             stdin0, stdout0, stderr0 = ssh_client.exec_command("mkdir -p $HOME/run && rm -f $HOME/run/ready")
@@ -638,7 +652,7 @@ class CloudRunProvider(ABC):
             self.debug(1,"files uploaded.")
 
 
-        deploy_states[instance.get_name()] = { 'upload' : created or re_upload } 
+        deploy_states[instance.get_name()] = { 'upload' : re_upload } 
 
     def _deploy_environments(self,instance,deploy_states,ssh_client,ftp_client):
 
@@ -762,9 +776,9 @@ class CloudRunProvider(ABC):
         deploy_states = dict()
 
         # make sure we got the instance ready
-        created = await self._start_and_wait_for_instance(instance)
+        await self._wait_for_instance(instance)
 
-        deploy_states[instance.get_name()] = { 'created' : created }
+        deploy_states[instance.get_name()] = { }
 
         # connect to instance
         ssh_client = await self._connect_to_instance(instance)
@@ -784,6 +798,18 @@ class CloudRunProvider(ABC):
 
         ftp_client.close()
         ssh_client.close()
+
+    async def start(self):
+        # wait for instance to be deployed
+        wait_list = [ ]
+        for instance in self._instances:
+            wait_list.append( self._start_and_wait_for_instance(instance) )
+        await asyncio.gather(*wait_list)
+
+        for instance in self._instances:
+            if instance.is_invalid():
+                self.debug(1,"ERROR: Your configuration is causing an instance to not be created. Please fix.",instance.get_config_DIRTY())
+                sys.exit()
 
     # deploys:
     # - instances files
@@ -823,7 +849,7 @@ class CloudRunProvider(ABC):
                 print(sshe)
                 raise CloudRunError()    
 
-    async def run_jobs(self,start_and_wait=False):
+    async def run_jobs(self,wait=False):
 
         instances_runs = dict()
 
@@ -841,8 +867,8 @@ class CloudRunProvider(ABC):
 
             # CHECK EVERY TIME !
             if not instances_runs.get(instance.get_name()):
-                if start_and_wait:
-                    await self._start_and_wait_for_instance(instance)
+                if wait:
+                    await self._wait_for_instance(instance)
                 instances_runs[instance.get_name()] = { 'cmd_run':  "", 'cmd_pid': "" , 'cmd_run_pre':  "", 'instance': instance , 'jobs' : [] }
 
             cmd_run = instances_runs[instance.get_name()]['cmd_run']
@@ -948,7 +974,7 @@ class CloudRunProvider(ABC):
         return processes 
 
         
-    async def run_job(self,job,start_and_wait=False):
+    async def run_job(self,job,wait=False):
 
         if not job.get_instance():
             debug(1,"The job",job,"has not been assigned to an instance!")
@@ -957,8 +983,8 @@ class CloudRunProvider(ABC):
         instance = job.get_instance()
 
         # CHECK EVERY TIME !
-        if start_and_wait:
-            await self._start_and_wait_for_instance(instance)
+        if wait:
+            await self._wait_for_instance(instance)
 
         # FOR NOW
         env      = job.get_env()        # get its environment

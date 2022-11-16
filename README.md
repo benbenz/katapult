@@ -201,6 +201,8 @@ class CloudRunInstance():
      
     def set_state(self,value):
 
+    def set_invalid(self,value):
+
     def set_data(self,data):
 
     def get_data(self,key):
@@ -214,6 +216,8 @@ class CloudRunInstance():
     def get_jobs(self):
 
     def get_config_DIRTY(self):
+
+    def is_invalid(self):
 
     def update_from_instance(self,instance):
 
@@ -290,13 +294,15 @@ class CloudRunProvider(ABC):
 
     def debug(self,level,*args,**kwargs):
 
+    async def start(self):
+
     def assign_jobs_to_instances(self):
 
     async def deploy(self):
 
-    async def run_jobs(self,start_and_wait=False):
+    async def run_jobs(self,wait=False):
 
-    async def run_job(self,job,start_and_wait=False):
+    async def run_job(self,job,wait=False):
 
     async def wait_for_jobs_state(self,processes,job_state):
 
@@ -331,6 +337,35 @@ def get_client(config):
 def init_instance_name(instance_config):
 
 def debug(level,*args,**kwargs):
+```
+
+Usually you may use the CloudRunProvider the following way:
+
+```python
+
+import cloudrun
+
+# load config
+config = __import__(config).config
+
+# create provider: this loads the config
+provider = cloudrun.get_client(config)
+
+# start the provider: this attempts to create the instances
+await provider.start()
+
+# assign the jobs onto the instances
+provider.assign_jobs_to_instances()
+
+# deploy the necessary stuff onto the instances
+await provider.deploy()
+
+# run the jobs and get processes objects back
+processes = await provider.run_jobs()
+
+# wait for the jobs to be done
+await provider.wait_for_jobs_state(processes,CloudRunCommandState.DONE|CloudRunCommandState.ABORTED)
+
 ```
 
 ## Contributing
