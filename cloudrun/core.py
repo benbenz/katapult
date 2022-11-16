@@ -541,9 +541,9 @@ class CloudRunProvider(ABC):
 
         return ssh_client
 
-    def get_job(self,index):
+    # def get_job(self,index):
 
-        return self._jobs[index] 
+    #     return self._jobs[index] 
 
     def assign_jobs_to_instances(self):
 

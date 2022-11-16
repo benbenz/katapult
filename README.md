@@ -290,8 +290,6 @@ class CloudRunProvider(ABC):
 
     def debug(self,level,*args,**kwargs):
 
-    def get_job(self,index):
-
     def assign_jobs_to_instances(self):
 
     async def deploy(self):
