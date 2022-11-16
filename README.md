@@ -2,6 +2,45 @@
 
 CloudRun is a Python package that allows you to run any script on a cloud service (for now AWS only).
 
+## Pre-requisites
+
+In order to use the python AWS client (Boto3), you need to have an existing AWS account and to setup your computer for AWS.
+
+### with AWS CLI
+
+1. Go to [the AWS Signup page](https://portal.aws.amazon.com/billing/signup#/start/email) and create an account
+2. Download [the AWS CLI](https://docs.aws.amazon.com/cli/latest/userguide/getting-started-install.html)
+3. In the AWS web console, [create a user with administrator privilege](https://docs.aws.amazon.com/streams/latest/dev/setting-up.html)
+4. In the AWS web console, under the AMI section, click on the new user and make sure you create an access key under the tab "Security Credentials". Make sure "Console Password" is Enabled as well
+5. In ther Terminal, use the AWS CLI to setup your configuration:
+```
+aws configure
+```
+See [https://docs.aws.amazon.com/cli/latest/userguide/cli-configure-quickstart.html](here)
+
+### manually
+
+1. Go to [the AWS Signup page](https://portal.aws.amazon.com/billing/signup#/start/email) and create an account
+2. In the AWS web console, [create a user with administrator privilege](https://docs.aws.amazon.com/streams/latest/dev/setting-up.html)
+3. In the AWS web console, under the AMI section, click on the new user and make sure you create an access key under the tab "Security Credentials". Make sure "Console Password" is Enabled as well
+4. Add your new user credentials manually, [in the credentials file] (https://docs.aws.amazon.com/cli/latest/userguide/cli-configure-profiles.html)
+
+##### example ~/.aws/config file
+
+```
+[default]
+region = eu-west-3
+output = json
+```
+
+##### example ~/.aws/credentials file
+
+```
+[default]
+aws_access_key_id = YOUR_ACCESS_KEY_ID
+aws_secret_access_key = YOUR_SECRET_ACCESS_KEY
+```
+
 ## Installation
 
 ```bash

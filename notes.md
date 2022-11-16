@@ -59,6 +59,8 @@
   - [x] CloudRunInstance class stores the client once for all (for a region) >> it will store just the region
   - [x] use instance class
   - [x] rewrite CloudRun to handle plurality / new config
+  - [ ] run-dry to check CPUs settings compatibilty BEFORE job assignation 
+  - [ ] online vs offline bin packing >> online bin packing used by the nano instance
 
 4) local mode:
   - [ ] handle new config 
@@ -69,7 +71,7 @@
       - [ ] adjust the number of instances running
 
 5) nano mode:
-  - [ ] same as lambda but we keep the sftp_pu formalism (as with fat client)
+  - [ ] same as lambda but we keep the sftp_put formalism (as with fat client)
 
 6) lambda mode:
   - [ ] fat client setup lambda with requirements.txt

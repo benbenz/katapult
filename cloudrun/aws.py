@@ -1,6 +1,6 @@
 import boto3
 import os
-from .cloudrunutils import *
+from .utils import *
 from .core import CloudRunError , CloudRunInstance , CloudRunProvider , debug
 from .core import cr_keypairName , cr_secGroupName , cr_bucketName , cr_vpcName , init_instance_name
 from botocore.exceptions import ClientError

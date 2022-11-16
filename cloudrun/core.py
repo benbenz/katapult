@@ -1,6 +1,6 @@
 from enum import IntFlag
 from abc import ABC , abstractmethod
-import cloudrun.cloudrunutils as cloudrunutils
+import cloudrun.utils as cloudrunutils
 import sys , json , os
 import paramiko
 import re
@@ -549,10 +549,11 @@ class CloudRunProvider(ABC):
                 self.debug(1,"Assigned job " + str(job) )
 
         # knapsack / 2d packing / bin packing ...
-        # https://developers.google.com/optimization/bin/multiple_knapsack
         elif assignation=='multi_knapsack':
-            
+
             self._multiple_knapsack_assignation()
+
+    # https://developers.google.com/optimization/bin/multiple_knapsack
 
     def _multiple_knapsack_assignation(self):
 
@@ -565,7 +566,6 @@ class CloudRunProvider(ABC):
             cpu_req = job.get_config('cpu_reqs')
             if cpu_req is None:
                 cpu_req = 1
-            
             weight = cpu_req
             value  = cpu_req
             data['weights'].append(weight)
@@ -580,6 +580,7 @@ class CloudRunProvider(ABC):
             cpus = instance.get_config('cpus')
             if cpus is None:
                 cpus = 1 #TODO: use the spec from the type ....
+            data['bin_capacities'].append(cpus)
 
         data['num_bins'] = len(data['bin_capacities'])
         data['all_bins'] = range(data['num_bins'])
@@ -1429,9 +1430,9 @@ def get_client(config):
 
     if config['provider'] == 'aws':
 
-        craws  = __import__("cloudrun.cloudrun_aws")
+        craws  = __import__("cloudrun.aws")
 
-        client = craws.cloudrun_aws.AWSCloudRunProvider(config)
+        client = craws.aws.AWSCloudRunProvider(config)
 
         return client
 
