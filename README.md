@@ -178,6 +178,48 @@ class CloudRunCommandState(IntFlag):
     ABORTED   = 32 # script has been aborted
     ANY       = 32 + 16 + 8 + 4 + 2 + 1 
 
+class CloudRunProvider(ABC):
+
+    def debug(self,level,*args,**kwargs):
+
+    def start(self):
+
+    def assign_jobs_to_instances(self):
+
+    def deploy(self):
+
+    async def run_jobs(self,wait=False):
+
+    async def run_job(self,job,wait=False):
+
+    async def wait_for_jobs_state(self,processes,job_state):
+
+    async def get_jobs_states(self,processes):
+
+    @abstractmethod
+    def get_user_region(self):
+
+    @abstractmethod
+    def get_recommended_cpus(self,inst_cfg):
+
+    @abstractmethod
+    def create_instance_objects(self,config):
+
+    @abstractmethod
+    def find_instance(self,config):
+
+    @abstractmethod
+    def start_instance(self,instance):
+
+    @abstractmethod
+    def stop_instance(self,instance):
+
+    @abstractmethod
+    def terminate_instance(self,instance):
+
+    @abstractmethod
+    def update_instance_info(self,instance):    
+
 class CloudRunInstance():
 
     def get_region(self):
@@ -291,47 +333,7 @@ class CloudRunProcess():
 
     def get_job(self):
 
-class CloudRunProvider(ABC):
-
-    def debug(self,level,*args,**kwargs):
-
-    def start(self):
-
-    def assign_jobs_to_instances(self):
-
-    async def deploy(self):
-
-    async def run_jobs(self,wait=False):
-
-    async def run_job(self,job,wait=False):
-
-    async def wait_for_jobs_state(self,processes,job_state):
-
-    async def get_jobs_states(self,processes):
-
-    @abstractmethod
-    def get_user_region(self):
-
-    @abstractmethod
-    def get_recommended_cpus(self,inst_cfg):
-
-    @abstractmethod
-    def create_instance_objects(self,config):
-
-    @abstractmethod
-    def find_instance(self,config):
-
-    @abstractmethod
-    def start_instance(self,instance):
-
-    @abstractmethod
-    def stop_instance(self,instance):
-
-    @abstractmethod
-    def terminate_instance(self,instance):
-
-    @abstractmethod
-    def update_instance_info(self,instance):
+# GLOBAL methods 
 
 def get_client(config):
 
@@ -359,7 +361,7 @@ provider.start()
 provider.assign_jobs_to_instances()
 
 # deploy the necessary stuff onto the instances
-await provider.deploy()
+provider.deploy()
 
 # run the jobs and get processes objects back
 processes = await provider.run_jobs()

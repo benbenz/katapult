@@ -29,7 +29,7 @@ async def mainloop(cr_client):
     # it is recommended to wait here allthough run.sh should wait for bootstraping
     # currently, the bootstraping is non-blocking
     # so this will barely wait ... (the jobs will do the waiting ...)
-    await cr_client.deploy()
+    cr_client.deploy()
 
     print("\n== RUN ==\n")
 

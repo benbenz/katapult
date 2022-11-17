@@ -1,7 +1,7 @@
 from enum import IntFlag
 from abc import ABC , abstractmethod
 import cloudrun.utils as cloudrunutils
-import sys , json , os
+import sys , json , os , time
 import paramiko
 import re
 import asyncio
@@ -528,6 +528,46 @@ class CloudRunProvider(ABC):
 
         self.debug(2,instance)    
 
+    def _wait_for_instance_block(self,instance):
+        # get the public DNS info when instance actually started (todo: check actual state)
+        waitFor = True
+        while waitFor:
+            self.update_instance_info(instance)
+
+            lookForDNS       = instance.get_dns_addr() is None
+            lookForIP        = instance.get_ip_addr() is None
+            instanceState    = instance.get_state()
+
+            lookForState = True
+            # 'pending'|'running'|'shutting-down'|'terminated'|'stopping'|'stopped'
+            if instanceState == 'stopped' or instanceState == 'stopping':
+                try:
+                    # restart the instance
+                    self.start_instance(instance)
+                except CloudRunError:
+                    self.terminate_instance(instance)
+                    try :
+                        self._get_or_create_instance(instance)
+                    except:
+                        return None
+
+            elif instanceState == 'running':
+                lookForState = False
+
+            waitFor = lookForDNS or lookForState  
+            if waitFor:
+                if lookForDNS:
+                    debug(1,"waiting for DNS address and  state ...",instanceState)
+                else:
+                    if lookForIP:
+                        debug(1,"waiting for state ...",instanceState)
+                    else:
+                        debug(1,"waiting for state ...",instanceState," IP =",instance.get_ip_addr())
+                 
+                time.sleep(10)
+
+        self.debug(2,instance)            
+
     async def _connect_to_instance(self,instance):
         # ssh into instance and run the script from S3/local? (or sftp)
         region = instance.get_region()
@@ -553,6 +593,32 @@ class CloudRunProvider(ABC):
         self.debug(1,"connected")    
 
         return ssh_client
+
+    def _connect_to_instance_block(self,instance):
+        # ssh into instance and run the script from S3/local? (or sftp)
+        region = instance.get_region()
+        if region is None:
+            region = self.get_user_region()
+        k = paramiko.RSAKey.from_private_key_file('cloudrun-'+str(region)+'.pem')
+        ssh_client = paramiko.SSHClient()
+        ssh_client.set_missing_host_key_policy(paramiko.AutoAddPolicy())
+        self.debug(1,"connecting to ",instance.get_dns_addr(),"/",instance.get_ip_addr())
+        while True:
+            try:
+                ssh_client.connect(hostname=instance.get_dns_addr(),username=instance.get_config('img_username'),pkey=k) #,password=’mypassword’)
+                break
+            except paramiko.ssh_exception.NoValidConnectionsError as cexc:
+                print(cexc)
+                time.sleep(4)
+                self.debug(1,"Retrying ...")
+            except OSError as ose:
+                print(ose)
+                time.sleep(4)
+                self.debug(1,"Retrying ...")
+
+        self.debug(1,"connected")    
+
+        return ssh_client        
 
     # def get_job(self,index):
 
@@ -839,13 +905,14 @@ class CloudRunProvider(ABC):
 
                 self.debug(1,"uploaded.",dpl_job.get_hash())
 
-    def _deploy_all(self,instance,ssh_client,ftp_client):
+    def _deploy_all(self,instance):
 
         deploy_states = dict()
 
         deploy_states[instance.get_name()] = { }
 
         # instanceid , ssh_client , ftp_client = await self._wait_and_connect(instance)
+        instanceid , ssh_client , ftp_client = self._wait_and_connect_block(instance)
 
         self.debug(1,"-- deploy instances --")
 
@@ -859,8 +926,8 @@ class CloudRunProvider(ABC):
 
         self._deploy_jobs(instance,deploy_states,ssh_client,ftp_client) 
 
-        #ftp_client.close()
-        #ssh_client.close()
+        ftp_client.close()
+        ssh_client.close()
 
     async def _wait_and_connect(self,instance):
 
@@ -872,6 +939,17 @@ class CloudRunProvider(ABC):
         ftp_client = ssh_client.open_sftp()
 
         return instance.get_id() , ssh_client , ftp_client
+
+    def _wait_and_connect_block(self,instance):
+
+        # wait for instance to be ready 
+        self._wait_for_instance_block(instance)
+
+        # connect to instance
+        ssh_client = self._connect_to_instance_block(instance)
+        ftp_client = ssh_client.open_sftp()
+
+        return instance.get_id() , ssh_client , ftp_client        
 
 
     def start(self):
@@ -899,34 +977,31 @@ class CloudRunProvider(ABC):
     # - instances files
     # - environments files
     # - shared script files / upload / inputs ...
-    async def deploy(self):
+    def deploy(self):
 
         clients = {} 
 
         # wait for instances to be deployed
-        wait_list = [ ]
-        for instance in self._instances:
-            wait_list.append( self._wait_and_connect(instance) )
-        #await asyncio.gather(*wait_list)
-        for future in asyncio.as_completed(wait_list):
-            instanceid , ssh_client , ftp_client = await future
-            clients[instanceid] = { 'ssh' : ssh_client , 'ftp' : ftp_client }
+        # wait_list = [ ]
+        # for instance in self._instances:
+        #     wait_list.append( self._wait_and_connect(instance) )
+        # #await asyncio.gather(*wait_list)
+        # for future in asyncio.as_completed(wait_list):
+        #     instanceid , ssh_client , ftp_client = await future
+        #     clients[instanceid] = { 'ssh' : ssh_client , 'ftp' : ftp_client }
 
-        loop = asyncio.get_running_loop()
+        # loop = asyncio.get_running_loop()
 
         # https://docs.python.org/3/library/concurrent.futures.html cf. ThreadPoolExecutor Example¶
         with concurrent.futures.ThreadPoolExecutor(max_workers=10) as pool:
             future_to_instance = { pool.submit(self._deploy_all,
-                                                instance,
-                                                clients[instance.get_id()]['ssh'],
-                                                clients[instance.get_id()]['ftp']) : instance for instance in self._instances
+                                                instance) : instance for instance in self._instances
                                                 }
             for future in concurrent.futures.as_completed(future_to_instance):
                 inst = future_to_instance[future]
                 instanceid = inst.get_id()
-                clients[instance.get_id()]['ftp'].close()
-                clients[instance.get_id()]['ssh'].close()
-                #future.result()
+                future.result()
+            pool.shutdown()
 
     def _run_ssh_commands(self,ssh_client,commands):
         for command in commands:
@@ -954,7 +1029,7 @@ class CloudRunProvider(ABC):
                 print(sshe)
                 raise CloudRunError()    
 
-    async def run_jobs(self,wait=False):
+    async def run_jobs(self):#,wait=False):
 
         instances_runs = dict()
 
@@ -972,8 +1047,8 @@ class CloudRunProvider(ABC):
 
             # CHECK EVERY TIME !
             if not instances_runs.get(instance.get_name()):
-                if wait:
-                    await self._wait_for_instance(instance)
+                # if wait:
+                #     await self._wait_for_instance(instance)
                 instances_runs[instance.get_name()] = { 'cmd_run':  "", 'cmd_pid': "" , 'cmd_run_pre':  "", 'instance': instance , 'jobs' : [] }
 
             cmd_run = instances_runs[instance.get_name()]['cmd_run']
@@ -1085,7 +1160,7 @@ class CloudRunProvider(ABC):
         return processes 
 
         
-    async def run_job(self,job,wait=False):
+    async def run_job(self,job):#,wait=False):
 
         if not job.get_instance():
             debug(1,"The job",job,"has not been assigned to an instance!")
@@ -1094,8 +1169,8 @@ class CloudRunProvider(ABC):
         instance = job.get_instance()
 
         # CHECK EVERY TIME !
-        if wait:
-            await self._wait_for_instance(instance)
+        # if wait:
+        #     await self._wait_for_instance(instance)
 
         # FOR NOW
         env      = job.get_env()        # get its environment

@@ -72,11 +72,11 @@
   - [x] check why sometimes processes are considered aborted at the very beginning - issue with env ?
 
 4) local mode:
-  - [ ] handle new config 
+  - [x] handle new config 
   - [ ] Maestro feature:
-    - [ ] Batch feature
-    - [ ] Load Balancer
-      - [ ] tetris function: distribute according to script CPUs needs (packing algorithm)
+    - [x] Batch feature
+    - [x] Load Balancer
+      - [x] tetris function: distribute according to script CPUs needs (packing algorithm)
       - [ ] adjust the number of instances running
 
 5) nano mode:
