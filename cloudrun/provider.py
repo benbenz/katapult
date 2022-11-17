@@ -382,13 +382,13 @@ class CloudRunProvider(ABC):
 
         #created = deploy_states[instance.get_name()].get('created')
 
-        debug(1,"re_upload",re_upload)
+        debug(2,"re_upload",re_upload)
 
         if re_upload:
 
-            self.debug(1,"creating instance's directories ...")
+            self.debug(2,"creating instance's directories ...")
             stdin0, stdout0, stderr0 = ssh_client.exec_command("mkdir -p $HOME/run && rm -f $HOME/run/ready")
-            self.debug(1,"directories created")
+            self.debug(2,"directories created")
 
             self.debug(1,"uploading instance's files ... ")
 
@@ -441,7 +441,7 @@ class CloudRunProvider(ABC):
             # "deploy" the environment to the instance and get a DeployedEnvironment
             dpl_env  = environment.deploy(instance) 
 
-            self.debug(2,dpl_env.json())
+            self.debug(3,dpl_env.json())
 
             re_upload_env = self._test_reupload(instance,dpl_env.get_path_abs()+'/ready', ssh_client)
 
@@ -461,7 +461,7 @@ class CloudRunProvider(ABC):
                 #    re_upload_env_aptget = True
                 #    re_upload_env = True
 
-            debug(1,"re_upload_instance",re_upload_inst,"re_upload_env",re_upload_env,"re_upload_env_mamba",re_upload_env_mamba,"re_upload_env_pip",re_upload_env_pip,"re_upload_env_aptget",re_upload_env_aptget,"ENV",dpl_env.get_name())
+            debug(2,"re_upload_instance",re_upload_inst,"re_upload_env",re_upload_env,"re_upload_env_mamba",re_upload_env_mamba,"re_upload_env_pip",re_upload_env_pip,"re_upload_env_aptget",re_upload_env_aptget,"ENV",dpl_env.get_name())
 
             re_upload = re_upload_env #or re_upload_inst
 
@@ -471,9 +471,9 @@ class CloudRunProvider(ABC):
                 files_path = dpl_env.get_path()
                 global_path = "$HOME/run" # more robust
 
-                self.debug(1,"creating environment directories ...")
+                self.debug(2,"creating environment directories ...")
                 stdin0, stdout0, stderr0 = ssh_client.exec_command("mkdir -p "+files_path+" && rm -f "+dpl_env.get_path_abs()+'/ready')
-                self.debug(1,"directories created")
+                self.debug(2,"directories created")
 
                 self.debug(1,"uploading files ... ")
 
@@ -537,11 +537,11 @@ class CloudRunProvider(ABC):
                 if dirname:
                     mkdir_cmd = mkdir_cmd + (" && " if mkdir_cmd else "") + "mkdir -p " + dpl_job.get_path()+'/'+dirname
 
-            self.debug(1,"creating job directories ...")
+            self.debug(2,"creating job directories ...")
             stdin0, stdout0, stderr0 = ssh_client.exec_command("mkdir -p "+dpl_job.get_path())
             if mkdir_cmd != "":
                 stdin0, stdout0, stderr0 = ssh_client.exec_command(mkdir_cmd)
-            self.debug(1,"directories created")
+            self.debug(2,"directories created")
 
             re_upload_env = deploy_states[instance.get_name()][env.get_name()]['upload']
             re_upload = self._test_reupload(instance,dpl_job.get_path()+'/ready', ssh_client)
@@ -718,7 +718,7 @@ class CloudRunProvider(ABC):
 
     def _run_ssh_commands(self,ssh_client,commands):
         for command in commands:
-            self.debug(1,"Executing ",format( command['cmd'] ),"output",command['out'])
+            self.debug(2,"Executing ",format( command['cmd'] ),"output",command['out'])
             try:
                 #print(stdout.read())
                 if command['out']:
@@ -1219,8 +1219,11 @@ class CloudRunProvider(ABC):
 
     def _print_jobs_summary(self,instance=None):
         jobs = instance.get_jobs() if instance is not None else self._jobs
+        self.debug(1,"\n----------------------------------------------------------------------------------------------------------------------------------------------------------")
+        if instance:
+            self.debug(1,instance.get_name())
         for i,job in enumerate(jobs):
-            self.debug(1,"Job",job.get_rank(),"=",job,":")
+            self.debug(1,"\nJob",job.get_rank(),"=",job.str_simple() if instance else job)
             dpl_jobs = job.get_deployed_jobs()
             for dpl_job in dpl_jobs:
                 processes = dpl_job.get_processes()
