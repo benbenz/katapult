@@ -1161,6 +1161,8 @@ class CloudRunProvider(ABC):
                 #instanceid = inst.get_id()
                 #future.result()
                 for process in future.result():
+                    # switch to yield when the wait_for_state method is ready ...
+                    #yield process
                     processes.append(process)
             #pool.shutdown()        
 

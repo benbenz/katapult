@@ -192,9 +192,9 @@ class CloudRunProvider(ABC):
 
     def run_job(self,job,wait=False):
 
-    async def wait_for_jobs_state(self,processes,job_state):
+    def wait_for_jobs_state(self,processes,job_state):
 
-    async def get_jobs_states(self,processes):
+    def get_jobs_states(self,processes):
 
     @abstractmethod
     def get_user_region(self):
@@ -367,7 +367,7 @@ provider.deploy()
 processes = provider.run_jobs()
 
 # wait for the jobs to be done
-await provider.wait_for_jobs_state(processes,CloudRunCommandState.DONE|CloudRunCommandState.ABORTED)
+provider.wait_for_jobs_state(processes,CloudRunCommandState.DONE|CloudRunCommandState.ABORTED)
 
 ```
 
