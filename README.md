@@ -346,7 +346,9 @@ Usually you may use the CloudRunProvider the following way:
 
 ```python
 
-import cloudrun
+from cloudrun      import provider as cloudrun
+from cloudrun.core import CloudRunCommandState
+import asyncio 
 
 # load config
 config = __import__(config).config

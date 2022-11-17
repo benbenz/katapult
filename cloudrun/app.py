@@ -1,4 +1,4 @@
-from cloudrun import core as cr
+from cloudrun import provider as cr
 import asyncio , os , sys
 from cloudrun.core import CloudRunCommandState
 import traceback
