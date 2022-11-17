@@ -140,10 +140,15 @@ class CloudRunInstance():
         self._data     = copy.deepcopy(instance._data)        
 
     def __repr__(self):
-        return "{0}: REGION = {1} , ID = {2} , NAME = {3} , IP = {4} , CPUS = {5} , RANK = {6}".format(type(self).__name__,self._region,self._id,self._name,self._ip_addr,self.get_cpus(),self._rank)
+        # return "{0}: REGION = {1} , ID = {2} , NAME = {3} , IP = {4} , CPUS = {5} , RANK = {6}".format(type(self).__name__,self._region,self._id,self._name,self._ip_addr,self.get_cpus(),self._rank)
+        # return "{0}: ID = {1} , NAME = {2} , IP = {3} , CPUS = {4}".format(type(self).__name__,self._id,self._name,self._ip_addr,self.get_cpus())
+        return "{0}: NAME = {1} , IP = {2}".format(type(self).__name__,self._name,self._ip_addr)
 
     def __str__(self):
-        return "{0}: REGION = {1} , ID = {2} , NAME = {3} , IP = {4} , CPUS = {5} , RANK = {6}".format(type(self).__name__,self._region,self._id,self._name,self._ip_addr,self.get_cpus(),self._rank)
+        # return "{0}: REGION = {1} , ID = {2} , NAME = {3} , IP = {4} , CPUS = {5} , RANK = {6}".format(type(self).__name__,self._region,self._id,self._name,self._ip_addr,self.get_cpus(),self._rank)
+        # return "{0}: ID = {1} , NAME = {2} , IP = {3} , CPUS = {4}".format(type(self).__name__,self._id,self._name,self._ip_addr,self.get_cpus())
+        return "{0}: NAME = {1} , IP = {2}".format(type(self).__name__,self._name,self._ip_addr)
+
 
 class CloudRunEnvironment():
 
@@ -250,10 +255,10 @@ class CloudRunJob():
         instance.append_job(self)
 
     def __repr__(self):
-        return "{0}: HASH = {1} , INSTANCE = {2}".format(type(self).__name__,self.get_hash(),self.get_instance())
+        return "{0}: HASH = {1} , INSTANCE = {2} , ENV = {3}".format(type(self).__name__,self.get_hash(),self.get_instance(),self.get_env().get_name() if self.get_env() else None)
          
     def __str__(self):
-        return "{0}: HASH = {1} , INSTANCE = {2}".format(type(self).__name__,self.get_hash(),self.get_instance())
+        return "{0}: HASH = {1} , INSTANCE = {2} , ENV = {3}".format(type(self).__name__,self.get_hash(),self.get_instance(),self.get_env().get_name() if self.get_env() else None)
 
 
 # "Temporary" objects used when starting scripts     
@@ -594,7 +599,7 @@ class CloudRunProvider(ABC):
 
         return ssh_client
 
-    def _connect_to_instance_block(self,instance):
+    def _connect_to_instance_block(self,instance,**kwargs):
         # ssh into instance and run the script from S3/local? (or sftp)
         region = instance.get_region()
         if region is None:
@@ -603,20 +608,34 @@ class CloudRunProvider(ABC):
         ssh_client = paramiko.SSHClient()
         ssh_client.set_missing_host_key_policy(paramiko.AutoAddPolicy())
         self.debug(1,"connecting to ",instance.get_dns_addr(),"/",instance.get_ip_addr())
+        retrys = 0 
         while True:
             try:
-                ssh_client.connect(hostname=instance.get_dns_addr(),username=instance.get_config('img_username'),pkey=k) #,password=’mypassword’)
+                ssh_client.connect(hostname=instance.get_dns_addr(),username=instance.get_config('img_username'),pkey=k,**kwargs) #,password=’mypassword’)
                 break
-            except paramiko.ssh_exception.NoValidConnectionsError as cexc:
-                print(cexc)
-                time.sleep(4)
-                self.debug(1,"Retrying ...")
-            except OSError as ose:
-                print(ose)
-                time.sleep(4)
-                self.debug(1,"Retrying ...")
+            except Exception as cexc:
+            #except paramiko.ssh_exception.NoValidConnectionsError as cexc:
+                if retrys < 5:
+                    print(cexc)
+                    time.sleep(4)
+                    self.debug(1,"Retrying ...")
+                    retrys = retrys + 1
+                else:
+                    print(cexc)
+                    self.debug(0,"ERROR! instance is unreachable: ",instance)
+                    return None
+            # except OSError as ose:
+            #     if retrys < 5:
+            #         print(ose)
+            #         time.sleep(4)
+            #         self.debug(1,"Retrying (2) ...")
+            #         retrys = retrys + 1
+            #     else:
+            #         print(cexc)
+            #         self.debug(0,"ERROR! instance is unreachable: ",instance)
+            #         return None
 
-        self.debug(1,"connected")    
+        self.debug(1,"connected to ",instance.get_ip_addr())    
 
         return ssh_client        
 
@@ -626,10 +645,10 @@ class CloudRunProvider(ABC):
 
     def assign_jobs_to_instances(self):
 
-        assignation = self._config.get('job_assign')
+        assignation = self._config.get('job_assign','multi_knapsack')
         
         # DUMMY algorithm 
-        if assignation is None or assignation=='random':
+        if assignation=='random':
             for job in self._jobs:
                 if job.get_instance():
                     continue
@@ -640,7 +659,7 @@ class CloudRunProvider(ABC):
                 self.debug(1,"Assigned job " + str(job) )
 
         # knapsack / 2d packing / bin packing ...
-        elif assignation=='multi_knapsack':
+        else: #if assignation is None or assignation=='multi_knapsack':
 
             combopt.multiple_knapsack_assignation(self._jobs,self._instances)            
                
@@ -914,6 +933,10 @@ class CloudRunProvider(ABC):
         # instanceid , ssh_client , ftp_client = await self._wait_and_connect(instance)
         instanceid , ssh_client , ftp_client = self._wait_and_connect_block(instance)
 
+        if ssh_client is None:
+            self.debug(1,"ERROR: could not deploy instance",instance)
+            return
+
         self.debug(1,"-- deploy instances --")
 
         self._deploy_instance(instance,deploy_states,ssh_client,ftp_client)
@@ -947,9 +970,12 @@ class CloudRunProvider(ABC):
 
         # connect to instance
         ssh_client = self._connect_to_instance_block(instance)
-        ftp_client = ssh_client.open_sftp()
+        if ssh_client is not None:
+            ftp_client = ssh_client.open_sftp()
 
-        return instance.get_id() , ssh_client , ftp_client        
+            return instance.get_id() , ssh_client , ftp_client        
+        else:
+            return instance.get_id() , None , None
 
 
     def start(self):
@@ -1003,6 +1029,19 @@ class CloudRunProvider(ABC):
                 #future.result()
             #pool.shutdown()
 
+    def revive(self,instance,rerun=False):
+        self.debug(1,"REVIVING instance",instance)
+        # try restarting it
+        self._start_and_update_instance(instance)
+        # wait for it
+        #self._wait_for_instance_block(instance)
+        # re-deploy it
+        self._deploy_all(instance)
+        #TODO: not ready yet
+        #if rerun:
+        #    self._run_jobs_for_instance(instance)
+
+
     def _run_ssh_commands(self,ssh_client,commands):
         for command in commands:
             self.debug(1,"Executing ",format( command['cmd'] ),"output",command['out'])
@@ -1029,7 +1068,7 @@ class CloudRunProvider(ABC):
                 print(sshe)
                 raise CloudRunError()  
 
-    def _run_jobs_for_instance(self,batch_uid,runinfo,dpl_jobs) :
+    def _run_jobs_for_instance(self,runinfo,dpl_jobs) :
 
         global_path = "$HOME/run" # more robust
 
@@ -1039,9 +1078,17 @@ class CloudRunProvider(ABC):
         cmd_run  = runinfo.get('cmd_run')
         cmd_run_pre = runinfo.get('cmd_run_pre')
         cmd_pid  = runinfo.get('cmd_pid')
-        batch_run_file = 'batch_run-'+batch_uid+'.sh'
-        batch_pid_file = 'batch_pid-'+batch_uid+'.sh'
+        batch_run_file = 'batch_run-'+self.batch_uid+'.sh'
+        batch_pid_file = 'batch_pid-'+self.batch_uid+'.sh'
         ssh_client = self._connect_to_instance_block(instance)
+        if ssh_client is None:
+            self.debug(1,"ERROR: could not run jobs for instance",instance)
+            self.revive(instance)
+            ssh_client = self._connect_to_instance_block(instance,timeout=10)
+            if ssh_client is None:
+                self.debug(1,"FATAL ERROR: could not run jobs for instance",instance)
+                return []
+
         ftp_client = ssh_client.open_sftp()
         ftp_client.chdir('/home/'+instance.get_config('img_username')+'/run')
         ftp_client.putfo(BytesIO(cmd_run_pre.encode()+cmd_run.encode()), batch_run_file)
@@ -1142,7 +1189,7 @@ class CloudRunProvider(ABC):
             instances_runs[instance.get_name()]['cmd_run_pre'] = cmd_run_pre
         
         # batch uid is shared accross instances
-        batch_uid = cloudrunutils.generate_unique_filename()
+        self.batch_uid = cloudrunutils.generate_unique_filename()
 
         processes = []
         
@@ -1154,7 +1201,7 @@ class CloudRunProvider(ABC):
 
         with concurrent.futures.ThreadPoolExecutor(max_workers=10) as pool:
             future_to_instance = { pool.submit(self._run_jobs_for_instance,
-                                                batch_uid,runinfo,dpl_jobs) : instance for instance_name , runinfo in instances_runs.items()
+                                                runinfo,dpl_jobs) : instance for instance_name , runinfo in instances_runs.items()
                                                 }
             for future in concurrent.futures.as_completed(future_to_instance):
                 inst = future_to_instance[future]
@@ -1192,6 +1239,10 @@ class CloudRunProvider(ABC):
         dpl_job  = job.deploy(dpl_env)
 
         ssh_client = self._connect_to_instance_block(instance)
+
+        if ssh_client is None:
+            self.debug(1,"ERROR: could not run job for instance",instance)
+            return None
 
         files_path = dpl_env.get_path()
         global_path = "$HOME/run" # more robust
@@ -1500,7 +1551,15 @@ class CloudRunProvider(ABC):
             
             instance    = job.get_instance() # should be the same for all jobs
 
-        ssh_client = self._connect_to_instance_block(instance)
+        ssh_client = self._connect_to_instance_block(instance,timeout=10)
+
+        if ssh_client is None:
+            self.debug(1,"ERROR: could not get jobs states for instance",instance)
+            self.revive(instance,True) #re-run the jobs 
+            ssh_client = self._connect_to_instance_block(instance,timeout=10)
+            if ssh_client is None:
+                self.debug(1,"FATAL ERROR: could not get jobs states for instance",instance)
+                return
 
         global_path = "$HOME/run"
 
