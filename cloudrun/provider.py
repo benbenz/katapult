@@ -130,8 +130,8 @@ class CloudRunProvider(ABC):
 
         self._jobs = [ ] 
         if job_cfgs:
-            for job_cfg in job_cfgs:
-                job = CloudRunJob(job_cfg)
+            for i,job_cfg in enumerate(job_cfgs):
+                job = CloudRunJob(job_cfg,i)
                 self._jobs.append(job)
 
     # fill up the jobs names if not present (and we have only 1 environment defined)
@@ -648,22 +648,15 @@ class CloudRunProvider(ABC):
 
 
     def start(self):
-        # wait for instance to be deployed
-        # wait_list = [ ]
-        # for instance in self._instances:
-        #     wait_list.append( self._start_and_wait_for_instance(instance) )
-        # await asyncio.gather(*wait_list)
-
-        # for instance in self._instances:
-        #     self._start_and_update_instance(instance)
-        #     if instance.is_invalid():
-        #         self.debug(1,"ERROR: Your configuration is causing an instance to not be created. Please fix.",instance.get_config_DIRTY())
-        #         sys.exit()
-
         with concurrent.futures.ThreadPoolExecutor(max_workers=10) as pool:
             future_to_instance = { pool.submit(self._start_and_update_instance,instance) : instance for instance in self._instances }
             for future in concurrent.futures.as_completed(future_to_instance):
                 inst = future_to_instance[future]
+                if inst.is_invalid():
+                    self.debug(1,"ERROR: Your configuration is causing an instance to not be created. Please fix.",instance.get_config_DIRTY())
+                    sys.exit()
+
+                
 
     # GREAT summary
     # https://www.integralist.co.uk/posts/python-asyncio/
@@ -716,6 +709,12 @@ class CloudRunProvider(ABC):
             return instance_processes, jobsinfo 
         else :
             return None
+
+    def _mark_aborted(self,processes):
+
+        for process in processes:
+            if process.get_state() != CloudRunCommandState.DONE:
+                process.set_state(CloudRunCommandState.ABORTED)
 
     def _run_ssh_commands(self,ssh_client,commands):
         for command in commands:
@@ -782,7 +781,6 @@ class CloudRunProvider(ABC):
             # lets leave it blank. it can work with the uid ...
             job = dpl_jobs[uid]
             process = CloudRunProcess( job , uid , None ) 
-            job.attach_process( process )
             self.debug(1,process) 
             processes.append(process)
 
@@ -960,7 +958,6 @@ class CloudRunProvider(ABC):
         ssh_client.close()
 
         process = CloudRunProcess( dpl_job , uid , pid )
-        dpl_job.attach_process( process )
 
         self.debug(1,process) 
 
@@ -1059,6 +1056,7 @@ class CloudRunProvider(ABC):
 
         if ssh_client is None:
             self.debug(1,"ERROR: could not get jobs states for instance",instance)
+            self._mark_aborted([processes_infos[uid]['process'] for uid in processes_infos]) # mark the "running" processes as aborted
             processes_info , jobsinfo   = self.revive(instance,True) #re-run the jobs and get an updated jobsinfo 
             ssh_client = self._connect_to_instance_block(instance,timeout=10)
             if ssh_client is None:
@@ -1073,6 +1071,7 @@ class CloudRunProvider(ABC):
 
             if not ssh_client.get_transport().is_active():
                 self.debug(1,"ERROR: SSH connection has been lost with",instance)
+                self._mark_aborted([processes_infos[uid]['process'] for uid in processes_infos])
                 processes_infos , jobsinfo = self.revive(instance,True)  #re-run the jobs and get an updated jobsinfo 
                 processes = []
                 ssh_client = self._connect_to_instance_block(instance,timeout=10)
@@ -1081,14 +1080,14 @@ class CloudRunProvider(ABC):
                     return
 
             cmd = global_path + "/state.sh " + jobsinfo
-            self.debug(1,"Executing command",cmd)
+            self.debug(2,"Executing command",cmd)
             stdin, stdout, stderr = ssh_client.exec_command(cmd)
 
             while True: 
                 lines = stdout.readlines()
                 for line in lines:           
                     statestr = line.strip() #line.decode("utf-8").strip()
-                    self.debug(1,"State=",statestr,"IP=",instance.get_ip_addr())
+                    self.debug(2,"State=",statestr,"IP=",instance.get_ip_addr())
                     stateinfo = statestr.split(',')
                     statestr  = re.sub(r'\([0-9]+\)','',stateinfo[2])
                     uid       = stateinfo[0]
@@ -1104,7 +1103,7 @@ class CloudRunProvider(ABC):
                         try:
                             state = CloudRunCommandState[statestr.upper()]
                             process.set_state(state)
-                            self.debug(1,process)
+                            self.debug(2,process)
                             processes_infos[uid]['retrieved'] = True
                             processes_infos[uid]['test']      = job_state & state 
                         except Exception as e:
@@ -1120,6 +1119,9 @@ class CloudRunProvider(ABC):
 
                 if lines is None or len(lines)==0:
                     break
+
+            # print job status summary
+            self._print_jobs_summary(instance)
 
             # all retrived attributes need to be true
             retrieved = all( [ pinfo['retrieved'] for pinfo in processes_infos.values()] )
@@ -1214,6 +1216,18 @@ class CloudRunProvider(ABC):
     def get_jobs_states(self,processes):
 
         return self.__get_or_wait_jobs_state(processes)
+
+    def _print_jobs_summary(self,instance=None):
+        jobs = instance.get_jobs() if instance is not None else self._jobs
+        for i,job in enumerate(jobs):
+            self.debug(1,"Job",job.get_rank(),"=",job,":")
+            dpl_jobs = job.get_deployed_jobs()
+            for dpl_job in dpl_jobs:
+                processes = dpl_job.get_processes()
+                for uid , process in processes.items():
+                    self.debug(1,"|_",process.str_simple())
+
+
 
     def _tail_execute_command(self,ssh,files_path,uid,line_num):
         run_log = files_path + '/' + uid + '-run.log'

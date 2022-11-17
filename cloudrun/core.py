@@ -2,6 +2,7 @@ from enum import IntFlag
 from abc import ABC , abstractmethod
 import cloudrun.utils as cloudrunutils
 import json
+import copy
 
 cr_keypairName         = 'cloudrun-keypair'
 cr_secGroupName        = 'cloudrun-sec-group-allow-ssh'
@@ -207,8 +208,9 @@ class CloudRunDeployedEnvironment(CloudRunEnvironment):
 
 class CloudRunJob():
 
-    def __init__(self,job_cfg):
+    def __init__(self,job_cfg,rank):
         self._config    = job_cfg
+        self._rank      = rank
         self._hash      = cloudrunutils.compute_job_hash(self._config)
         self._env       = None
         self._instance  = None
@@ -232,6 +234,12 @@ class CloudRunJob():
 
     def get_instance(self):
         return self._instance
+
+    def get_rank(self):
+        return self._rank
+
+    def get_deployed_jobs(self):
+        return self.__deployed
 
     def deploy(self,dpl_env):
         dpl_job = CloudRunDeployedJob(self,dpl_env)
@@ -295,6 +303,9 @@ class CloudRunDeployedJob(CloudRunJob):
     def get_instance(self):
         return self._job._instance   
 
+    def get_processes(self):
+        return self._processes
+
     def deploy(self,dpl_env):
         raise CloudRunError('Can not deploy a deployed job')
 
@@ -309,6 +320,7 @@ class CloudRunProcess():
         self._uid   = uid
         self._pid   = pid
         self._state = CloudRunCommandState.UNKNOWN
+        self._job.attach_process(self)
      
     def get_uid(self):
         return self._uid
@@ -328,11 +340,14 @@ class CloudRunProcess():
     def get_job(self):
         return self._job 
 
+    def str_simple(self):
+        return "CloudRunProcess: UID = {0} , PID = {1} , STATE = {2} ({3})".format(self._uid,self._pid,self._state,self._state.name)
+
     def __repr__(self):
-        return "CloudRunProcess: job = {0} , UID = {1} , PID = {2} , STATE = {3}".format(self._job,self._uid,self._pid,self._state)
+        return "CloudRunProcess: job = {0} , UID = {1} , PID = {2} , STATE = {3} ({4})".format(self._job,self._uid,self._pid,self._state,self._state.name)
          
     def __str__(self):
-        return "CloudRunProcess: job = {0} , UID = {1} , PID = {2} , STATE = {3}".format(self._job,self._uid,self._pid,self._state)
+        return "CloudRunProcess: job = {0} , UID = {1} , PID = {2} , STATE = {3} ({4})".format(self._job,self._uid,self._pid,self._state,self._state.name)
 
 
 
