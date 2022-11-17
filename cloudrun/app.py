@@ -37,17 +37,17 @@ async def mainloop(cr_client):
     # process1  = await cr_client.run_job(cr_client.get_job(0)) 
     # process2  = await cr_client.run_job(cr_client.get_job(1)) 
     # processes = [ process1 , process2 ]
-    processes = await cr_client.run_jobs()
+    processes = cr_client.run_jobs()
 
     print("\n== WAIT ==\n")
 
     print("Waiting for DONE or ABORTED ...")
-    await cr_client.wait_for_jobs_state(processes,CloudRunCommandState.DONE|CloudRunCommandState.ABORTED)
+    cr_client.wait_for_jobs_state(processes,CloudRunCommandState.DONE|CloudRunCommandState.ABORTED)
 
     print("\n== GET STATE ==\n")
 
     # just to show the API ...
-    await cr_client.get_jobs_states(processes)
+    cr_client.get_jobs_states(processes)
 
     # print("\n== WAIT and TAIL ==\n")
 

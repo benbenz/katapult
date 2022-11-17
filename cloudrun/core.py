@@ -1000,8 +1000,8 @@ class CloudRunProvider(ABC):
             for future in concurrent.futures.as_completed(future_to_instance):
                 inst = future_to_instance[future]
                 instanceid = inst.get_id()
-                future.result()
-            pool.shutdown()
+                #future.result()
+            #pool.shutdown()
 
     def _run_ssh_commands(self,ssh_client,commands):
         for command in commands:
@@ -1027,9 +1027,49 @@ class CloudRunProvider(ABC):
             except paramiko.ssh_exception.SSHException as sshe:
                 print("The SSH Client has been disconnected!")
                 print(sshe)
-                raise CloudRunError()    
+                raise CloudRunError()  
 
-    async def run_jobs(self):#,wait=False):
+    def _run_jobs_for_instance(self,batch_uid,runinfo,dpl_jobs) :
+
+        global_path = "$HOME/run" # more robust
+
+        processes = []
+
+        instance = runinfo.get('instance')
+        cmd_run  = runinfo.get('cmd_run')
+        cmd_run_pre = runinfo.get('cmd_run_pre')
+        cmd_pid  = runinfo.get('cmd_pid')
+        batch_run_file = 'batch_run-'+batch_uid+'.sh'
+        batch_pid_file = 'batch_pid-'+batch_uid+'.sh'
+        ssh_client = self._connect_to_instance_block(instance)
+        ftp_client = ssh_client.open_sftp()
+        ftp_client.chdir('/home/'+instance.get_config('img_username')+'/run')
+        ftp_client.putfo(BytesIO(cmd_run_pre.encode()+cmd_run.encode()), batch_run_file)
+        ftp_client.putfo(BytesIO(cmd_pid.encode()), batch_pid_file)
+        # run
+        commands = [ 
+            { 'cmd': "chmod +x "+global_path+"/"+batch_run_file+" "+global_path+"/"+batch_pid_file, 'out' : False } ,  
+            # execute main script (spawn) (this will wait for bootstraping)
+            { 'cmd': global_path+"/"+batch_run_file , 'out' : False } 
+        ]
+        
+        self._run_ssh_commands(ssh_client,commands)
+
+        for uid in runinfo.get('jobs'):
+            # we dont have the pid of everybody yet because its sequential
+            # lets leave it blank. it can work with the uid ...
+            job = dpl_jobs[uid]
+            process = CloudRunProcess( job , uid , None ) 
+            job.attach_process( process )
+            self.debug(1,process) 
+            processes.append(process)
+
+        ssh_client.close()
+
+        return processes 
+
+
+    def run_jobs(self):#,wait=False):
 
         instances_runs = dict()
 
@@ -1106,61 +1146,28 @@ class CloudRunProvider(ABC):
 
         processes = []
         
-        for instance_name , runinfo in instances_runs.items():
-            instance = runinfo.get('instance')
-            cmd_run  = runinfo.get('cmd_run')
-            cmd_run_pre = runinfo.get('cmd_run_pre')
-            cmd_pid  = runinfo.get('cmd_pid')
-            batch_run_file = 'batch_run-'+batch_uid+'.sh'
-            batch_pid_file = 'batch_pid-'+batch_uid+'.sh'
-            ssh_client = await self._connect_to_instance(instance)
-            ftp_client = ssh_client.open_sftp()
-            ftp_client.chdir('/home/'+instance.get_config('img_username')+'/run')
-            ftp_client.putfo(BytesIO(cmd_run_pre.encode()+cmd_run.encode()), batch_run_file)
-            ftp_client.putfo(BytesIO(cmd_pid.encode()), batch_pid_file)
-            # run
-            commands = [ 
-                { 'cmd': "chmod +x "+global_path+"/"+batch_run_file+" "+global_path+"/"+batch_pid_file, 'out' : False } ,  
-                # execute main script (spawn) (this will wait for bootstraping)
-                { 'cmd': global_path+"/"+batch_run_file , 'out' : False } 
-            ]
-            
-            self._run_ssh_commands(ssh_client,commands)
+        # for instance_name , runinfo in instances_runs.items():
 
-            for uid in runinfo.get('jobs'):
-                # we dont have the pid of everybody yet because its sequential
-                # lets leave it blank. it can work with the uid ...
-                job = dpl_jobs[uid]
-                process = CloudRunProcess( job , uid , None ) 
-                job.attach_process( process )
-                self.debug(1,process) 
-                processes.append(process)
-            
-            # useless .... most scripts are queuing (not actually running) so lets not even try to retrieve the PIDs....
+        #     for process in self._run_jobs_for_instance(batch_uid,runinfo,dpl_jobs):
 
-            # self.debug(1,"Executing ",format( global_path+"/"+batch_pid_file ) )
-            # stdin , stdout, stderr = ssh_client.exec_command(global_path+"/"+batch_pid_file)
-            # while True: 
-            #     lines = stdout.readlines()
-            #     for line in lines:     
-            #         info    = line.strip().split(',')
-            #         uid     = info[0]
-            #         pid     = int(info[1])
-            #         dpl_job = dpl_jobs[uid]
-            #         process = CloudRunProcess( dpl_job , uid , pid )
-            #         dpl_job.attach_process( process )
-            #         self.debug(1,process) 
-            #         processes.append(process)
+        #         processes.append( process )
 
-            #     if not lines or len(lines)==0:
-            #         break
-
-            ssh_client.close()
+        with concurrent.futures.ThreadPoolExecutor(max_workers=10) as pool:
+            future_to_instance = { pool.submit(self._run_jobs_for_instance,
+                                                batch_uid,runinfo,dpl_jobs) : instance for instance_name , runinfo in instances_runs.items()
+                                                }
+            for future in concurrent.futures.as_completed(future_to_instance):
+                inst = future_to_instance[future]
+                #instanceid = inst.get_id()
+                #future.result()
+                for process in future.result():
+                    processes.append(process)
+            #pool.shutdown()        
 
         return processes 
 
         
-    async def run_job(self,job):#,wait=False):
+    def run_job(self,job):#,wait=False):
 
         if not job.get_instance():
             debug(1,"The job",job,"has not been assigned to an instance!")
@@ -1182,7 +1189,7 @@ class CloudRunProvider(ABC):
         dpl_env  = env.deploy(instance)
         dpl_job  = job.deploy(dpl_env)
 
-        ssh_client = await self._connect_to_instance(instance)
+        ssh_client = self._connect_to_instance_block(instance)
 
         files_path = dpl_env.get_path()
         global_path = "$HOME/run" # more robust
@@ -1473,7 +1480,7 @@ class CloudRunProvider(ABC):
         return pkg_resources.resource_stream(resource_package, resource_path)
 
 
-    async def __get_jobs_states_internal( self , processes_infos , doWait , job_state ):
+    def __get_jobs_states_internal( self , processes_infos , doWait , job_state ):
         
         jobsinfo = ""
 
@@ -1491,7 +1498,7 @@ class CloudRunProvider(ABC):
             
             instance    = job.get_instance() # should be the same for all jobs
 
-        ssh_client = await self._connect_to_instance(instance)
+        ssh_client = self._connect_to_instance_block(instance)
 
         global_path = "$HOME/run"
 
@@ -1542,14 +1549,15 @@ class CloudRunProvider(ABC):
                 break
 
             if doWait:
-                await asyncio.sleep(15)
+                #await asyncio.sleep(15)
+                time.sleep(15)
             else:
                 break
 
         ssh_client.close() 
 
 
-    async def __get_or_wait_jobs_state( self, processes , do_wait = False , job_state = CloudRunCommandState.ANY ):    
+    def __get_or_wait_jobs_state( self, processes , do_wait = False , job_state = CloudRunCommandState.ANY ):    
 
         if not isinstance(processes,list):
             processes = [ processes ]
@@ -1571,26 +1579,37 @@ class CloudRunProvider(ABC):
                 instances_processes[instance.get_name()][process.get_uid()] = { 'process' : process , 'retrieved' : False  , 'test' : False }
 
         # wait for instances to be ready (concurrently)
-        instances_wait = [ ]
-        for instance in instances_list.values():
-            instances_wait.append( self._wait_for_instance(instance))
-        await asyncio.gather( *instances_wait ) 
+        #instances_wait = [ ]
+        #for instance in instances_list.values():
+        #    instances_wait.append( self._wait_for_instance(instance))
+        #await asyncio.gather( *instances_wait ) 
 
         # wait for each group of processes
-        jobs_wait = [ ] 
-        for instance_name , processes_infos in instances_processes.items():
-            jobs_wait.append( self.__get_jobs_states_internal( processes_infos , do_wait , job_state ) )
-        await asyncio.gather( * jobs_wait )
+        # jobs_wait = [ ] 
+        # for instance_name , processes_infos in instances_processes.items():
+        #     jobs_wait.append( self.__get_jobs_states_internal( processes_infos , do_wait , job_state ) )
+        # await asyncio.gather( * jobs_wait )
+
+        with concurrent.futures.ThreadPoolExecutor(max_workers=10) as pool:
+            future_to_instance = { pool.submit(self.__get_jobs_states_internal,
+                                                processes_infos,do_wait,job_state) : instance for instance_name , processes_infos in instances_processes.items()
+                                                }
+            for future in concurrent.futures.as_completed(future_to_instance):
+                inst = future_to_instance[future]
+                instanceid = inst.get_id()
+                #future.result()
+            #pool.shutdown()
+
 
         # done
 
-    async def wait_for_jobs_state(self,processes,job_state):
+    def wait_for_jobs_state(self,processes,job_state):
 
-        await self.__get_or_wait_jobs_state(processes,True,job_state)
+        self.__get_or_wait_jobs_state(processes,True,job_state)
 
-    async def get_jobs_states(self,processes):
+    def get_jobs_states(self,processes):
 
-        await self.__get_or_wait_jobs_state(processes)
+        self.__get_or_wait_jobs_state(processes)
 
     def _tail_execute_command(self,ssh,files_path,uid,line_num):
         run_log = files_path + '/' + uid + '-run.log'

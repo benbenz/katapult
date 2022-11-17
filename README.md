@@ -188,9 +188,9 @@ class CloudRunProvider(ABC):
 
     def deploy(self):
 
-    async def run_jobs(self,wait=False):
+    def run_jobs(self,wait=False):
 
-    async def run_job(self,job,wait=False):
+    def run_job(self,job,wait=False):
 
     async def wait_for_jobs_state(self,processes,job_state):
 
@@ -364,7 +364,7 @@ provider.assign_jobs_to_instances()
 provider.deploy()
 
 # run the jobs and get processes objects back
-processes = await provider.run_jobs()
+processes = provider.run_jobs()
 
 # wait for the jobs to be done
 await provider.wait_for_jobs_state(processes,CloudRunCommandState.DONE|CloudRunCommandState.ABORTED)

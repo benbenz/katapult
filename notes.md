@@ -68,7 +68,7 @@
     - [x] if there is no directory involve we need to create a symbolic link for each file 
   - [x] fix bug with missing environment when using instance.get_environments() in _deploy_environments
   - [x] move remote_files as resources in package
-  - [ ] fix bug that co-routines are not concurrent in gather (visible with print_deploy = True) >> use concurrent.futures. run_in_executor OR https://stackoverflow.com/questions/28492103/how-to-combine-python-asyncio-with-threads
+  - [x] fix bug that co-routines are not concurrent in gather (visible with print_deploy = True) >> use concurrent.futures. run_in_executor OR https://stackoverflow.com/questions/28492103/how-to-combine-python-asyncio-with-threads
   - [x] check why sometimes processes are considered aborted at the very beginning - issue with env ?
 
 4) local mode:
