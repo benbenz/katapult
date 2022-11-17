@@ -15,6 +15,16 @@ cr_environmentNameRoot = 'cloudrun-env'
 class CloudRunError(Exception):
     pass
 
+class CloudRunInstanceState(IntFlag):
+    UNKNOWN     = 0
+    STARTING    = 1  # instance starting
+    RUNNING     = 2  # instance running
+    STOPPING    = 4  # stopping
+    STOPPED     = 8  # stopped
+    TERMINATING = 16 # terminating
+    TERMINATED  = 32 # terminated
+    ANY         = 32 + 16 + 8 + 4 + 2 + 1     
+
 
 class CloudRunCommandState(IntFlag):
     UNKNOWN   = 0
@@ -39,7 +49,7 @@ class CloudRunInstance():
         self._ip_addr  = None
         self._dns_addr = None
         # state
-        self._state    = None
+        self._state    = CloudRunCommandState.UNKNOWN
         # the config the instance has been created on
         self._config   = config 
         # dict data associated with it (AWS response data e.g.)

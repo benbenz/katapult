@@ -1,7 +1,7 @@
 import boto3
 import os
 from .utils import *
-from .core     import CloudRunError , CloudRunInstance 
+from .core     import CloudRunError , CloudRunInstance , CloudRunInstanceState 
 from .core     import cr_keypairName , cr_secGroupName , cr_bucketName , cr_vpcName , init_instance_name
 from .provider import CloudRunProvider , debug
 from botocore.exceptions import ClientError
@@ -453,7 +453,22 @@ def aws_update_instance_info(instance):
     # proprietary values
     instance.set_dns_addr(instance_new_data.get('PublicDnsName'))
     instance.set_ip_addr(instance_new_data.get('PublicIpAddress'))
-    instance.set_state(instance_new_data.get('State').get('Name'))
+    statestr = instance_new_data.get('State').get('Name').lower()
+    #'terminated' | 'shutting-down' | 'pending' | 'running' | 'stopping' | 'stopped'
+    state = CloudRunInstanceState.UNKNOWN
+    if statestr == "pending":
+        state = CloudRunInstanceState.STARTING
+    elif statestr == "running":
+        state = CloudRunInstanceState.RUNNING
+    elif statestr == 'stopping':
+        state = CloudRunInstanceState.STOPPING
+    elif statestr == 'stopped':
+        state = CloudRunInstanceState.STOPPED
+    elif statestr == 'shutting-down':
+        state = CloudRunInstanceState.TERMINATING
+    elif statestr == 'terminated':
+        state = CloudRunInstanceState.TERMINATED
+    instance.set_state(state)
     instance.set_data(instance_new_data)
 
     return instance
@@ -479,7 +494,7 @@ class AWSCloudRunProvider(CloudRunProvider):
     def stop_instance(self,instance):
         aws_stop_instance(instance)
 
-    def terminate_instance(self):
+    def terminate_instance(self,instance):
         aws_terminate_instance(instance)
 
     def update_instance_info(self,instance):

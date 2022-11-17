@@ -174,7 +174,7 @@ class CloudRunProvider(ABC):
 
             lookForState = True
             # 'pending'|'running'|'shutting-down'|'terminated'|'stopping'|'stopped'
-            if instanceState == 'stopped' or instanceState == 'stopping':
+            if instanceState == CloudRunInstanceState.STOPPED or instanceState == CloudRunInstanceState.STOPPING:
                 try:
                     # restart the instance
                     self.start_instance(instance)
@@ -185,18 +185,18 @@ class CloudRunProvider(ABC):
                     except:
                         return None
 
-            elif instanceState == 'running':
+            elif instanceState == CloudRunInstanceState.RUNNING:
                 lookForState = False
 
             waitFor = lookForDNS or lookForState  
             if waitFor:
                 if lookForDNS:
-                    debug(1,"waiting for DNS address and  state ...",instanceState)
+                    debug(1,"waiting for DNS address and  state ...",instanceState.name)
                 else:
                     if lookForIP:
-                        debug(1,"waiting for state ...",instanceState)
+                        debug(1,"waiting for state ...",instanceState.name)
                     else:
-                        debug(1,"waiting for state ...",instanceState," IP =",instance.get_ip_addr())
+                        debug(1,"waiting for state ...",instanceState.name," IP =",instance.get_ip_addr())
                  
                 await asyncio.sleep(10)
 
@@ -214,7 +214,17 @@ class CloudRunProvider(ABC):
 
             lookForState = True
             # 'pending'|'running'|'shutting-down'|'terminated'|'stopping'|'stopped'
-            if instanceState == 'stopped' or instanceState == 'stopping':
+
+            attempts = 0
+            if instanceState == CloudRunInstanceState.STOPPING:
+                while instanceState == CloudRunInstanceState.STOPPING and attempts < 20:
+                    self.deburg(1,"wait for instance to stop",instance)
+                    time.sleep(30)
+                    self.update_instance_info(instance)
+                    instanceState = instance.get_state()
+                    attempts = attempts + 1
+
+            if instanceState == CloudRunInstanceState.STOPPED:
                 try:
                     # restart the instance
                     self.start_instance(instance)
@@ -225,18 +235,21 @@ class CloudRunProvider(ABC):
                     except:
                         return None
 
-            elif instanceState == 'running':
+            elif instanceState == CloudRunInstanceState.RUNNING:
                 lookForState = False
+
+            elif instanceState == CloudRunInstanceState.TERMINATED:
+                self._start_and_update_instance(instance)
 
             waitFor = lookForDNS or lookForState  
             if waitFor:
                 if lookForDNS:
-                    debug(1,"waiting for DNS address and  state ...",instanceState)
+                    debug(1,"waiting for DNS address and  state ...",instanceState.name)
                 else:
                     if lookForIP:
-                        debug(1,"waiting for state ...",instanceState)
+                        debug(1,"waiting for state ...",instanceState.name)
                     else:
-                        debug(1,"waiting for state ...",instanceState," IP =",instance.get_ip_addr())
+                        debug(1,"waiting for state ...",instanceState.name," IP =",instance.get_ip_addr())
                  
                 time.sleep(10)
 
@@ -693,14 +706,20 @@ class CloudRunProvider(ABC):
 
     def revive(self,instance,rerun=False):
         self.debug(1,"REVIVING instance",instance)
-        # try restarting it
-        self._start_and_update_instance(instance)
-        # wait for it
-        #no need - deploy is doing this already
-        #self._wait_for_instance_block(instance)
-        # re-deploy it
-        self._deploy_all(instance)
-        #TODO: not ready yet
+
+        # check the status on the instance
+        self.update_instance_info(instance)
+        if instance.get_state()==CloudRunInstanceState.STOPPED:
+            self.debug(1,"we just have to re-start the instance")
+            self.start_instance(instance)
+        else:
+            # try restarting it
+            self._start_and_update_instance(instance)
+            # wait for it
+            #no need - deploy is doing this already
+            #self._wait_for_instance_block(instance)
+            # re-deploy it
+            self._deploy_all(instance)
         if rerun:
             processes = self.run_jobs(instance) #will run the jobs for this instance
             instances_processes = self._compute_instances_processes(processes)
@@ -1221,7 +1240,7 @@ class CloudRunProvider(ABC):
         jobs = instance.get_jobs() if instance is not None else self._jobs
         self.debug(1,"\n----------------------------------------------------------------------------------------------------------------------------------------------------------")
         if instance:
-            self.debug(1,instance.get_name())
+            self.debug(1,instance.get_name(),instance.get_ip_addr())
         for i,job in enumerate(jobs):
             self.debug(1,"\nJob",job.get_rank(),"=",job.str_simple() if instance else job)
             dpl_jobs = job.get_deployed_jobs()
