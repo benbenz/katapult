@@ -5,6 +5,7 @@ import sys , json , os
 import paramiko
 import re
 import asyncio
+import concurrent.futures
 import copy
 import math , random
 import cloudrun.combopt as combopt
@@ -690,17 +691,23 @@ class CloudRunProvider(ABC):
 
             re_upload_env = self._test_reupload(instance,dpl_env.get_path_abs()+'/ready', ssh_client)
 
+            re_upload_env_mamba  = False
+            re_upload_env_pip    = False
+            re_upload_env_aptget = False
+
             if not re_upload_env:
                 if dpl_env.get_config('env_conda') is not None:
-                    re_upload_env_mamba = self._test_reupload(instance,'$HOME/micromamba/envs/'+dpl_env.get_name(), ssh_client,True)
+                    re_upload_env_mamba = self._test_reupload(instance,'$HOME/micromamba/envs/'+dpl_env.get_name(), ssh_client,False)
                     re_upload_env = re_upload_env or re_upload_env_mamba
-                if dpl_env.get_config('env_pypi') is not None:
-                    re_upload_env_pip = self._test_reupload(instance,'$HOME/.'+dpl_env.get_name(), ssh_client, True)
+                if dpl_env.get_config('env_pypi') is not None and dpl_env.get_config('env_conda') is None:
+                    re_upload_env_pip = self._test_reupload(instance,'$HOME/.'+dpl_env.get_name(), ssh_client, False)
                     re_upload_env = re_upload_env or re_upload_env_pip
-                if dpl_env.get_config('env_aptget') is not None:
-                    re_upload_env = True
+                # TODO: have an aptget install TEST
+                #if dpl_env.get_config('env_aptget') is not None:
+                #    re_upload_env_aptget = True
+                #    re_upload_env = True
 
-            debug(1,"re_upload_instance",re_upload_inst,"re_upload_env",re_upload_env,"ENV",dpl_env.get_name())
+            debug(1,"re_upload_instance",re_upload_inst,"re_upload_env",re_upload_env,"re_upload_env_mamba",re_upload_env_mamba,"re_upload_env_pip",re_upload_env_pip,"re_upload_env_aptget",re_upload_env_aptget,"ENV",dpl_env.get_name())
 
             re_upload = re_upload_env #or re_upload_inst
 
@@ -832,18 +839,13 @@ class CloudRunProvider(ABC):
 
                 self.debug(1,"uploaded.",dpl_job.get_hash())
 
-    async def _deploy_all(self,instance):
+    def _deploy_all(self,instance,ssh_client,ftp_client):
 
         deploy_states = dict()
 
-        # make sure we got the instance ready
-        await self._wait_for_instance(instance)
-
         deploy_states[instance.get_name()] = { }
 
-        # connect to instance
-        ssh_client = await self._connect_to_instance(instance)
-        ftp_client = ssh_client.open_sftp()
+        # instanceid , ssh_client , ftp_client = await self._wait_and_connect(instance)
 
         self.debug(1,"-- deploy instances --")
 
@@ -857,8 +859,20 @@ class CloudRunProvider(ABC):
 
         self._deploy_jobs(instance,deploy_states,ssh_client,ftp_client) 
 
-        ftp_client.close()
-        ssh_client.close()
+        #ftp_client.close()
+        #ssh_client.close()
+
+    async def _wait_and_connect(self,instance):
+
+        # wait for instance to be ready 
+        await self._wait_for_instance(instance)
+
+        # connect to instance
+        ssh_client = await self._connect_to_instance(instance)
+        ftp_client = ssh_client.open_sftp()
+
+        return instance.get_id() , ssh_client , ftp_client
+
 
     def start(self):
         # wait for instance to be deployed
@@ -867,11 +881,19 @@ class CloudRunProvider(ABC):
         #     wait_list.append( self._start_and_wait_for_instance(instance) )
         # await asyncio.gather(*wait_list)
 
-        for instance in self._instances:
-            self._start_and_update_instance(instance)
-            if instance.is_invalid():
-                self.debug(1,"ERROR: Your configuration is causing an instance to not be created. Please fix.",instance.get_config_DIRTY())
-                sys.exit()
+        # for instance in self._instances:
+        #     self._start_and_update_instance(instance)
+        #     if instance.is_invalid():
+        #         self.debug(1,"ERROR: Your configuration is causing an instance to not be created. Please fix.",instance.get_config_DIRTY())
+        #         sys.exit()
+
+        with concurrent.futures.ThreadPoolExecutor(max_workers=10) as pool:
+            future_to_instance = { pool.submit(self._start_and_update_instance,instance) : instance for instance in self._instances }
+            for future in concurrent.futures.as_completed(future_to_instance):
+                inst = future_to_instance[future]
+
+    # GREAT summary
+    # https://www.integralist.co.uk/posts/python-asyncio/
 
     # deploys:
     # - instances files
@@ -879,12 +901,32 @@ class CloudRunProvider(ABC):
     # - shared script files / upload / inputs ...
     async def deploy(self):
 
-        # wait for instance to be deployed
+        clients = {} 
+
+        # wait for instances to be deployed
         wait_list = [ ]
         for instance in self._instances:
-            wait_list.append( self._deploy_all(instance) )
-        await asyncio.gather(*wait_list)
+            wait_list.append( self._wait_and_connect(instance) )
+        #await asyncio.gather(*wait_list)
+        for future in asyncio.as_completed(wait_list):
+            instanceid , ssh_client , ftp_client = await future
+            clients[instanceid] = { 'ssh' : ssh_client , 'ftp' : ftp_client }
 
+        loop = asyncio.get_running_loop()
+
+        # https://docs.python.org/3/library/concurrent.futures.html cf. ThreadPoolExecutor Example¶
+        with concurrent.futures.ThreadPoolExecutor(max_workers=10) as pool:
+            future_to_instance = { pool.submit(self._deploy_all,
+                                                instance,
+                                                clients[instance.get_id()]['ssh'],
+                                                clients[instance.get_id()]['ftp']) : instance for instance in self._instances
+                                                }
+            for future in concurrent.futures.as_completed(future_to_instance):
+                inst = future_to_instance[future]
+                instanceid = inst.get_id()
+                clients[instance.get_id()]['ftp'].close()
+                clients[instance.get_id()]['ssh'].close()
+                #future.result()
 
     def _run_ssh_commands(self,ssh_client,commands):
         for command in commands:
@@ -1124,11 +1166,11 @@ class CloudRunProvider(ABC):
             filename  = os.path.basename(upfile)
             filedir   = os.path.dirname(upfile)
             if filedir and filedir != '/':
-                fulldir   = dpl_job.get_path() + '/' + uid + '/' + filedir
-                uploaddir = dpl_job.get_path() + '/' + filedir
+                fulldir   = os.path.join(dpl_job.get_path() , uid , filedir)
+                uploaddir = os.path.join(dpl_job.get_path() , filedir )
                 lnstr = lnstr + (" && " if lnstr else "") + "mkdir -p " + fulldir + " && ln -sf " + uploaddir + '/' + filename + " " + fulldir + '/' + filename
             else:
-                fulldir   = dpl_job.get_path() + '/' + uid
+                fulldir   = os.path.join( dpl_job.get_path() , uid )
                 uploaddir = dpl_job.get_path()
                 lnstr = lnstr + (" && " if lnstr else "") + "ln -sf " + uploaddir + '/' + filename + " " + fulldir + '/' + filename
         return lnstr
