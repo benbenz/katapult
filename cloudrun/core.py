@@ -1034,12 +1034,15 @@ class CloudRunProvider(ABC):
         # try restarting it
         self._start_and_update_instance(instance)
         # wait for it
+        #no need - deploy is doing this already
         #self._wait_for_instance_block(instance)
         # re-deploy it
         self._deploy_all(instance)
         #TODO: not ready yet
-        #if rerun:
-        #    self._run_jobs_for_instance(instance)
+        if rerun:
+            return self.run_jobs(instance) #will run the jobs for this instance
+        else :
+            return None
 
 
     def _run_ssh_commands(self,ssh_client,commands):
@@ -1115,8 +1118,7 @@ class CloudRunProvider(ABC):
 
         return processes 
 
-
-    def run_jobs(self):#,wait=False):
+    def run_jobs(self,instance_filter=None):#,wait=False):
 
         instances_runs = dict()
 
@@ -1131,6 +1133,9 @@ class CloudRunProvider(ABC):
                 return None
 
             instance = job.get_instance()
+
+            if instance_filter is not None and instance != instance_filter:
+                continue 
 
             # CHECK EVERY TIME !
             if not instances_runs.get(instance.get_name()):
@@ -1564,6 +1569,15 @@ class CloudRunProvider(ABC):
         global_path = "$HOME/run"
 
         while True:
+
+            if not ssh_client.get_transport().is_active():
+                self.debug(1,"ERROR: SSH connection has been lost with",instance)
+                self.revive(instance,True)
+                ssh_client = self._connect_to_instance_block(instance,timeout=10)
+                if ssh_client is None:
+                    self.debug(1,"FATAL ERROR: could not get jobs states for instance. SSH connection lost with",instance)
+                    return
+
             cmd = global_path + "/state.sh " + jobsinfo
             self.debug(1,"Executing command",cmd)
             stdin, stdout, stderr = ssh_client.exec_command(cmd)
@@ -1625,7 +1639,7 @@ class CloudRunProvider(ABC):
 
         # organize by instance
         instances_processes = dict()
-        instances_list      = dict()
+        #instances_list      = dict()
         for process in processes:
             job         = process.get_job()   # deployed job
             instance    = job.get_instance()
@@ -1635,7 +1649,7 @@ class CloudRunProvider(ABC):
             # initialize the collection dict
             if instance.get_name() not in instances_processes:
                 instances_processes[instance.get_name()] = dict()
-                instances_list[instance.get_name()]      = instance
+                #instances_list[instance.get_name()]      = instance
             if process.get_uid() not in instances_processes[instance.get_name()]:
                 instances_processes[instance.get_name()][process.get_uid()] = { 'process' : process , 'retrieved' : False  , 'test' : False }
 
@@ -1653,11 +1667,11 @@ class CloudRunProvider(ABC):
 
         with concurrent.futures.ThreadPoolExecutor(max_workers=10) as pool:
             future_to_instance = { pool.submit(self.__get_jobs_states_internal,
-                                                processes_infos,do_wait,job_state) : instance for instance_name , processes_infos in instances_processes.items()
+                                                processes_infos,do_wait,job_state) : instance_name for instance_name , processes_infos in instances_processes.items()
                                                 }
             for future in concurrent.futures.as_completed(future_to_instance):
-                inst = future_to_instance[future]
-                instanceid = inst.get_id()
+                inst_name = future_to_instance[future]
+                #instanceid = inst.get_id()
                 #future.result()
             #pool.shutdown()
 
