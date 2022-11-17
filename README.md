@@ -366,8 +366,8 @@ provider.deploy()
 # run the jobs and get processes objects back
 processes = provider.run_jobs()
 
-# wait for the jobs to be done
-provider.wait_for_jobs_state(processes,CloudRunCommandState.DONE|CloudRunCommandState.ABORTED)
+# wait for the processes to be done and update the processes info if needed be (an instance terminated e.g.)
+processes = provider.wait_for_jobs_state(processes,CloudRunCommandState.DONE|CloudRunCommandState.ABORTED)
 
 ```
 

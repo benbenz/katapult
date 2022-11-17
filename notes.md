@@ -70,6 +70,9 @@
   - [x] move remote_files as resources in package
   - [x] fix bug that co-routines are not concurrent in gather (visible with print_deploy = True) >> use concurrent.futures. run_in_executor OR https://stackoverflow.com/questions/28492103/how-to-combine-python-asyncio-with-threads
   - [x] check why sometimes processes are considered aborted at the very beginning - issue with env ?
+  - [ ] smarter recovery mode that looks at the jobs that have been completed ...
+  - [ ] add set_aborted_on_disconnect (to set all running states to aborted (because of disconnect))
+  - [x] get_jobs_state: complement dynamically the list of processes with the current process list returned to get
 
 4) local mode:
   - [x] handle new config 

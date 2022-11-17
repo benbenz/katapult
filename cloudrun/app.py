@@ -42,12 +42,12 @@ async def mainloop(cr_client):
     print("\n== WAIT ==\n")
 
     print("Waiting for DONE or ABORTED ...")
-    cr_client.wait_for_jobs_state(processes,CloudRunCommandState.DONE|CloudRunCommandState.ABORTED)
+    processes = cr_client.wait_for_jobs_state(processes,CloudRunCommandState.DONE|CloudRunCommandState.ABORTED)
 
     print("\n== GET STATE ==\n")
 
     # just to show the API ...
-    cr_client.get_jobs_states(processes)
+    processes = cr_client.get_jobs_states(processes)
 
     # print("\n== WAIT and TAIL ==\n")
 

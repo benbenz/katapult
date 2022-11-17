@@ -1040,10 +1040,13 @@ class CloudRunProvider(ABC):
         self._deploy_all(instance)
         #TODO: not ready yet
         if rerun:
-            return self.run_jobs(instance) #will run the jobs for this instance
+            processes = self.run_jobs(instance) #will run the jobs for this instance
+            instances_processes = self._compute_instances_processes(processes)
+            instance_processes  = instances_processes[instance.get_name()]
+            jobsinfo , instance = self._compute_jobs_info(instance_processes)
+            return instance_processes, jobsinfo 
         else :
             return None
-
 
     def _run_ssh_commands(self,ssh_client,commands):
         for command in commands:
@@ -1349,183 +1352,6 @@ class CloudRunProvider(ABC):
                     return raw[attr]
         return         
 
-    async def run_job_OLD(self,job):
-
-        if not job.get_instance():
-            debug(1,"The job",job,"has not been assigned to an instance!")
-            return None
-
-        instance = job.get_instance()
-
-        # CHECK EVERY TIME !
-        new_instance , created = self._get_or_create_instance(job.get_instance())
-          
-        # make sure we update the instance with the new instance data
-        instance.update_from_instance(new_instance)
-
-        await self._wait_for_instance(instance)
-
-        # FOR NOW
-        env      = job.get_env()        # get its environment
-        dpl_env  = env.deploy(instance) # "deploy" the environment to the instance and get a DeployedEnvironment
-        dpl_job  = job.deploy(dpl_env)
-
-        # init environment object
-        self.debug(2,dpl_env.json())
-
-        ssh_client = await self._connect_to_instance(instance)
-
-        files_path = dpl_env.get_path()
-
-        # generate unique PID file
-        uid = cloudrunutils.generate_unique_filename() 
-          
-        run_path    = dpl_job.get_path() + '/' + uid
-
-        self.debug(1,"creating directories ...")
-        stdin0, stdout0, stderr0 = ssh_client.exec_command("mkdir -p "+files_path+" "+run_path)
-        self.debug(1,"directories created")
-
-
-        self.debug(1,"uploading files ... ")
-
-        # upload the install file, the env file and the script file
-        ftp_client = ssh_client.open_sftp()
-
-        # change dir to global dir (should be done once)
-        global_path = "/home/" + instance.get_config('img_username') + '/run/'
-        ftp_client.chdir(global_path)
-        ftp_client.putfo(self._get_resource_file('remote_files/config.py'),'config.py')
-        ftp_client.putfo(self._get_resource_file('remote_files/bootstrap.sh'),'bootstrap.sh')
-        ftp_client.putfo(self._get_resource_file('remote_files/run.sh'),'run.sh')
-        ftp_client.putfo(self._get_resource_file('remote_files/microrun.sh'),'microrun.sh')
-        ftp_client.putfo(self._get_resource_file('remote_files/state.sh'),'state.sh')
-        ftp_client.putfo(self._get_resource_file('remote_files/tail.sh'),'tail.sh')
-        ftp_client.putfo(self._get_resource_file('remote_files/getpid.sh'),'getpid.sh')
-
-        global_path = "$HOME/run" # more robust
-
-        # change to env dir
-        ftp_client.chdir(dpl_env.get_path_abs())
-        remote_config = 'config-'+dpl_env.get_name()+'.json'
-        with open(remote_config,'w') as cfg_file:
-            cfg_file.write(dpl_env.json())
-            cfg_file.close()
-            ftp_client.put(remote_config,'config.json')
-            os.remove(remote_config)
-          
-        # change to job hash dir
-        ftp_client.chdir(dpl_job.get_path())
-        if job.get_config('run_script'):
-            script_args = job.get_config('run_script').split()
-            script_file = script_args[0]
-            filename = os.path.basename(script_file)
-            try:
-                ftp_client.put(os.path.abspath(script_file),filename)
-            except:
-                self.debug(1,"You defined a script that is not available",job.get_config('run_script'))
-        if job.get_config('upload_files'):
-            files = job.get_config('upload_files')
-            if isinstance( files,str):
-                files = [ files ] 
-            for upfile in files:
-                try:
-                    try:
-                        ftp_client.put(upfile,os.path.basename(upfile))
-                    except:
-                        self.debug(1,"You defined an upload file that is not available",upfile)
-                except Exception as e:
-                    print("Error while uploading file",upfile)
-                    print(e)
-        if job.get_config('input_file'):
-            filename = os.path.basename(job.get_config('run_script'))
-            try:
-                ftp_client.put(job.get_config('input_file'),filename)
-            except:
-                self.debug(1,"You defined an input file that is not available:",job.get_config('input_file'))
-
-        # used to check if everything is uploaded
-        ftp_client.putfo(BytesIO("".encode()), 'uploaded')
-
-        ftp_client.close()
-
-        self.debug(1,"uploaded.")
-
-        if created:
-            self.debug(1,"Installing PyYAML for newly created instance ...")
-            stdin , stdout, stderr = ssh_client.exec_command("pip install pyyaml")
-            self.debug(2,stdout.read())
-            self.debug(2, "Errors")
-            self.debug(2,stderr.read())
-
-        # run
-        commands = [ 
-            # make bootstrap executable
-            { 'cmd': "chmod +x "+global_path+"/*.sh ", 'out' : True },  
-            # recreate pip+conda files according to config
-            { 'cmd': "cd " + files_path + " && python3 "+global_path+"/config.py" , 'out' : True },
-            # setup envs according to current config files state
-            # NOTE: make sure to let out = True or bootstraping is not executed properly 
-            # TODO: INVESTIGATE THIS
-            { 'cmd': global_path+"/bootstrap.sh \"" + dpl_env.get_name() + "\" " + ("1" if self._config['dev'] else "0") , 'out': True },  
-            # execute main script (spawn) (this will wait for bootstraping)
-            { 'cmd': global_path+"/run.sh \"" + dpl_env.get_name() + "\" \""+dpl_job.get_command()+"\" " + job.get_config('input_file') + " " + job.get_config('output_file') + " " + job.get_hash()+" "+uid, 'out' : False }
-        ]
-        for command in commands:
-            self.debug(1,"Executing ",format( command['cmd'] ),"output",command['out'])
-            try:
-                stdin , stdout, stderr = ssh_client.exec_command(command['cmd'])
-                #print(stdout.read())
-                if command['out']:
-                    while True:
-                        l = stdout.readline()
-                        self.debug(1,l)
-                        if l is None:
-                            break 
-                    #for l in line_buffered(stdout):
-                    #    self.debug(1,l)
-
-                    errmsg = stderr.read()
-                    dbglvl = 1 if errmsg else 2
-                    self.debug(dbglvl,"Errors")
-                    self.debug(dbglvl,errmsg)
-                else:
-                    pass
-                    #stdout.read()
-                    #pid = int(stdout.read().strip().decode("utf-8"))
-            except paramiko.ssh_exception.SSHException as sshe:
-                print("The SSH Client has been disconnected!")
-                print(sshe)
-                raise CloudRunError()
-
-        # retrieve PID (this will wait for PID file)
-        pid_file = run_path + "/pid"
-        #getpid_cmd = "tail "+pid_file #+" && cp "+pid_file+ " "+run_path+"/pid" # && rm -f "+pid_file
-        getpid_cmd = global_path+"/getpid.sh \"" + pid_file + "\""
-          
-        self.debug(1,"Executing ",format( getpid_cmd ) )
-        stdin , stdout, stderr = ssh_client.exec_command(getpid_cmd)
-        pid = int(stdout.readline().strip())
-
-        # try:
-        #     getpid_cmd = "tail "+pid_file + "2" #+" && cp "+pid_file+ " "+run_path+"/pid && rm -f "+pid_file
-        #     self.debug(1,"Executing ",format( getpid_cmd ) )
-        #     stdin , stdout, stderr = ssh_client.exec_command(getpid_cmd)
-        #     pid2 = int(stdout.readline().strip())
-        # except:
-        #     pid2 = 0 
-
-        ssh_client.close()
-
-        # make sure we stop the instance to avoid charges !
-        #stop_instance(instance)
-        process = CloudRunProcess( dpl_job , uid , pid )
-        dpl_job.attach_process( process )
-
-        self.debug(1,process) 
-
-        return process  
-
     def _get_resource_file(self,resource_file):
         resource_package = 'cloudrun'
         resource_path = '/'.join(('resources', resource_file))  # Do not use os.path.join()
@@ -1537,9 +1363,7 @@ class CloudRunProvider(ABC):
         #self._csv_reader = csv.DictReader(io.StringIO(csvstr.decode()))              
         return pkg_resources.resource_stream(resource_package, resource_path)
 
-
-    def __get_jobs_states_internal( self , processes_infos , doWait , job_state ):
-        
+    def _compute_jobs_info(self,processes_infos):
         jobsinfo = ""
 
         for uid , process_info in processes_infos.items():
@@ -1555,12 +1379,18 @@ class CloudRunProvider(ABC):
                 jobsinfo = dpl_env.get_name() + " " + str(shash) + " " + str(uid) + " " + str(pid) + " \"" + str(job.get_config('output_file')) + "\""
             
             instance    = job.get_instance() # should be the same for all jobs
+        
+        return jobsinfo , instance
+
+    def __get_jobs_states_internal( self , processes_infos , doWait , job_state ):
+        
+        jobsinfo , instance = self._compute_jobs_info(processes_infos)
 
         ssh_client = self._connect_to_instance_block(instance,timeout=10)
 
         if ssh_client is None:
             self.debug(1,"ERROR: could not get jobs states for instance",instance)
-            self.revive(instance,True) #re-run the jobs 
+            processes_info , jobsinfo   = self.revive(instance,True) #re-run the jobs and get an updated jobsinfo 
             ssh_client = self._connect_to_instance_block(instance,timeout=10)
             if ssh_client is None:
                 self.debug(1,"FATAL ERROR: could not get jobs states for instance",instance)
@@ -1568,11 +1398,14 @@ class CloudRunProvider(ABC):
 
         global_path = "$HOME/run"
 
+        processes = []
+
         while True:
 
             if not ssh_client.get_transport().is_active():
                 self.debug(1,"ERROR: SSH connection has been lost with",instance)
-                self.revive(instance,True)
+                processes_infos , jobsinfo = self.revive(instance,True)  #re-run the jobs and get an updated jobsinfo 
+                processes = []
                 ssh_client = self._connect_to_instance_block(instance,timeout=10)
                 if ssh_client is None:
                     self.debug(1,"FATAL ERROR: could not get jobs states for instance. SSH connection lost with",instance)
@@ -1610,6 +1443,8 @@ class CloudRunProvider(ABC):
                             debug(2,e)
                             state = CloudRunCommandState.UNKNOWN
 
+                        processes.append(process)
+
                     else:
                         debug(2,"Received UID info that was not requested")
                         pass
@@ -1631,13 +1466,9 @@ class CloudRunProvider(ABC):
 
         ssh_client.close() 
 
+        return processes
 
-    def __get_or_wait_jobs_state( self, processes , do_wait = False , job_state = CloudRunCommandState.ANY ):    
-
-        if not isinstance(processes,list):
-            processes = [ processes ]
-
-        # organize by instance
+    def _compute_instances_processes( self , processes ):
         instances_processes = dict()
         #instances_list      = dict()
         for process in processes:
@@ -1652,6 +1483,30 @@ class CloudRunProvider(ABC):
                 #instances_list[instance.get_name()]      = instance
             if process.get_uid() not in instances_processes[instance.get_name()]:
                 instances_processes[instance.get_name()][process.get_uid()] = { 'process' : process , 'retrieved' : False  , 'test' : False }
+        return instances_processes
+
+
+    def __get_or_wait_jobs_state( self, processes , do_wait = False , job_state = CloudRunCommandState.ANY ):    
+
+        if not isinstance(processes,list):
+            processes = [ processes ]
+
+        # organize by instance
+        # instances_processes = dict()
+        # #instances_list      = dict()
+        # for process in processes:
+        #     job         = process.get_job()   # deployed job
+        #     instance    = job.get_instance()
+        #     if instance is None:
+        #         print("wait_for_job_state: instance is not available!")
+        #         return 
+        #     # initialize the collection dict
+        #     if instance.get_name() not in instances_processes:
+        #         instances_processes[instance.get_name()] = dict()
+        #         #instances_list[instance.get_name()]      = instance
+        #     if process.get_uid() not in instances_processes[instance.get_name()]:
+        #         instances_processes[instance.get_name()][process.get_uid()] = { 'process' : process , 'retrieved' : False  , 'test' : False }
+        instances_processes = self._compute_instances_processes(processes)
 
         # wait for instances to be ready (concurrently)
         #instances_wait = [ ]
@@ -1665,6 +1520,8 @@ class CloudRunProvider(ABC):
         #     jobs_wait.append( self.__get_jobs_states_internal( processes_infos , do_wait , job_state ) )
         # await asyncio.gather( * jobs_wait )
 
+        processes = [] 
+
         with concurrent.futures.ThreadPoolExecutor(max_workers=10) as pool:
             future_to_instance = { pool.submit(self.__get_jobs_states_internal,
                                                 processes_infos,do_wait,job_state) : instance_name for instance_name , processes_infos in instances_processes.items()
@@ -1673,18 +1530,21 @@ class CloudRunProvider(ABC):
                 inst_name = future_to_instance[future]
                 #instanceid = inst.get_id()
                 #future.result()
+                fut_processes = future.result()
+                for p in fut_processes:
+                    processes.append(p)
             #pool.shutdown()
 
-
+        return processes
         # done
 
     def wait_for_jobs_state(self,processes,job_state):
 
-        self.__get_or_wait_jobs_state(processes,True,job_state)
+        return self.__get_or_wait_jobs_state(processes,True,job_state)
 
     def get_jobs_states(self,processes):
 
-        self.__get_or_wait_jobs_state(processes)
+        return self.__get_or_wait_jobs_state(processes)
 
     def _tail_execute_command(self,ssh,files_path,uid,line_num):
         run_log = files_path + '/' + uid + '-run.log'
