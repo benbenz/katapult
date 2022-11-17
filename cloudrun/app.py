@@ -16,7 +16,7 @@ async def mainloop(cr_client):
     print("\n== START ==\n")
 
     # distribute the jobs on the instances (dummy algo for now)
-    await cr_client.start()
+    cr_client.start()
 
     print("\n== ALLOCATE JOBS ==\n")
 

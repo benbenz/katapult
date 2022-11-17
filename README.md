@@ -295,7 +295,7 @@ class CloudRunProvider(ABC):
 
     def debug(self,level,*args,**kwargs):
 
-    async def start(self):
+    def start(self):
 
     def assign_jobs_to_instances(self):
 
@@ -353,7 +353,7 @@ config = __import__(config).config
 provider = cloudrun.get_client(config)
 
 # start the provider: this attempts to create the instances
-await provider.start()
+provider.start()
 
 # assign the jobs onto the instances
 provider.assign_jobs_to_instances()

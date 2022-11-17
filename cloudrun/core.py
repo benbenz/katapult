@@ -577,8 +577,7 @@ class CloudRunProvider(ABC):
 
             combopt.multiple_knapsack_assignation(self._jobs,self._instances)            
                
-
-    async def _start_and_wait_for_instance(self,instance):
+    def _start_and_update_instance(self,instance):
 
         try:
             # CHECK EVERY TIME !
@@ -587,13 +586,26 @@ class CloudRunProvider(ABC):
             # make sure we update the instance with the new instance data
             instance.update_from_instance(new_instance)
 
-            # wait for the instance to be ready
-            await self._wait_for_instance(instance)
-
-            return created
         except CloudRunError as cre:
 
             instance.set_invalid(True)
+
+
+    # async def _start_and_wait_for_instance(self,instance):
+
+    #     try:
+    #         # CHECK EVERY TIME !
+    #         new_instance , created = self._get_or_create_instance(instance)
+            
+    #         # make sure we update the instance with the new instance data
+    #         instance.update_from_instance(new_instance)
+
+    #         # wait for the instance to be ready
+    #         await self._wait_for_instance(instance)
+
+    #     except CloudRunError as cre:
+
+    #         instance.set_invalid(True)
 
 
     def _test_reupload(self,instance,file_test,ssh_client,isfile=True):
@@ -848,14 +860,15 @@ class CloudRunProvider(ABC):
         ftp_client.close()
         ssh_client.close()
 
-    async def start(self):
+    def start(self):
         # wait for instance to be deployed
-        wait_list = [ ]
-        for instance in self._instances:
-            wait_list.append( self._start_and_wait_for_instance(instance) )
-        await asyncio.gather(*wait_list)
+        # wait_list = [ ]
+        # for instance in self._instances:
+        #     wait_list.append( self._start_and_wait_for_instance(instance) )
+        # await asyncio.gather(*wait_list)
 
         for instance in self._instances:
+            self._start_and_update_instance(instance)
             if instance.is_invalid():
                 self.debug(1,"ERROR: Your configuration is causing an instance to not be created. Please fix.",instance.get_config_DIRTY())
                 sys.exit()
