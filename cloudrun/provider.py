@@ -681,7 +681,7 @@ class CloudRunProvider(ABC):
         # batch uid is shared accross instances
         batch_uid = cloudrunutils.generate_unique_filename()
 
-        for job in self._jobs:
+        for job in jobs:
 
             if not job.get_instance():
                 debug(1,"The job",job,"has not been assigned to an instance!")
