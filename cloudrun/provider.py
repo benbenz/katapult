@@ -39,7 +39,7 @@ class CloudRunProvider(ABC):
         self._state_serializer = StateSerializer(self,self._instances,self._environments,self._jobs)
         self._state_serializer.load()
 
-        consistency = self._state_serializer.check_consistency()
+        consistency = False #self._state_serializer.check_consistency()
         if consistency:
             self.debug(1,"State is consistent with configuration - LOADING old state")
             self._recovery = True
