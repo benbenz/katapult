@@ -110,7 +110,8 @@ class CloudRunProvider(ABC):
                 except CloudRunError:
                     self.terminate_instance(instance)
                     try :
-                        self._get_or_create_instance(instance)
+                        #self._get_or_create_instance(instance)
+                        self._start_and_update_instance(instance)
                     except:
                         return None
 
@@ -218,31 +219,19 @@ class CloudRunProvider(ABC):
         try:
             # CHECK EVERY TIME !
             new_instance , created = self._get_or_create_instance(instance)
+
+            old_id = instance.get_id()
             
             # make sure we update the instance with the new instance data
             instance.update_from_instance(new_instance)
 
+            if instance.get_id() != old_id:
+                self.debug(2,"Instance has changed",old_id,"VS",instance.get_id())
+                instance.set_has_changed(True)
+
         except CloudRunError as cre:
 
             instance.set_invalid(True)
-
-
-    # async def _start_and_wait_for_instance(self,instance):
-
-    #     try:
-    #         # CHECK EVERY TIME !
-    #         new_instance , created = self._get_or_create_instance(instance)
-            
-    #         # make sure we update the instance with the new instance data
-    #         instance.update_from_instance(new_instance)
-
-    #         # wait for the instance to be ready
-    #         await self._wait_for_instance(instance)
-
-    #     except CloudRunError as cre:
-
-    #         instance.set_invalid(True)
-
 
     def _test_reupload(self,instance,file_test,ssh_client,isfile=True):
         re_upload = False
@@ -646,6 +635,11 @@ class CloudRunProvider(ABC):
 
     def _check_run_state(self,runinfo):
         instance = runinfo.get('instance')
+        if instance.has_changed():
+           self.debug(1,"Instance has changed! States of old jobs should return UNKNOWN and a new batch of jobs will be started",color=bcolors.WARNING)
+           instance.set_has_changed(False)
+           #let's just let the following logic do its job ... JOB CENTRIC 
+           #return True , None , False
         last_processes_old = [] 
         last_processes_new = []
         do_run = False
@@ -674,13 +668,22 @@ class CloudRunProvider(ABC):
                 # let's just run the jobs ...
                 #TODO: improve precision of recovery
                 self.debug(2,state_old.name,"vs",state_new.name)
-                if state_new < state_old or (state_new == CloudRunJobState.ABORTED or state_old == CloudRunJobState.ABORTED):
+                if state_new!=CloudRunJobState.DONE and (state_new < state_old or (state_new == CloudRunJobState.ABORTED or state_old == CloudRunJobState.ABORTED)):
                     do_run = True
-                    break
-                if state_new != CloudRunJobState.DONE:
-                    all_done = False
+                    # do not break cause we want to check all_done properly!
+                    #break
+                all_done = all_done and state_new == CloudRunJobState.DONE
+
             if all_done:
                 do_run = False
+
+            # it is now time to update the old processes 
+            # we've retrieved what we needed and we want to new state to be corrected for future prints
+            # this should likely set the states to ABORTED if this is a new instance
+            #TODO: debug why states are not returned as aborted ...
+            instances_processes = self._compute_instances_processes(last_processes_old)
+            processes_infos = instances_processes[instance.get_name()]
+            self.__get_jobs_states_internal(processes_infos,False,CloudRunJobState.ANY,True) # Programmatic >> no print, no serialize
 
             if do_run:
                 return True , None, False

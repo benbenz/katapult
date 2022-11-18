@@ -1,3 +1,3 @@
-from .app import *
+from cloudrun.app import *
 
 main()

@@ -61,6 +61,8 @@ class CloudRunInstance():
         self._envs     = dict()
         # invalid
         self._invalid  = False
+        # has changed
+        self._changed  = False
 
     def get_region(self):
         return self._region
@@ -89,6 +91,9 @@ class CloudRunInstance():
     def get_state(self):
         return self._state
 
+    def has_changed(self):
+        return self._changed
+
     def set_dns_addr(self,value):
         self._dns_addr = value
      
@@ -100,6 +105,9 @@ class CloudRunInstance():
 
     def set_data(self,data):
         self._data = data 
+    
+    def set_has_changed(self,value):
+        self._changed = value
 
     def get_data(self,key):
         if not self._data:

@@ -4,7 +4,8 @@ import sys
 import os
 import json
 import pickle
-from .core import *
+import math
+from cloudrun.core import *
 from datetime import date, datetime
 import traceback
 
@@ -64,7 +65,7 @@ class ConfigManager():
                     else:
                         total_inst_cpus = inst_cfg.get('cpus',1)
                         if type(total_inst_cpus) != int and type(total_inst_cpus) != float:
-                            cpucore = self.get_cpus_cores(inst_cfg)
+                            cpucore = self._provider.get_cpus_cores(inst_cfg)
                             total_inst_cpus = cpucore if cpucore is not None else 1
                             self._provider.debug(1,"WARNING: setting default CPUs number to",cpucore,"for instance",inst_cfg.get('type'))
                         if not inst_cfg.get('explode') and total_inst_cpus > cpu_split:
@@ -293,6 +294,10 @@ class StateSerializer():
             
             for i,instance in enumerate(instances):
                 assert instance.get_name() == _instances[i].get_name()
+                # more general to not compare the instances 
+                # this means we need to detect another way if the instance failed before 
+                # and reload the new instance in the state ?
+                #assert instance.get_id()   == _instances[i].get_id()
                 assert instance.get_cpus() == _instances[i].get_cpus()
             for i,env in enumerate(environments):
                 assert env.get_name() == _environments[i].get_name()

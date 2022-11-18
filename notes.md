@@ -83,6 +83,13 @@
   - [x] check generous creation of deployed jobs
   - [x] move config loading stuff to a config package with ConfigManager class
   - [x] this is in preparation of config serialization and reloading to serialize state .... StateManager class in config 
+  - [x] DEBUG why the state of old jobs on a newly created instance is returning as NOT ABORTED??
+    - start with state serialization
+    - kill the program when the first jobs are running
+    - terminate one of the instance that has the script running
+    - restart the program
+    - Note: it will do probably whats required but the state is wrong. The latest processes should be saying "ABORTED"
+  - [ ] DEBUG idem as before but by kiling the program in WAIT states
   - [ ] improve more paths issue (local vs remote)
 
 4) local mode:

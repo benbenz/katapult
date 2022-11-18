@@ -51,12 +51,12 @@ do
     fi
 
     # this is running (by PID)
-    if [ -z ${thestate+x} ] && [[ pid != "None" ]] && ! [[ pid -eq 0 ]]; then
+    if [ -z ${thestate+x} ] && [[ $pid != "None" ]] && ! [[ $pid -eq 0 ]]; then
         if [[ $(ps -p $pid | tail +2) ]] ; then
             thestate="running(2)"
             #exit
         fi
-        if [[ $(ps -ppid $pid | tail +2) ]]; then #usually this is the one that will hit positive (when using PID)
+        if [[ $(ps --ppid $pid | tail +2) ]]; then #usually this is the one that will hit positive (when using PID)
             thestate="running(3)"
             #exit
         fi
@@ -72,20 +72,24 @@ do
     #fi
 
     # check what is the environment state file
-    if [ -z ${thestate+x} ] && [ -d "$HOME/run/$env_name" ]; then
-        cd "$HOME/run/$env_name"
-        if [ -z ${thestate+x} ] && [ -f state ]; then
-            if [[ $(< state) == "bootstraping" ]]; then
-                thestate="wait(1)"
-                #exit
-            elif [[ $(< state) == "bootstraped" ]]; then
-                # the environment is bootstraped but we dont have state file nor the process in memory ...
-                # lets consider it aborted
-                thestate="aborted(3)"
-                #exit
-            fi
-        fi
-    fi
+
+# THIS IS NOT ROBUST because we may have an new instance bootstraping and we may be checking the UID of a process from an older instance ...
+# this could return WAIT which is not okay
+# it should return ABORTED or UNKNOWN at least
+    # if [ -z ${thestate+x} ] && [ -d "$HOME/run/$env_name" ]; then
+    #     cd "$HOME/run/$env_name"
+    #     if [ -z ${thestate+x} ] && [ -f state ]; then
+    #         if [[ $(< state) == "bootstraping" ]]; then
+    #             thestate="wait(1)"
+    #             #exit
+    #         elif [[ $(< state) == "bootstraped" ]]; then
+    #             # the environment is bootstraped but we dont have state file nor the process in memory ...
+    #             # lets consider it aborted
+    #             thestate="aborted(3)"
+    #             #exit
+    #         fi
+    #     fi
+    # fi
 
     if [ -z ${thestate+x} ] ; then
         thestate="unknown(1)"
