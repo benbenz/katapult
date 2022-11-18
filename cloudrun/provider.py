@@ -35,7 +35,7 @@ class CloudRunProvider(ABC):
         self._config_manager = ConfigManager(self,self._config,self._instances,self._environments,self._jobs)
         self._config_manager.load()
 
-        if self._config.get('serialize',False):
+        if self._config.get('recover',False):
             # load the state (if existing) and set the recovery mode accordingly
             self._state_serializer = StateSerializer(self)
             self._state_serializer.load()
@@ -61,7 +61,7 @@ class CloudRunProvider(ABC):
             print(*args,**kwargs)
 
     def serialize_state(self):
-        if self._config.get('serialize',False):
+        if self._config.get('recover',False):
             self._state_serializer.serialize(self._instances,self._environments,self._jobs)
 
     def _wait_for_instance(self,instance):
