@@ -1,7 +1,13 @@
 
 import copy
 import sys
+import os
+import json
+import pickle
 from .core import *
+from datetime import date, datetime
+import traceback
+
 
 class ConfigManager():
 
@@ -13,10 +19,10 @@ class ConfigManager():
         self._environments = environments
         self._jobs = jobs
 
+    def load(self):
         self._load_objects()
         self._preprocess_jobs()
         self._sanity_checks()
-
 
     def _load_objects(self):
         projectName = self._config.get('project')
@@ -148,3 +154,153 @@ class ConfigManager():
                 return env
         return None
 
+# def json_get_key(obj):
+#     if isinstance(obj,CloudRunInstance):
+#         return "__cloudrun_instance:" + obj.get_name()
+#     elif isinstance(obj,CloudRunDeployedEnvironment):
+#         return "__cloudrun_environment_dpl:" + obj.get_name()
+#     elif isinstance(obj,CloudRunEnvironment):
+#         return "__cloudrun_environment:" + obj.get_name()
+#     elif isinstance(obj,CloudRunDeployedJob):
+#         return "__cloudrun_job_dpl:" + obj.get_hash() + "|" + str(obj.get_job().get_rank()) + "," + str(obj.get_rank())
+#     elif isinstance(obj,CloudRunJob):
+#         return "__cloudrun_job:" + obj.get_hash() + "|" + str(obj.get_rank()) 
+#     elif isinstance(obj,CloudRunProcess):
+#         return "__cloudrun_process:" + obj.get_uid()
+#     else:
+#         return str(cr_obj)
+
+# class CloudRunJSONEncoder(json.JSONEncoder):
+
+#     def __init__(self, *args, **kwargs):
+#         kwargs['check_circular'] = False  # no need to check anymore
+#         super(CloudRunJSONEncoder,self).__init__(*args, **kwargs)
+#         self.proc_objs = []
+
+#     def default(self, obj):
+
+#         if  isinstance(obj, (CloudRunInstance, CloudRunEnvironment, CloudRunDeployedEnvironment, CloudRunJob, CloudRunDeployedJob, CloudRunProcess)):
+#             if obj in self.proc_objs:
+#                 return json_get_key(obj)
+#             else:
+#                 self.proc_objs.append(obj)
+#             return { **obj.__dict__ , **{'__class__':type(obj).__name__} }
+        
+#         elif isinstance(obj, (datetime, date)):
+#             return obj.isoformat()  # Let the base class default method raise the TypeError
+
+#         return super(CloudRunJSONEncoder,self).default(obj) #json.JSONEncoder.default(self, obj)
+
+# class CloudRunJSONDecoder(json.JSONDecoder):
+#     def __init__(self, *args, **kwargs):
+#         json.JSONDecoder.__init__(self, object_hook=self.object_hook, *args, **kwargs)
+#         self._references = dict()
+    
+#     def object_hook(self, dct):
+#         #print(dct)
+#         if '__class__' in dct:
+#             class_name = dct['__class__']
+#             try :
+#                 if class_name == 'CloudRunInstance':
+#                     obj = CloudRunInstance(dct['_config'],dct['_id'],dct['_data'])
+#                     obj.__dict__.update(dct)
+#                 elif class_name == 'CloudRunEnvironment':
+#                     obj = CloudRunEnvironment(dct['_project'],dct['_config'])
+#                     obj.__dict__.update(dct)
+#                 elif class_name == 'CloudRunDeployedEnvironment':
+#                     env_ref = None #self._references[dct['_env']]
+#                     ins_ref = None #self._references[dct['_instance']]
+#                     obj = CloudRunDeployedEnvironment.__new__(CloudRunDeployedEnvironment) #CloudRunDeployedEnvironment(env_ref,ins_ref)
+#                     obj.__dict__.update(dct)
+#                 elif class_name == 'CloudRunJob':
+#                     obj = CloudRunJob(dct['_config'],dct['_rank'])
+#                     obj.__dict__.update(dct)
+#                 elif class_name == 'CloudRunDeployedJob':
+#                     job_ref = None #self._references[dct['_job']]
+#                     env_ref = None #self._references[dct['_env']]
+#                     obj = CloudRunDeployedJob.__new__(CloudRunDeployedJob) #CloudRunDeployedJob(job_ref,env_ref)
+#                     obj.__dict__.update(dct)
+#                 elif class_name == 'CloudRunProcess':
+#                     job_ref = None #self._references[dct['_job']]
+#                     obj = CloudRunProcess.__new__(CloudRunProcess) #CloudRunProcess(job_ref,dct['_uid'],dct['_pid'],dct['_batch_uid'])
+#                     obj.__dict__.update(dct)
+#                 self._references[json_get_key(obj)] = obj
+#                 return obj
+#             except KeyError as ke:
+#                 traceback.print_exc()
+#                 print("KEY ERROR while DESERIALIZATION",ke)
+#                 print(self._references)
+#                 return None
+#         else:
+#             return dct        
+
+class StateSerializer():
+
+    def __init__(self,provider,instances,environments,jobs):
+        self._provider = provider
+        self._instances = instances
+        self._environments = environments
+        self._jobs = jobs
+
+        self._state_file = 'state.pickle' #'state.json'
+        self._loaded = None
+
+    def serialize(self):
+        try:
+            state = {
+                'instances' : self._instances ,
+                'environments' :self._environments  ,
+                'jobs' : self._jobs
+            }
+            #json_data = json.dumps(state,indent=4,cls=CloudRunJSONEncoder)
+            with open(self._state_file,'wb') as state_file:
+                pickle.dump(state,state_file)
+                #state_file.write(json_data)
+        except Exception as e:
+            self._provider.debug(1,"SERIALIZATION ERROR",e)
+
+
+    def load(self):
+        if not os.path.isfile(self._state_file):
+            self._provider.debug(2,"StateSerializer: no state serialized")
+            return False
+        try:
+            with open(self._state_file,'rb') as state_file:
+                #json_data = state_file.read()
+                #objects   = json.loads(json_data,cls=CloudRunJSONDecoder)
+                self._loaded = pickle.load(state_file)
+        except Exception as e:
+            traceback.print_exc()
+            self._provider.debug(1,"DE-SERIALIZATION ERROR",e)
+
+    # check if the state is consistent with the provider objects that have been loaded from the config...
+    # TODO: do that
+    def check_consistency(self):
+        if self._loaded is None:
+            self._provider.debug(2,"Seralized data not loaded. No consistency")
+            return False 
+        try:
+            instances    = self._loaded['instances']
+            environments = self._loaded['environments']
+            jobs         = self._loaded['jobs']
+            assert len(self._instances)==len(instances)
+            assert len(self._environments)==len(environments)
+            assert len(self._jobs)==len(jobs)
+            
+            for i,instance in enumerate(self._instances):
+                assert instance.get_name() == instances[i].get_name()
+                assert instance.get_cpus() == instances[i].get_cpus()
+            for i,env in enumerate(self._environments):
+                assert env.get_name() == environments[i].get_name()
+            for i,job in enumerate(self._jobs):
+                assert job.get_hash() == jobs[i].get_hash()
+                assert job.get_rank() == jobs[i].get_rank()
+            return True
+        except Exception as e:
+            self._provider.debug(1,e)
+            return False
+
+    def transfer(self):
+        self._instances    = self._loaded['instances']
+        self._environments = self._loaded['environments']
+        self._jobs         = self._loaded['jobs']        

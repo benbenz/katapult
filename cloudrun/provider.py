@@ -12,7 +12,7 @@ from io import BytesIO
 import csv , io
 import pkg_resources
 from cloudrun.core import *
-from .config import ConfigManager
+from .config import ConfigManager , StateSerializer
 
 random.seed()
 
@@ -30,17 +30,39 @@ class CloudRunProvider(ABC):
         self._instances = []
         self._environments = []
         self._jobs = []
+
+        # load the config
         self._config_manager = ConfigManager(self,self._config,self._instances,self._environments,self._jobs)
+        self._config_manager.load()
+
+        # load the state (if existing) and set the recovery mode accordingly
+        self._state_serializer = StateSerializer(self,self._instances,self._environments,self._jobs)
+        self._state_serializer.load()
+
+        consistency = self._state_serializer.check_consistency()
+        if consistency:
+            self.debug(1,"State is consistent with configuration - LOADING old state")
+            self._recovery = True
+            self._state_serializer.transfer()
+            self.debug(1,self._instances)
+            self.debug(1,self._environments)
+            self.debug(1,self._jobs)
+        else:
+            self._recovery = False
 
     def debug(self,level,*args,**kwargs):
         if level <= self.DBG_LVL:
             print(*args,**kwargs)
 
-    async def _wait_for_instance(self,instance):
+    def serialize_state(self):
+        self._state_serializer.serialize()
+
+    def _wait_for_instance(self,instance):
         # get the public DNS info when instance actually started (todo: check actual state)
         waitFor = True
         while waitFor:
             self.update_instance_info(instance)
+            self.serialize_state()
 
             lookForDNS       = instance.get_dns_addr() is None
             lookForIP        = instance.get_ip_addr() is None
@@ -48,57 +70,6 @@ class CloudRunProvider(ABC):
 
             lookForState = True
             # 'pending'|'running'|'shutting-down'|'terminated'|'stopping'|'stopped'
-            if instanceState == CloudRunInstanceState.STOPPED or instanceState == CloudRunInstanceState.STOPPING:
-                try:
-                    # restart the instance
-                    self.start_instance(instance)
-                except CloudRunError:
-                    self.terminate_instance(instance)
-                    try :
-                        self._get_or_create_instance(instance)
-                    except:
-                        return None
-
-            elif instanceState == CloudRunInstanceState.RUNNING:
-                lookForState = False
-
-            waitFor = lookForDNS or lookForState  
-            if waitFor:
-                if lookForDNS:
-                    debug(1,"waiting for DNS address and  state ...",instanceState.name)
-                else:
-                    if lookForIP:
-                        debug(1,"waiting for state ...",instanceState.name)
-                    else:
-                        debug(1,"waiting for state ...",instanceState.name," IP =",instance.get_ip_addr())
-                 
-                await asyncio.sleep(10)
-
-        self.debug(2,instance)    
-
-    def _wait_for_instance_block(self,instance):
-        # get the public DNS info when instance actually started (todo: check actual state)
-        waitFor = True
-        while waitFor:
-            self.update_instance_info(instance)
-
-            lookForDNS       = instance.get_dns_addr() is None
-            lookForIP        = instance.get_ip_addr() is None
-            instanceState    = instance.get_state()
-
-            lookForState = True
-            # 'pending'|'running'|'shutting-down'|'terminated'|'stopping'|'stopped'
-
-# NOT: let it do its thing in the main loop ...
-            # attempts = 0
-            # if instanceState == CloudRunInstanceState.STOPPING:
-            #     while instanceState == CloudRunInstanceState.STOPPING and attempts < 20:
-            #         self.deburg(1,"wait for instance to stop",instance)
-            #         time.sleep(30)
-            #         self.update_instance_info(instance)
-            #         instanceState = instance.get_state()
-            #         attempts = attempts + 1
-
             if instanceState == CloudRunInstanceState.STOPPED:
                 try:
                     # restart the instance
@@ -179,6 +150,16 @@ class CloudRunProvider(ABC):
 
     def assign_jobs_to_instances(self):
 
+        if self._recovery == True:
+            assign_jobs = False
+            for job in self._jobs:
+                if not job.get_instance():
+                    assign_jobs = True
+                    break
+            if not assign_jobs:
+                self.debug(1,"Skipping jobs allocation dues to reloaded state...")
+                return 
+
         assignation = self._config.get('job_assign','multi_knapsack')
         
         # DUMMY algorithm 
@@ -195,7 +176,9 @@ class CloudRunProvider(ABC):
         # knapsack / 2d packing / bin packing ...
         else: #if assignation is None or assignation=='multi_knapsack':
 
-            combopt.multiple_knapsack_assignation(self._jobs,self._instances)            
+            combopt.multiple_knapsack_assignation(self._jobs,self._instances)   
+
+        self.serialize_state()         
                
     def _start_and_update_instance(self,instance):
 
@@ -505,7 +488,7 @@ class CloudRunProvider(ABC):
     def _wait_and_connect(self,instance):
 
         # wait for instance to be ready 
-        self._wait_for_instance_block(instance)
+        self._wait_for_instance(instance)
 
         # connect to instance
         ssh_client = self._connect_to_instance(instance)
@@ -561,7 +544,7 @@ class CloudRunProvider(ABC):
             self._start_and_update_instance(instance)
             # wait for it
             #no need - deploy is doing this already
-            #self._wait_for_instance_block(instance)
+            #self._wait_for_instance(instance)
             # re-deploy it
             self._deploy_all(instance)
         if rerun:
@@ -666,9 +649,15 @@ class CloudRunProvider(ABC):
 
             ssh_client.close()
 
+        self.serialize_state()
+
         return processes 
 
     def run_jobs(self,instance_filter=None,except_done=False):#,wait=False):
+
+        if except_done == False and self._recovery == True:
+            self.debug(1,"\n\nWARNING: found serialized state - we will attempt to recover only incomplete jobs\n\n")
+            except_done = True
 
         instances_runs = dict()
 
@@ -1084,6 +1073,8 @@ class CloudRunProvider(ABC):
                 break
 
         ssh_client.close() 
+
+        self.serialize_state()
 
         return processes
 

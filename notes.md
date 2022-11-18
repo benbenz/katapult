@@ -81,8 +81,9 @@
   - [x] handle also if it's a simple disconnection from SSH (remove wifi to test)
   - [ ] clean up unused functions and the get/create/find/update stuff ...
   - [x] check generous creation of deployed jobs
-  - [ ] move config loading stuff to a config package with ConfigManager class
+  - [x] move config loading stuff to a config package with ConfigManager class
   - [ ] this is in preparation of config serialization and reloading to serialize state .... StateManager class in config 
+  - [ ] improve more paths issue (local vs remote)
 
 4) local mode:
   - [x] handle new config 

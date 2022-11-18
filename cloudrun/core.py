@@ -224,7 +224,7 @@ class CloudRunJob():
         self._hash      = cloudrunutils.compute_job_hash(self._config)
         self._env       = None
         self._instance  = None
-        self.__deployed = [ ]
+        self._deployed = [ ]
         if (not 'input_file' in self._config) or (not 'output_file' in self._config) or not isinstance(self._config['input_file'],str) or not isinstance(self._config['output_file'],str):
             print("\n\n\033[91mConfiguration requires an input and output file names\033[0m\n\n")
             raise CloudRunError() 
@@ -249,16 +249,16 @@ class CloudRunJob():
         return self._rank
 
     def get_deployed_jobs(self):
-        return self.__deployed
+        return self._deployed
 
     def deploy(self,dpl_env,add_permanently=True):
         dpl_job = CloudRunDeployedJob(self,dpl_env)
         if add_permanently:
-            self.__deployed.append(dpl_job)
+            self._deployed.append(dpl_job)
         return dpl_job
 
     def has_completed(self):
-        for dpl_job in self.__deployed:
+        for dpl_job in self._deployed:
             for process in dpl_job.get_processes():
                 if process.get_state() == CloudRunJobState.DONE:
                     return True
@@ -290,7 +290,7 @@ class CloudRunDeployedJob(CloudRunJob):
         self._job       = job
         #self._config    = copy.deepcopy(job._config)
         #self._hash      = job._hash
-        #self._env       = dpl_env
+        self._env       = dpl_env
         #self._instance  = job._instance
         self._processes = []
         self._path      = dpl_env.get_path_abs() + '/' + self.get_hash()
