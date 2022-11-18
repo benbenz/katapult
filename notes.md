@@ -52,7 +52,7 @@
   - [x] make state.sh handle multiple uid/pid
   - [ ] create a getByName state (using the command line)
   - [x] generate dynamically bash .sh file to start all the jobs ...
-  - [ ] save uid of scripts in a json file 
+  - [ ] save uid of scripts in a json file (statemanager)
   - [x] explode uploads between instance setup, env setup and run setup ...
   - [x] maybe we should not put the script arguments in the hash ? This is more a runtime thing 
   - [x] allocate job to instance before doing anything
@@ -63,16 +63,26 @@
   - [ ] online vs offline bin packing >> online bin packing used by the nano instance (use yield?)
   - [x] improve handling of uploaded files: 
     - [x] keep tree structure (what to do when absolute files?)
-    - [ ] define 'upload_base_path' in config
+    - [ ] define 'upload_base_path' in config?
     - [x] add symbolic links under the run_dir to point to the job_dir where its uploaded (parent dir)
     - [x] if there is no directory involve we need to create a symbolic link for each file 
   - [x] fix bug with missing environment when using instance.get_environments() in _deploy_environments
   - [x] move remote_files as resources in package
   - [x] fix bug that co-routines are not concurrent in gather (visible with print_deploy = True) >> use concurrent.futures. run_in_executor OR https://stackoverflow.com/questions/28492103/how-to-combine-python-asyncio-with-threads
   - [x] check why sometimes processes are considered aborted at the very beginning - issue with env ?
-  - [ ] smarter recovery mode that looks at the jobs that have been completed ...
-  - [ ] add set_aborted_on_disconnect (to set all running states to aborted (because of disconnect))
+  - [x] smarter recovery mode that looks at the jobs that have been completed ...
+  - [x] add set_aborted_on_disconnect (to set all running states to aborted (because of disconnect))
   - [x] get_jobs_state: complement dynamically the list of processes with the current process list returned to get
+  - [x] finish mark aborted function
+  - [x] re-run jobs, with aborted checkups 
+  - [x] factorize handle_instance_disconnect
+  - [ ] add batch uid to deploy job or process
+  - [ ] display batchuid in summary if not None
+  - [ ] handle also if it's a simple disconnection from SSH (remove wifi to test)
+  - [ ] clean up unused functions and the get/create/find/update stuff ...
+  - [ ] check generous creation of deployed jobs
+  - [ ] move config loading stuff to a config package with ConfigManager class
+  - [ ] this is in preparation of config serialization and reloading to serialize state .... StateManager class in config 
 
 4) local mode:
   - [x] handle new config 

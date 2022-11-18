@@ -215,14 +215,15 @@ class CloudRunProvider(ABC):
             lookForState = True
             # 'pending'|'running'|'shutting-down'|'terminated'|'stopping'|'stopped'
 
-            attempts = 0
-            if instanceState == CloudRunInstanceState.STOPPING:
-                while instanceState == CloudRunInstanceState.STOPPING and attempts < 20:
-                    self.deburg(1,"wait for instance to stop",instance)
-                    time.sleep(30)
-                    self.update_instance_info(instance)
-                    instanceState = instance.get_state()
-                    attempts = attempts + 1
+# NOT: let it do its thing in the main loop ...
+            # attempts = 0
+            # if instanceState == CloudRunInstanceState.STOPPING:
+            #     while instanceState == CloudRunInstanceState.STOPPING and attempts < 20:
+            #         self.deburg(1,"wait for instance to stop",instance)
+            #         time.sleep(30)
+            #         self.update_instance_info(instance)
+            #         instanceState = instance.get_state()
+            #         attempts = attempts + 1
 
             if instanceState == CloudRunInstanceState.STOPPED:
                 try:
@@ -239,7 +240,10 @@ class CloudRunProvider(ABC):
                 lookForState = False
 
             elif instanceState == CloudRunInstanceState.TERMINATED:
-                self._start_and_update_instance(instance)
+                try:
+                    self._start_and_update_instance(instance)
+                except:
+                    return None
 
             waitFor = lookForDNS or lookForState  
             if waitFor:
@@ -707,8 +711,6 @@ class CloudRunProvider(ABC):
     def revive(self,instance,rerun=False):
         self.debug(1,"REVIVING instance",instance)
 
-        # check the status on the instance
-        self.update_instance_info(instance)
         if instance.get_state()==CloudRunInstanceState.STOPPED:
             self.debug(1,"we just have to re-start the instance")
             self.start_instance(instance)
@@ -721,19 +723,16 @@ class CloudRunProvider(ABC):
             # re-deploy it
             self._deploy_all(instance)
         if rerun:
-            processes = self.run_jobs(instance) #will run the jobs for this instance
-            instances_processes = self._compute_instances_processes(processes)
-            instance_processes  = instances_processes[instance.get_name()]
-            jobsinfo , instance = self._compute_jobs_info(instance_processes)
-            return instance_processes, jobsinfo 
+            processes = self.run_jobs(instance,True) #will run the jobs for this instance
+            return processes #instance_processes, jobsinfo 
         else :
-            return None
+            return None 
 
-    def _mark_aborted(self,processes):
+    def _mark_aborted(self,processes,state_mask):
 
         for process in processes:
-            if process.get_state() != CloudRunCommandState.DONE:
-                process.set_state(CloudRunCommandState.ABORTED)
+            if process.get_state() & state_mask:
+                process.set_state(CloudRunJobState.ABORTED)
 
     def _run_ssh_commands(self,ssh_client,commands):
         for command in commands:
@@ -775,11 +774,8 @@ class CloudRunProvider(ABC):
         batch_pid_file = 'batch_pid-'+self.batch_uid+'.sh'
         ssh_client = self._connect_to_instance_block(instance)
         if ssh_client is None:
-            self.debug(1,"ERROR: could not run jobs for instance",instance)
-            self.revive(instance)
-            ssh_client = self._connect_to_instance_block(instance,timeout=10)
+            ssh_client , processes = self._handle_instance_disconnect(instance,"could not run jobs for instance")
             if ssh_client is None:
-                self.debug(1,"FATAL ERROR: could not run jobs for instance",instance)
                 return []
 
         ftp_client = ssh_client.open_sftp()
@@ -807,13 +803,15 @@ class CloudRunProvider(ABC):
 
         return processes 
 
-    def run_jobs(self,instance_filter=None):#,wait=False):
+    def run_jobs(self,instance_filter=None,except_done=False):#,wait=False):
 
         instances_runs = dict()
 
         global_path = "$HOME/run" # more robust
 
         dpl_jobs = dict()
+
+        jobs = self._jobs if not instance_filter else instance_filter.get_jobs()
 
         for job in self._jobs:
 
@@ -823,8 +821,11 @@ class CloudRunProvider(ABC):
 
             instance = job.get_instance()
 
-            if instance_filter is not None and instance != instance_filter:
-                continue 
+            #if instance_filter is not None:
+            #    if instance != instance_filter:
+            #        continue 
+            if except_done and job.has_completed():
+                continue
 
             # CHECK EVERY TIME !
             if not instances_runs.get(instance.get_name()):
@@ -1048,6 +1049,42 @@ class CloudRunProvider(ABC):
         #self._csv_reader = csv.DictReader(io.StringIO(csvstr.decode()))              
         return pkg_resources.resource_stream(resource_package, resource_path)
 
+    def _handle_instance_disconnect(self,instance,msg,processes=None):
+        # check the status on the instance with AWS
+        self.update_instance_info(instance)
+
+        # this is an Internet error
+        if instance.get_state() == CloudRunInstanceState.RUNNING:
+            ssh_client = self._connect_to_instance_block(instance,timeout=10)
+            if ssh_client is None:
+                self.debug(1,"FATAL ERROR(0):",msgs,instance)
+                return None , None
+            return ssh_client , None
+
+
+        self.debug(1,"ERROR:",msg,instance)
+        if processes is not None:
+            if instance.get_state() & (CloudRunInstanceState.STOPPING | CloudRunInstanceState.STOPPED) :
+                # mark any type of process as aborted, but DONE
+                self._mark_aborted(processes,CloudRunJobState.ANY - CloudRunJobState.DONE) 
+            elif instance.get_state() & (CloudRunInstanceState.TERMINATING | CloudRunInstanceState.TERMINATED):
+                # mark any type of process as aborted
+                self._mark_aborted(processes,CloudRunJobState.ANY) 
+        rerun_jobs = processes is not None
+        #processes_info , jobsinfo   = self.revive(instance,rerun_jobs) #re-run the jobs and get an updated processes/jobsinfo 
+        processes = self.revive(instance,rerun_jobs)
+        ssh_client = self._connect_to_instance_block(instance,timeout=10)
+        if ssh_client is None:
+            self.debug(1,"FATAL ERROR(1):",msgs,instance)
+        return ssh_client , processes #processes_info , jobsinfo
+
+    def _recompute_jobs_info(self,instance,processes):
+        instances_processes = self._compute_instances_processes(processes)
+        instance_processes  = instances_processes[instance.get_name()]
+        jobsinfo , instance = self._compute_jobs_info(instance_processes)
+        return instance_processes , jobsinfo 
+
+
     def _compute_jobs_info(self,processes_infos):
         jobsinfo = ""
 
@@ -1074,13 +1111,13 @@ class CloudRunProvider(ABC):
         ssh_client = self._connect_to_instance_block(instance,timeout=10)
 
         if ssh_client is None:
-            self.debug(1,"ERROR: could not get jobs states for instance",instance)
-            self._mark_aborted([processes_infos[uid]['process'] for uid in processes_infos]) # mark the "running" processes as aborted
-            processes_info , jobsinfo   = self.revive(instance,True) #re-run the jobs and get an updated jobsinfo 
-            ssh_client = self._connect_to_instance_block(instance,timeout=10)
+            ssh_client , processes = self._handle_instance_disconnect(instance,"could not get jobs states for instance",
+                                            [processes_infos[uid]['process'] for uid in processes_infos])
             if ssh_client is None:
-                self.debug(1,"FATAL ERROR: could not get jobs states for instance",instance)
-                return
+                return 
+            
+            if processes is not None:
+                processes_infos , jobsinfo = self._recompute_jobs_info(instance,processes)
 
         global_path = "$HOME/run"
 
@@ -1089,14 +1126,15 @@ class CloudRunProvider(ABC):
         while True:
 
             if not ssh_client.get_transport().is_active():
-                self.debug(1,"ERROR: SSH connection has been lost with",instance)
-                self._mark_aborted([processes_infos[uid]['process'] for uid in processes_infos])
-                processes_infos , jobsinfo = self.revive(instance,True)  #re-run the jobs and get an updated jobsinfo 
-                processes = []
-                ssh_client = self._connect_to_instance_block(instance,timeout=10)
+                ssh_client , processes = self._handle_instance_disconnect(instance,"could not get jobs states for instance. SSH connection lost with",
+                                                [processes_infos[uid]['process'] for uid in processes_infos])
                 if ssh_client is None:
-                    self.debug(1,"FATAL ERROR: could not get jobs states for instance. SSH connection lost with",instance)
                     return
+                
+                if processes is not None:
+                    processes_infos , jobsinfo = self._recompute_jobs_info(instance,processes)
+
+                processes = []
 
             cmd = global_path + "/state.sh " + jobsinfo
             self.debug(2,"Executing command",cmd)
@@ -1120,7 +1158,7 @@ class CloudRunProvider(ABC):
                         if process.get_pid() is None and pid != "None":
                             process.set_pid( int(pid) )
                         try:
-                            state = CloudRunCommandState[statestr.upper()]
+                            state = CloudRunJobState[statestr.upper()]
                             process.set_state(state)
                             self.debug(2,process)
                             processes_infos[uid]['retrieved'] = True
@@ -1128,7 +1166,7 @@ class CloudRunProvider(ABC):
                         except Exception as e:
                             debug(1,"\nUnhandled state received by state.sh!!!",statestr,"\n")
                             debug(2,e)
-                            state = CloudRunCommandState.UNKNOWN
+                            state = CloudRunJobState.UNKNOWN
 
                         processes.append(process)
 
@@ -1176,7 +1214,7 @@ class CloudRunProvider(ABC):
         return instances_processes
 
 
-    def __get_or_wait_jobs_state( self, processes , do_wait = False , job_state = CloudRunCommandState.ANY ):    
+    def __get_or_wait_jobs_state( self, processes , do_wait = False , job_state = CloudRunJobState.ANY ):    
 
         if not isinstance(processes,list):
             processes = [ processes ]
@@ -1245,8 +1283,7 @@ class CloudRunProvider(ABC):
             self.debug(1,"\nJob",job.get_rank(),"=",job.str_simple() if instance else job)
             dpl_jobs = job.get_deployed_jobs()
             for dpl_job in dpl_jobs:
-                processes = dpl_job.get_processes()
-                for uid , process in processes.items():
+                for process in dpl_job.get_processes():
                     self.debug(1,"|_",process.str_simple())
 
 

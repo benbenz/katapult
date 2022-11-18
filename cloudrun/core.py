@@ -26,7 +26,7 @@ class CloudRunInstanceState(IntFlag):
     ANY         = 32 + 16 + 8 + 4 + 2 + 1     
 
 
-class CloudRunCommandState(IntFlag):
+class CloudRunJobState(IntFlag):
     UNKNOWN   = 0
     WAIT      = 1  # waiting for bootstraping
     QUEUE     = 2  # queued (for sequential scripts)
@@ -49,7 +49,7 @@ class CloudRunInstance():
         self._ip_addr  = None
         self._dns_addr = None
         # state
-        self._state    = CloudRunCommandState.UNKNOWN
+        self._state    = CloudRunJobState.UNKNOWN
         # the config the instance has been created on
         self._config   = config 
         # dict data associated with it (AWS response data e.g.)
@@ -256,6 +256,13 @@ class CloudRunJob():
         self.__deployed.append(dpl_job)
         return dpl_job
 
+    def has_completed(self):
+        for dpl_job in self.__deployed:
+            for process in dpl_job.get_processes():
+                if process.get_state() == CloudRunJobState.DONE:
+                    return True
+        return False
+
     def set_instance(self,instance):
         self._instance = instance
         instance.append_job(self)
@@ -284,12 +291,12 @@ class CloudRunDeployedJob(CloudRunJob):
         #self._hash      = job._hash
         #self._env       = dpl_env
         #self._instance  = job._instance
-        self._processes = dict()
+        self._processes = []
         self._path      = dpl_env.get_path_abs() + '/' + self.get_hash()
         self._command   = cloudrunutils.compute_job_command(self._path,self._job._config)
 
     def attach_process(self,process):
-        self._processes[process.get_uid()] = process 
+        self._processes.append(process)
 
     def get_path(self):
         return self._path
@@ -332,7 +339,7 @@ class CloudRunProcess():
         self._job    = dpl_job
         self._uid   = uid
         self._pid   = pid
-        self._state = CloudRunCommandState.UNKNOWN
+        self._state = CloudRunJobState.UNKNOWN
         self._job.attach_process(self)
      
     def get_uid(self):
