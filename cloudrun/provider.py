@@ -1294,7 +1294,7 @@ class CloudRunProvider(ABC):
                 #instanceid = inst.get_id()
                 #future.result()
                 fut_processes = future.result()
-                if fut_procsses is not None:
+                if fut_processes is not None:
                     for p in fut_processes:
                         processes.append(p)
                 else:
