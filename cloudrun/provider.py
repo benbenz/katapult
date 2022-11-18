@@ -14,6 +14,17 @@ import pkg_resources
 from cloudrun.core import *
 from .config import ConfigManager , StateSerializer
 
+class bcolors:
+    HEADER = '\033[95m'
+    OKBLUE = '\033[94m'
+    OKCYAN = '\033[96m'
+    OKGREEN = '\033[92m'
+    WARNING = '\033[93m'
+    FAIL = '\033[91m'
+    ENDC = '\033[0m'
+    BOLD = '\033[1m'
+    UNDERLINE = '\033[4m'
+    
 random.seed()
 
 class CloudRunProvider(ABC):
@@ -58,6 +69,13 @@ class CloudRunProvider(ABC):
 
     def debug(self,level,*args,**kwargs):
         if level <= self.DBG_LVL:
+            if 'color' in kwargs:
+                color = kwargs['color']
+                listargs = list(args)
+                listargs.insert(0,color)
+                listargs.append(bcolors.ENDC)
+                args = tuple(listargs)
+                kwargs.pop('color')
             print(*args,**kwargs)
 
     def serialize_state(self):
@@ -142,7 +160,7 @@ class CloudRunProvider(ABC):
                     retrys = retrys + 1
                 else:
                     print(cexc)
-                    self.debug(0,"ERROR! instance is unreachable: ",instance)
+                    self.debug(0,"ERROR! instance is unreachable: ",instance,color=bcolors.FAIL)
                     return None
             # except OSError as ose:
             #     if retrys < 5:
@@ -172,7 +190,7 @@ class CloudRunProvider(ABC):
                     assign_jobs = True
                     break
             if not assign_jobs:
-                self.debug(1,"Skipping jobs allocation dues to reloaded state...")
+                self.debug(1,"SKIPPING jobs allocation dues to reloaded state...",color=bcolors.WARNING)
                 return 
 
         assignation = self._config.get('job_assign','multi_knapsack')
@@ -475,7 +493,7 @@ class CloudRunProvider(ABC):
             instanceid , ssh_client , ftp_client = self._wait_and_connect(instance)
 
             if ssh_client is None:
-                self.debug(1,"ERROR: could not deploy instance",instance)
+                self.debug(1,"ERROR: could not deploy instance",instance,color=bcolors.FAIL)
                 return
 
             try :
@@ -524,7 +542,7 @@ class CloudRunProvider(ABC):
             for future in concurrent.futures.as_completed(future_to_instance):
                 inst = future_to_instance[future]
                 if inst.is_invalid():
-                    self.debug(1,"ERROR: Your configuration is causing an instance to not be created. Please fix.",instance.get_config_DIRTY())
+                    self.debug(1,"ERROR: Your configuration is causing an instance to not be created. Please fix.",instance.get_config_DIRTY(),color=bcolors.FAIL)
                     sys.exit()
 
                 
@@ -679,9 +697,9 @@ class CloudRunProvider(ABC):
             do_run , processes , all_done = self._check_run_state(runinfo)
             if not do_run:
                 if all_done:
-                    self.debug(1,"Skipping run_jobs because the jobs have completed since we left them :)")
+                    self.debug(1,"Skipping run_jobs because the jobs have completed since we left them :)",color=bcolors.WARNING)
                 else:
-                    self.debug(1,"Skipping run_jobs because the jobs have advanced as we left them :)")
+                    self.debug(1,"Skipping run_jobs because the jobs have advanced as we left them :)",color=bcolors.WARNING)
                 return processes
 
         global_path = "$HOME/run" # more robust
@@ -720,7 +738,7 @@ class CloudRunProvider(ABC):
                 tryagain = False
             except Exception as e:
                 self.debug(1,e)
-                self.debug(1,"ERROR: the instance is unreachable while sending batch",instance)
+                self.debug(1,"ERROR: the instance is unreachable while sending batch",instance,color=bcolors.FAIL)
                 ssh_client , processes = self._handle_instance_disconnect(instance,"could not run jobs for instance")
                 if ssh_client is None:
                     return []
@@ -744,7 +762,7 @@ class CloudRunProvider(ABC):
 
         # we're not coming from revive but we recovered a state ...
         if except_done == False and self._recovery == True:
-            self.debug(1,"WARNING: found serialized state: we will not restart jobs that have completed")
+            self.debug(1,"WARNING: found serialized state: we will not restart jobs that have completed",color=bcolors.WARNING)
             except_done = True
 
         instances_runs = dict()
@@ -882,7 +900,7 @@ class CloudRunProvider(ABC):
         ssh_client = self._connect_to_instance(instance)
 
         if ssh_client is None:
-            self.debug(1,"ERROR: could not run job for instance",instance)
+            self.debug(1,"ERROR: could not run job for instance",instance,color=bcolors.FAIL)
             return None
 
         files_path = dpl_env.get_path()
@@ -1010,12 +1028,12 @@ class CloudRunProvider(ABC):
         if instance.get_state() == CloudRunInstanceState.RUNNING:
             ssh_client = self._connect_to_instance(instance,timeout=10)
             if ssh_client is None:
-                self.debug(1,"FATAL ERROR(0):",msgs,instance)
+                self.debug(1,"FATAL ERROR(0):",msgs,instance,color=bcolors.FAIL)
                 return None , None
             return ssh_client , None
 
 
-        self.debug(1,"ERROR:",msg,instance)
+        self.debug(1,"ERROR:",msg,instance,color=bcolors.FAIL)
         if processes is not None:
             if instance.get_state() & (CloudRunInstanceState.STOPPING | CloudRunInstanceState.STOPPED) :
                 # mark any type of process as aborted, but DONE
@@ -1028,7 +1046,7 @@ class CloudRunProvider(ABC):
         processes = self.revive(instance,rerun_jobs)
         ssh_client = self._connect_to_instance(instance,timeout=10)
         if ssh_client is None:
-            self.debug(1,"FATAL ERROR(1):",msgs,instance)
+            self.debug(1,"FATAL ERROR(1):",msgs,instance,color=bcolors.FAIL)
         return ssh_client , processes #processes_info , jobsinfo
 
     def _recompute_jobs_info(self,instance,processes):
