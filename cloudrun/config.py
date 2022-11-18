@@ -236,22 +236,23 @@ class ConfigManager():
 
 class StateSerializer():
 
-    def __init__(self,provider,instances,environments,jobs):
+    def __init__(self,provider):
         self._provider = provider
-        self._instances = instances
-        self._environments = environments
-        self._jobs = jobs
 
         self._state_file = 'state.pickle' #'state.json'
         self._loaded = None
 
-    def serialize(self):
+    def serialize(self,instances,environments,jobs):
         try:
             state = {
-                'instances' : self._instances ,
-                'environments' :self._environments  ,
-                'jobs' : self._jobs
+                'instances' : instances ,
+                'environments' : environments ,
+                'jobs' : jobs
             }
+            for job in state['jobs']:
+                lastp = job.get_last_process()
+                self._provider.debug(3,"PROCESS TO SERIALIZE",lastp)
+
             #json_data = json.dumps(state,indent=4,cls=CloudRunJSONEncoder)
             with open(self._state_file,'wb') as state_file:
                 pickle.dump(state,state_file)#,protocol=0) # protocol 0 = readable
@@ -275,26 +276,29 @@ class StateSerializer():
 
     # check if the state is consistent with the provider objects that have been loaded from the config...
     # TODO: do that
-    def check_consistency(self):
+    def check_consistency(self,instances,environments,jobs):
         if self._loaded is None:
             self._provider.debug(2,"Seralized data not loaded. No consistency")
             return False 
         try:
-            instances    = self._loaded['instances']
-            environments = self._loaded['environments']
-            jobs         = self._loaded['jobs']
-            assert len(self._instances)==len(instances)
-            assert len(self._environments)==len(environments)
-            assert len(self._jobs)==len(jobs)
+            _instances    = self._loaded['instances']
+            _environments = self._loaded['environments']
+            _jobs         = self._loaded['jobs']
+            for job in jobs:
+                lastp = job.get_last_process()
+                self._provider.debug(3,"DESERIALIZED PROCESS",lastp)
+            assert len(instances)==len(_instances)
+            assert len(environments)==len(_environments)
+            assert len(jobs)==len(_jobs)
             
-            for i,instance in enumerate(self._instances):
-                assert instance.get_name() == instances[i].get_name()
-                assert instance.get_cpus() == instances[i].get_cpus()
-            for i,env in enumerate(self._environments):
-                assert env.get_name() == environments[i].get_name()
-            for i,job in enumerate(self._jobs):
-                assert job.get_hash() == jobs[i].get_hash()
-                assert job.get_rank() == jobs[i].get_rank()
+            for i,instance in enumerate(instances):
+                assert instance.get_name() == _instances[i].get_name()
+                assert instance.get_cpus() == _instances[i].get_cpus()
+            for i,env in enumerate(environments):
+                assert env.get_name() == _environments[i].get_name()
+            for i,job in enumerate(jobs):
+                assert job.get_hash() == _jobs[i].get_hash()
+                assert job.get_rank() == _jobs[i].get_rank()
             return True
         except Exception as e:
             self._provider.debug(1,e)

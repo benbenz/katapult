@@ -156,7 +156,7 @@ def aws_create_security_group(region,vpc):
                 'ToPort': 22,
                 'IpRanges': [{'CidrIp': '0.0.0.0/0'}]}
             ])
-        debug(1,'Ingress Successfully Set %s' % data)
+        debug(3,'Ingress Successfully Set %s' % data)
 
     else:
         secGroup = secgroups['SecurityGroups'][0]
@@ -248,7 +248,7 @@ def aws_find_instance(instance_config):
     if len(existing['Reservations']) > 0 and len(existing['Reservations'][0]['Instances']) >0 :
         instance_data = existing['Reservations'][0]['Instances'][0]
         debug(1,"Found exisiting instance !",instance_data['InstanceId'])
-        debug(2,instance_data)
+        debug(3,instance_data)
         instance = CloudRunInstance( instance_config , instance_data['InstanceId'] , instance_data )
         return instance 
     
@@ -293,7 +293,7 @@ def aws_create_instance(instance_config,vpc,subnet,secGroup):
     if len(existing['Reservations']) > 0 and len(existing['Reservations'][0]['Instances']) >0 :
         instance_data = existing['Reservations'][0]['Instances'][0]
         debug(1,"Found exisiting instance !",instance_data['InstanceId'])
-        debug(2,instance_data)
+        debug(3,instance_data)
         instance = CloudRunInstance( instance_config, instance_data['InstanceId'] , instance_data )
         return instance , created
 

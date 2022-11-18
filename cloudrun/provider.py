@@ -37,10 +37,10 @@ class CloudRunProvider(ABC):
 
         if self._config.get('serialize',False):
             # load the state (if existing) and set the recovery mode accordingly
-            self._state_serializer = StateSerializer(self,self._instances,self._environments,self._jobs)
+            self._state_serializer = StateSerializer(self)
             self._state_serializer.load()
 
-            consistency = self._state_serializer.check_consistency()
+            consistency = self._state_serializer.check_consistency(self._instances,self._environments,self._jobs)
             if consistency:
                 self.debug(1,"State is consistent with configuration - LOADING old state")
                 self._recovery = True
@@ -48,6 +48,9 @@ class CloudRunProvider(ABC):
                 self.debug(2,self._instances)
                 self.debug(2,self._environments)
                 self.debug(2,self._jobs)
+                for job in self._jobs:
+                    process = job.get_last_process()
+                    self.debug(2,process)
             else:
                 self._recovery = False
         else:
@@ -59,13 +62,21 @@ class CloudRunProvider(ABC):
 
     def serialize_state(self):
         if self._config.get('serialize',False):
-            self._state_serializer.serialize()
+            self._state_serializer.serialize(self._instances,self._environments,self._jobs)
 
     def _wait_for_instance(self,instance):
+        
+        for job in instance.get_jobs():
+            self.debug(3,"PROCESS in _wait_for_instance",job.get_last_process())
+
         # get the public DNS info when instance actually started (todo: check actual state)
         waitFor = True
         while waitFor:
             self.update_instance_info(instance)
+
+            for job in instance.get_jobs():
+                self.debug(3,"PROCESS in _wait_for_instance (after update)",job.get_last_process())
+
             self.serialize_state()
 
             lookForDNS       = instance.get_dns_addr() is None
@@ -453,6 +464,9 @@ class CloudRunProvider(ABC):
 
         attempts = 0 
 
+        for job in instance.get_jobs():
+            self.debug(3,"PROCESS in deploy_all",job.get_last_process())
+
         while attempts < 5:
 
             if attempts!=0:
@@ -525,6 +539,10 @@ class CloudRunProvider(ABC):
     def deploy(self):
 
         clients = {} 
+
+        for job in self._jobs:
+            self.debug(3,"PROCESS in deploy",job.get_last_process())
+
 
         # https://docs.python.org/3/library/concurrent.futures.html cf. ThreadPoolExecutor Example¶
         with concurrent.futures.ThreadPoolExecutor(max_workers=10) as pool:
@@ -599,7 +617,72 @@ class CloudRunProvider(ABC):
                 print(sshe)
                 raise CloudRunError()  
 
+        # we may not have to do anything:
+        # we recovered a state at startup
+        # let's make sure the state has "advanced":
+        # 1) wait jobs have not aborted
+        # 2) queue jobs have not aborted
+        # 3) IDLE jobs are ...
+        # ...
+        # 4) basically the state is > old state ...?
+
+    def _check_run_state(self,runinfo):
+        instance = runinfo.get('instance')
+        last_processes_old = [] 
+        last_processes_new = []
+        do_run = False
+        for job in instance.get_jobs():
+            last_process = job.get_last_process()
+            if not last_process:
+                self.debug(2,"Found a job without process, we should run")
+                return True , None , False
+            last_processes_new.append(copy.copy(last_process))
+            last_processes_old.append(last_process)
+       
+        instances_processes = self._compute_instances_processes(last_processes_new)
+        do_run = True
+        if instance.get_name() in instances_processes:
+            processes_infos = instances_processes[instance.get_name()]
+            last_processes_new = self.__get_jobs_states_internal(processes_infos,False,CloudRunJobState.ANY,True) # Programmatic >> no print, no serialize
+            do_run = False
+            all_done = True
+            for process_old in last_processes_old:
+                uid = process_old.get_uid()
+                process_new = processes_infos[uid]['process']
+                state_new = process_new.get_state()
+                state_old = process_old.get_state()
+
+                # we found one process that hasn't advanced ...
+                # let's just run the jobs ...
+                #TODO: improve precision of recovery
+                self.debug(2,state_old.name,"vs",state_new.name)
+                if state_new < state_old or (state_new == CloudRunJobState.ABORTED or state_old == CloudRunJobState.ABORTED):
+                    do_run = True
+                    break
+                if state_new != CloudRunJobState.DONE:
+                    all_done = False
+            if all_done:
+                do_run = False
+
+            if do_run:
+                return True , None, False
+            else:
+                # we return the old ones because those are the ones linked with the memory 
+                # the other ones have been separated with copy.copy ...
+                return False , last_processes_old , all_done
+        else:
+            return True , None , False
+
     def _run_jobs_for_instance(self,runinfo,batch_uid,dpl_jobs) :
+
+        if self._recovery:
+            do_run , processes , all_done = self._check_run_state(runinfo)
+            if not do_run:
+                if all_done:
+                    self.debug(1,"Skipping run_jobs because the jobs have completed since we left them :)")
+                else:
+                    self.debug(1,"Skipping run_jobs because the jobs have advanced as we left them :)")
+                return processes
 
         global_path = "$HOME/run" # more robust
 
@@ -648,7 +731,7 @@ class CloudRunProvider(ABC):
                 # lets leave it blank. it can work with the uid ...
                 job = dpl_jobs[uid]
                 process = CloudRunProcess( job , uid , None , batch_uid) 
-                self.debug(1,process) 
+                self.debug(2,process) 
                 processes.append(process)
 
             ssh_client.close()
@@ -659,8 +742,9 @@ class CloudRunProvider(ABC):
 
     def run_jobs(self,instance_filter=None,except_done=False):#,wait=False):
 
+        # we're not coming from revive but we recovered a state ...
         if except_done == False and self._recovery == True:
-            self.debug(1,"\n\nWARNING: found serialized state - we will attempt to recover only incomplete jobs\n\n")
+            self.debug(1,"WARNING: found serialized state: we will not restart jobs that have completed")
             except_done = True
 
         instances_runs = dict()
@@ -973,7 +1057,7 @@ class CloudRunProvider(ABC):
         
         return jobsinfo , instance
 
-    def __get_jobs_states_internal( self , processes_infos , doWait , job_state ):
+    def __get_jobs_states_internal( self , processes_infos , doWait , job_state , programmatic = False):
         
         jobsinfo , instance = self._compute_jobs_info(processes_infos)
 
@@ -1062,13 +1146,17 @@ class CloudRunProvider(ABC):
                     break
 
             # print job status summary
-            self._print_jobs_summary(instance)
+            if not programmatic:
+                self._print_jobs_summary(instance)
 
             # all retrived attributes need to be true
             retrieved = all( [ pinfo['retrieved'] for pinfo in processes_infos.values()] )
 
             if retrieved and all( [ pinfo['test'] for pinfo in processes_infos.values()] ) :
                 break
+
+            if not programmatic:
+                self.serialize_state()
 
             if doWait:
                 #await asyncio.sleep(15)
@@ -1077,8 +1165,6 @@ class CloudRunProvider(ABC):
                 break
 
         ssh_client.close() 
-
-        self.serialize_state()
 
         return processes
 
@@ -1124,7 +1210,7 @@ class CloudRunProvider(ABC):
                 else:
                     self.debug(1,"There has been a problem with __get_jobs_states_internal")
             #pool.shutdown()
-
+        
         return processes
         # done
 
