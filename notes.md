@@ -52,7 +52,7 @@
   - [x] make state.sh handle multiple uid/pid
   - [ ] create a getByName state (using the command line)
   - [x] generate dynamically bash .sh file to start all the jobs ...
-  - [ ] save uid of scripts in a json file (statemanager)
+  - [x] save uid of scripts in a json file (statemanager)
   - [x] explode uploads between instance setup, env setup and run setup ...
   - [x] maybe we should not put the script arguments in the hash ? This is more a runtime thing 
   - [x] allocate job to instance before doing anything
@@ -82,7 +82,7 @@
   - [ ] clean up unused functions and the get/create/find/update stuff ...
   - [x] check generous creation of deployed jobs
   - [x] move config loading stuff to a config package with ConfigManager class
-  - [ ] this is in preparation of config serialization and reloading to serialize state .... StateManager class in config 
+  - [x] this is in preparation of config serialization and reloading to serialize state .... StateManager class in config 
   - [ ] improve more paths issue (local vs remote)
 
 4) local mode:

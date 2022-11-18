@@ -27,7 +27,7 @@ class CloudRunInstanceState(IntFlag):
 
 
 class CloudRunJobState(IntFlag):
-    FOO = 100
+#    FOO = 100
     UNKNOWN   = 0
     WAIT      = 1  # waiting for bootstraping
     QUEUE     = 2  # queued (for sequential scripts)
@@ -50,7 +50,7 @@ class CloudRunInstance():
         self._ip_addr  = None
         self._dns_addr = None
         # state
-        self._state    = CloudRunJobState.FOO
+        self._state    = CloudRunJobState.UNKNOWN
         # the config the instance has been created on
         self._config   = config 
         # dict data associated with it (AWS response data e.g.)
