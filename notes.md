@@ -78,7 +78,7 @@
   - [x] factorize handle_instance_disconnect
   - [x] add batch uid to deploy job or process
   - [x] display batchuid in summary if not None
-  - [ ] handle also if it's a simple disconnection from SSH (remove wifi to test)
+  - [x] handle also if it's a simple disconnection from SSH (remove wifi to test)
   - [ ] clean up unused functions and the get/create/find/update stuff ...
   - [x] check generous creation of deployed jobs
   - [ ] move config loading stuff to a config package with ConfigManager class

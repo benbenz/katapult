@@ -6,13 +6,13 @@ import paramiko
 import re
 import asyncio
 import concurrent.futures
-import copy
 import math , random
 import cloudrun.combopt as combopt
 from io import BytesIO
 import csv , io
 import pkg_resources
 from cloudrun.core import *
+from .config import ConfigManager
 
 random.seed()
 
@@ -24,143 +24,17 @@ class CloudRunProvider(ABC):
         DBG_LVL = conf.get('debug',1)
 
         self._config  = conf
-        self._load_objects()
-        self._preprocess_jobs()
-        self._sanity_checks()
+        # self._load_objects()
+        # self._preprocess_jobs()
+        # self._sanity_checks()
+        self._instances = []
+        self._environments = []
+        self._jobs = []
+        self._config_manager = ConfigManager(self,self._config,self._instances,self._environments,self._jobs)
 
     def debug(self,level,*args,**kwargs):
         if level <= self.DBG_LVL:
             print(*args,**kwargs)
-
-    def _load_objects(self):
-        projectName = self._config.get('project')
-        inst_cfgs   = self._config.get('instances')
-        env_cfgs    = self._config.get('environments')
-        job_cfgs    = self._config.get('jobs')
-
-        self._instances = [ ]
-        if inst_cfgs:
-            for inst_cfg in inst_cfgs:
-                # virtually demultiply according to 'number' and 'explode'
-                for i in range(inst_cfg.get('number',1)):
-                    rec_cpus = self.get_recommended_cpus(inst_cfg)
-                    if rec_cpus is None:
-                        self.debug(1,"WARNING: could not set recommended CPU size for instance type:",inst_cfg.get('type'))
-                        cpu_split = None
-                    else:
-                        cpu_split = rec_cpus[len(rec_cpus)-1]
-
-                    if cpu_split is None:
-                        if inst_cfg.get('cpus') is not None:
-                            oldcpu = inst_cfg.get('cpus')
-                            self.debug(1,"WARNING: removing CPU reqs for instance type:",inst_cfg.get('type'),"| from",oldcpu,">>> None")
-                        real_inst_cfg = copy.deepcopy(inst_cfg)
-                        real_inst_cfg.pop('number',None)  # provide default value to avoid KeyError
-                        real_inst_cfg.pop('explode',None) # provide default value to avoid KeyError
-
-                        real_inst_cfg['cpus'] = None
-                        real_inst_cfg['rank'] = "{0}.{1}".format(i+1,1)
-                        # [!important!] also copy global information that are used for the name generation ...
-                        real_inst_cfg['dev']  = self._config.get('dev',False)
-                        real_inst_cfg['project']  = self._config.get('project',None)
-
-                        # starts calling the Service here !
-                        # instance , created = self.start_instance( real_inst_cfg )
-                        # let's put some dummy instances for now ...
-                        instance = CloudRunInstance( real_inst_cfg , None, None )
-                        self._instances.append( instance )
-                    else:
-                        total_inst_cpus = inst_cfg.get('cpus',1)
-                        if type(total_inst_cpus) != int and type(total_inst_cpus) != float:
-                            cpucore = self.get_cpus_cores(inst_cfg)
-                            total_inst_cpus = cpucore if cpucore is not None else 1
-                            self.debug(1,"WARNING: setting default CPUs number to",cpucore,"for instance",inst_cfg.get('type'))
-                        if not inst_cfg.get('explode') and total_inst_cpus > cpu_split:
-                            self.debug(1,"WARNING: forcing 'explode' to True because required number of CPUs",total_inst_cpus,' is superior to ',inst_cfg.get('type'),'max number of CPUs',cpu_split)
-                            inst_cfg.set('explode',True)
-
-                        if inst_cfg.get('explode'):
-                            num_sub_instances = math.floor( total_inst_cpus / cpu_split ) # we target CPUs with 16 cores...
-                            if num_sub_instances == 0:
-                                cpu_inc = total_inst_cpus
-                                num_sub_instances = 1
-                            else:
-                                cpu_inc = cpu_split 
-                                num_sub_instances = num_sub_instances + 1
-                        else:
-                            num_sub_instances = 1
-                            cpu_inc = total_inst_cpus
-                        cpus_created = 0 
-                        for j in range(num_sub_instances):
-                            rank = "{0}.{1}".format(i+1,j+1)
-                            if j == num_sub_instances-1: # for the last one we're completing the cpus with whatever
-                                inst_cpus = total_inst_cpus - cpus_created
-                            else:
-                                inst_cpus = cpu_inc
-                            if inst_cpus == 0:
-                                continue 
-
-                            if rec_cpus is not None and not inst_cpus in rec_cpus:
-                                self.debug(1,"ERROR: The total number of CPUs required causes a sub-number of CPUs ( =",inst_cpus,") to not be accepted by the type",inst_cfg.get('type'),"| list of valid cpus:",rec_cpus)
-                                sys.exit()
-
-                            real_inst_cfg = copy.deepcopy(inst_cfg)
-                            real_inst_cfg.pop('number',None)  # provide default value to avoid KeyError
-                            real_inst_cfg.pop('explode',None) # provide default value to avoid KeyError
-                            real_inst_cfg['cpus'] = inst_cpus
-                            real_inst_cfg['rank'] = rank
-                            # [!important!] also copy global information that are used for the name generation ...
-                            real_inst_cfg['dev']  = self._config.get('dev',False)
-                            real_inst_cfg['project']  = self._config.get('project',None)
-
-                            # let's put some dummy instances for now ...
-                            instance = CloudRunInstance( real_inst_cfg , None, None )
-                            self._instances.append( instance )
-
-                            cpus_created = cpus_created + inst_cpus
-        debug(2,self._instances)
-
-        self._environments = [ ] 
-        if env_cfgs:
-            for env_cfg in env_cfgs:
-                # copy the dev global paramter to the environment configuration (will be used for names)
-                env_cfg['dev']  = self._config.get('dev',False)
-                env = CloudRunEnvironment(projectName,env_cfg)
-                self._environments.append(env)
-
-        self._jobs = [ ] 
-        if job_cfgs:
-            for i,job_cfg in enumerate(job_cfgs):
-                job = CloudRunJob(job_cfg,i)
-                self._jobs.append(job)
-
-    # fill up the jobs names if not present (and we have only 1 environment defined)
-    # link the jobs objects with an environment object
-    def _preprocess_jobs(self):
-        for job in self._jobs:
-            if not job.get_config('env_name'):
-                if len(self._environments)==1:
-                    job.attach_env(self._environments[0])
-                else:
-                    print("FATAL ERROR - you have more than one environments defined and the job doesnt have an env_name defined",job)
-                    sys.exit()
-            else:
-                env = self._get_environment(job.get_config('env_name'))
-                if not env:
-                    print("FATAL ERROR - could not find env with name",job.get_config('env_name'),job)
-                    sys.exit()
-                else:
-                    job.attach_env(env)
-
-
-    def _sanity_checks(self):
-        pass
-
-    def _get_environment(self,name):
-        for env in self._environments:
-            if env.get_name() == name:
-                return env
-        return None
 
     async def _wait_for_instance(self,instance):
         # get the public DNS info when instance actually started (todo: check actual state)
@@ -259,33 +133,7 @@ class CloudRunProvider(ABC):
 
         self.debug(2,instance)            
 
-    async def _connect_to_instance(self,instance):
-        # ssh into instance and run the script from S3/local? (or sftp)
-        region = instance.get_region()
-        if region is None:
-            region = self.get_user_region()
-        k = paramiko.RSAKey.from_private_key_file('cloudrun-'+str(region)+'.pem')
-        ssh_client = paramiko.SSHClient()
-        ssh_client.set_missing_host_key_policy(paramiko.AutoAddPolicy())
-        self.debug(1,"connecting to ",instance.get_dns_addr(),"/",instance.get_ip_addr())
-        while True:
-            try:
-                ssh_client.connect(hostname=instance.get_dns_addr(),username=instance.get_config('img_username'),pkey=k) #,password=’mypassword’)
-                break
-            except paramiko.ssh_exception.NoValidConnectionsError as cexc:
-                print(cexc)
-                await asyncio.sleep(4)
-                self.debug(1,"Retrying ...")
-            except OSError as ose:
-                print(ose)
-                await asyncio.sleep(4)
-                self.debug(1,"Retrying ...")
-
-        self.debug(1,"connected")    
-
-        return ssh_client
-
-    def _connect_to_instance_block(self,instance,**kwargs):
+    def _connect_to_instance(self,instance,**kwargs):
         # ssh into instance and run the script from S3/local? (or sftp)
         region = instance.get_region()
         if region is None:
@@ -623,8 +471,7 @@ class CloudRunProvider(ABC):
             if attempts!=0:
                 self.debug(1,"Trying again ...")
 
-            # instanceid , ssh_client , ftp_client = await self._wait_and_connect(instance)
-            instanceid , ssh_client , ftp_client = self._wait_and_connect_block(instance)
+            instanceid , ssh_client , ftp_client = self._wait_and_connect(instance)
 
             if ssh_client is None:
                 self.debug(1,"ERROR: could not deploy instance",instance)
@@ -655,25 +502,13 @@ class CloudRunProvider(ABC):
             
             attempts = attempts + 1
 
-
-    async def _wait_and_connect(self,instance):
-
-        # wait for instance to be ready 
-        await self._wait_for_instance(instance)
-
-        # connect to instance
-        ssh_client = await self._connect_to_instance(instance)
-        ftp_client = ssh_client.open_sftp()
-
-        return instance.get_id() , ssh_client , ftp_client
-
-    def _wait_and_connect_block(self,instance):
+    def _wait_and_connect(self,instance):
 
         # wait for instance to be ready 
         self._wait_for_instance_block(instance)
 
         # connect to instance
-        ssh_client = self._connect_to_instance_block(instance)
+        ssh_client = self._connect_to_instance(instance)
         if ssh_client is not None:
             ftp_client = ssh_client.open_sftp()
 
@@ -703,17 +538,6 @@ class CloudRunProvider(ABC):
     def deploy(self):
 
         clients = {} 
-
-        # wait for instances to be deployed
-        # wait_list = [ ]
-        # for instance in self._instances:
-        #     wait_list.append( self._wait_and_connect(instance) )
-        # #await asyncio.gather(*wait_list)
-        # for future in asyncio.as_completed(wait_list):
-        #     instanceid , ssh_client , ftp_client = await future
-        #     clients[instanceid] = { 'ssh' : ssh_client , 'ftp' : ftp_client }
-
-        # loop = asyncio.get_running_loop()
 
         # https://docs.python.org/3/library/concurrent.futures.html cf. ThreadPoolExecutor Example¶
         with concurrent.futures.ThreadPoolExecutor(max_workers=10) as pool:
@@ -804,7 +628,7 @@ class CloudRunProvider(ABC):
             cmd_pid  = runinfo.get('cmd_pid')
             batch_run_file = 'batch_run-'+batch_uid+'.sh'
             batch_pid_file = 'batch_pid-'+batch_uid+'.sh'
-            ssh_client = self._connect_to_instance_block(instance)
+            ssh_client = self._connect_to_instance(instance)
             if ssh_client is None:
                 ssh_client , processes = self._handle_instance_disconnect(instance,"could not run jobs for instance")
                 if ssh_client is None:
@@ -943,11 +767,11 @@ class CloudRunProvider(ABC):
                 inst = future_to_instance[future]
                 #instanceid = inst.get_id()
                 #future.result()
-                processes = future.result()
-                if processes is None:
+                fut_processes = future.result()
+                if fut_processes is None:
                     self.debug(1,"An error occured while running the jobs. Process will stop.")
                     return None
-                for process in processes:
+                for process in fut_processes:
                     # switch to yield when the wait_for_state method is ready ...
                     #yield process
                     processes.append(process)
@@ -978,7 +802,7 @@ class CloudRunProvider(ABC):
         dpl_env  = env.deploy(instance)
         dpl_job  = job.deploy(dpl_env)
 
-        ssh_client = self._connect_to_instance_block(instance)
+        ssh_client = self._connect_to_instance(instance)
 
         if ssh_client is None:
             self.debug(1,"ERROR: could not run job for instance",instance)
@@ -1107,7 +931,7 @@ class CloudRunProvider(ABC):
 
         # this is an Internet error
         if instance.get_state() == CloudRunInstanceState.RUNNING:
-            ssh_client = self._connect_to_instance_block(instance,timeout=10)
+            ssh_client = self._connect_to_instance(instance,timeout=10)
             if ssh_client is None:
                 self.debug(1,"FATAL ERROR(0):",msgs,instance)
                 return None , None
@@ -1125,7 +949,7 @@ class CloudRunProvider(ABC):
         rerun_jobs = processes is not None
         #processes_info , jobsinfo   = self.revive(instance,rerun_jobs) #re-run the jobs and get an updated processes/jobsinfo 
         processes = self.revive(instance,rerun_jobs)
-        ssh_client = self._connect_to_instance_block(instance,timeout=10)
+        ssh_client = self._connect_to_instance(instance,timeout=10)
         if ssh_client is None:
             self.debug(1,"FATAL ERROR(1):",msgs,instance)
         return ssh_client , processes #processes_info , jobsinfo
@@ -1160,7 +984,7 @@ class CloudRunProvider(ABC):
         
         jobsinfo , instance = self._compute_jobs_info(processes_infos)
 
-        ssh_client = self._connect_to_instance_block(instance,timeout=10)
+        ssh_client = self._connect_to_instance(instance,timeout=10)
 
         if ssh_client is None:
             ssh_client , processes = self._handle_instance_disconnect(instance,"could not get jobs states for instance",
@@ -1286,34 +1110,7 @@ class CloudRunProvider(ABC):
         if not isinstance(processes,list):
             processes = [ processes ]
 
-        # organize by instance
-        # instances_processes = dict()
-        # #instances_list      = dict()
-        # for process in processes:
-        #     job         = process.get_job()   # deployed job
-        #     instance    = job.get_instance()
-        #     if instance is None:
-        #         print("wait_for_job_state: instance is not available!")
-        #         return 
-        #     # initialize the collection dict
-        #     if instance.get_name() not in instances_processes:
-        #         instances_processes[instance.get_name()] = dict()
-        #         #instances_list[instance.get_name()]      = instance
-        #     if process.get_uid() not in instances_processes[instance.get_name()]:
-        #         instances_processes[instance.get_name()][process.get_uid()] = { 'process' : process , 'retrieved' : False  , 'test' : False }
         instances_processes = self._compute_instances_processes(processes)
-
-        # wait for instances to be ready (concurrently)
-        #instances_wait = [ ]
-        #for instance in instances_list.values():
-        #    instances_wait.append( self._wait_for_instance(instance))
-        #await asyncio.gather( *instances_wait ) 
-
-        # wait for each group of processes
-        # jobs_wait = [ ] 
-        # for instance_name , processes_infos in instances_processes.items():
-        #     jobs_wait.append( self.__get_jobs_states_internal( processes_infos , do_wait , job_state ) )
-        # await asyncio.gather( * jobs_wait )
 
         processes = [] 
 
