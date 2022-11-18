@@ -76,11 +76,11 @@
   - [x] finish mark aborted function
   - [x] re-run jobs, with aborted checkups 
   - [x] factorize handle_instance_disconnect
-  - [ ] add batch uid to deploy job or process
-  - [ ] display batchuid in summary if not None
+  - [x] add batch uid to deploy job or process
+  - [x] display batchuid in summary if not None
   - [ ] handle also if it's a simple disconnection from SSH (remove wifi to test)
   - [ ] clean up unused functions and the get/create/find/update stuff ...
-  - [ ] check generous creation of deployed jobs
+  - [x] check generous creation of deployed jobs
   - [ ] move config loading stuff to a config package with ConfigManager class
   - [ ] this is in preparation of config serialization and reloading to serialize state .... StateManager class in config 
 

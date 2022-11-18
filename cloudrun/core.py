@@ -251,9 +251,10 @@ class CloudRunJob():
     def get_deployed_jobs(self):
         return self.__deployed
 
-    def deploy(self,dpl_env):
+    def deploy(self,dpl_env,add_permanently=True):
         dpl_job = CloudRunDeployedJob(self,dpl_env)
-        self.__deployed.append(dpl_job)
+        if add_permanently:
+            self.__deployed.append(dpl_job)
         return dpl_job
 
     def has_completed(self):
@@ -335,10 +336,11 @@ class CloudRunDeployedJob(CloudRunJob):
 
 class CloudRunProcess():
 
-    def __init__(self,dpl_job,uid,pid=None):
+    def __init__(self,dpl_job,uid,pid=None,batch_uid=None):
         self._job    = dpl_job
         self._uid   = uid
         self._pid   = pid
+        self._batch_uid = batch_uid
         self._state = CloudRunJobState.UNKNOWN
         self._job.attach_process(self)
      
@@ -360,14 +362,20 @@ class CloudRunProcess():
     def get_job(self):
         return self._job 
 
+    def get_batch_uid(self):
+        return self._batch_uid
+
     def str_simple(self):
-        return "CloudRunProcess: UID = {0} , PID = {1} , STATE = {2} ({3})".format(self._uid,self._pid,self._state,self._state.name)
+        if self._batch_uid:
+            return "CloudRunProcess: UID = {0} , PID = {1} , BATCH = {2} , STATE = {3}".format(self._uid,self._pid,self._batch_uid,self._state.name)
+        else:
+            return "CloudRunProcess: UID = {0} , PID = {1} , STATE = {2}".format(self._uid,self._pid,self._state.name)
 
     def __repr__(self):
-        return "CloudRunProcess: job = {0} , UID = {1} , PID = {2} , STATE = {3} ({4})".format(self._job,self._uid,self._pid,self._state,self._state.name)
+        return "CloudRunProcess: job = {0} , UID = {1} , PID = {2} , STATE = {3}".format(self._job,self._uid,self._pid,self._state.name)
          
     def __str__(self):
-        return "CloudRunProcess: job = {0} , UID = {1} , PID = {2} , STATE = {3} ({4})".format(self._job,self._uid,self._pid,self._state,self._state.name)
+        return "CloudRunProcess: job = {0} , UID = {1} , PID = {2} , STATE = {3}".format(self._job,self._uid,self._pid,self._state.name)
 
 
 

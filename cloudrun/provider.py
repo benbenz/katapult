@@ -536,7 +536,7 @@ class CloudRunProvider(ABC):
         for job in instance.get_jobs():
             env      = job.get_env()        # get its environment
             dpl_env  = env.deploy(instance) # "deploy" the environment to the instance and get a DeployedEnvironment
-            dpl_job  = job.deploy(dpl_env)
+            dpl_job  = job.deploy(dpl_env,False) # do not add this dpl_job permanently (only use for utility here)
 
             input_files = []
             if job.get_config('upload_files'):
@@ -760,46 +760,59 @@ class CloudRunProvider(ABC):
                 print(sshe)
                 raise CloudRunError()  
 
-    def _run_jobs_for_instance(self,runinfo,dpl_jobs) :
+    def _run_jobs_for_instance(self,runinfo,batch_uid,dpl_jobs) :
 
         global_path = "$HOME/run" # more robust
 
-        processes = []
+        tryagain = True
 
-        instance = runinfo.get('instance')
-        cmd_run  = runinfo.get('cmd_run')
-        cmd_run_pre = runinfo.get('cmd_run_pre')
-        cmd_pid  = runinfo.get('cmd_pid')
-        batch_run_file = 'batch_run-'+self.batch_uid+'.sh'
-        batch_pid_file = 'batch_pid-'+self.batch_uid+'.sh'
-        ssh_client = self._connect_to_instance_block(instance)
-        if ssh_client is None:
-            ssh_client , processes = self._handle_instance_disconnect(instance,"could not run jobs for instance")
+        while tryagain:
+
+            processes = []
+
+            instance = runinfo.get('instance')
+            cmd_run  = runinfo.get('cmd_run')
+            cmd_run_pre = runinfo.get('cmd_run_pre')
+            cmd_pid  = runinfo.get('cmd_pid')
+            batch_run_file = 'batch_run-'+batch_uid+'.sh'
+            batch_pid_file = 'batch_pid-'+batch_uid+'.sh'
+            ssh_client = self._connect_to_instance_block(instance)
             if ssh_client is None:
-                return []
+                ssh_client , processes = self._handle_instance_disconnect(instance,"could not run jobs for instance")
+                if ssh_client is None:
+                    return []
 
-        ftp_client = ssh_client.open_sftp()
-        ftp_client.chdir('/home/'+instance.get_config('img_username')+'/run')
-        ftp_client.putfo(BytesIO(cmd_run_pre.encode()+cmd_run.encode()), batch_run_file)
-        ftp_client.putfo(BytesIO(cmd_pid.encode()), batch_pid_file)
-        # run
-        commands = [ 
-            { 'cmd': "chmod +x "+global_path+"/"+batch_run_file+" "+global_path+"/"+batch_pid_file, 'out' : False } ,  
-            # execute main script (spawn) (this will wait for bootstraping)
-            { 'cmd': global_path+"/"+batch_run_file , 'out' : False } 
-        ]
-        
-        self._run_ssh_commands(ssh_client,commands)
+            ftp_client = ssh_client.open_sftp()
+            ftp_client.chdir('/home/'+instance.get_config('img_username')+'/run')
+            ftp_client.putfo(BytesIO(cmd_run_pre.encode()+cmd_run.encode()), batch_run_file)
+            ftp_client.putfo(BytesIO(cmd_pid.encode()), batch_pid_file)
+            # run
+            commands = [ 
+                { 'cmd': "chmod +x "+global_path+"/"+batch_run_file+" "+global_path+"/"+batch_pid_file, 'out' : False } ,  
+                # execute main script (spawn) (this will wait for bootstraping)
+                { 'cmd': global_path+"/"+batch_run_file , 'out' : False } 
+            ]
+            
+            try:
+                self._run_ssh_commands(ssh_client,commands)
+                tryagain = False
+            except Exception as e:
+                self.debug(1,e)
+                self.debug(1,"ERROR: the instance is unreachable while sending batch",instance)
+                ssh_client , processes = self._handle_instance_disconnect(instance,"could not run jobs for instance")
+                if ssh_client is None:
+                    return []
+                tryagain = True
 
-        for uid in runinfo.get('jobs'):
-            # we dont have the pid of everybody yet because its sequential
-            # lets leave it blank. it can work with the uid ...
-            job = dpl_jobs[uid]
-            process = CloudRunProcess( job , uid , None ) 
-            self.debug(1,process) 
-            processes.append(process)
+            for uid in runinfo.get('jobs'):
+                # we dont have the pid of everybody yet because its sequential
+                # lets leave it blank. it can work with the uid ...
+                job = dpl_jobs[uid]
+                process = CloudRunProcess( job , uid , None , batch_uid) 
+                self.debug(1,process) 
+                processes.append(process)
 
-        ssh_client.close()
+            ssh_client.close()
 
         return processes 
 
@@ -812,6 +825,9 @@ class CloudRunProvider(ABC):
         dpl_jobs = dict()
 
         jobs = self._jobs if not instance_filter else instance_filter.get_jobs()
+
+        # batch uid is shared accross instances
+        batch_uid = cloudrunutils.generate_unique_filename()
 
         for job in self._jobs:
 
@@ -883,9 +899,6 @@ class CloudRunProvider(ABC):
             instances_runs[instance.get_name()]['cmd_pid'] = cmd_pid
             instances_runs[instance.get_name()]['cmd_run_pre'] = cmd_run_pre
         
-        # batch uid is shared accross instances
-        self.batch_uid = cloudrunutils.generate_unique_filename()
-
         processes = []
         
         # for instance_name , runinfo in instances_runs.items():
@@ -896,7 +909,7 @@ class CloudRunProvider(ABC):
 
         with concurrent.futures.ThreadPoolExecutor(max_workers=10) as pool:
             future_to_instance = { pool.submit(self._run_jobs_for_instance,
-                                                runinfo,dpl_jobs) : instance for instance_name , runinfo in instances_runs.items()
+                                                runinfo,batch_uid,dpl_jobs) : instance for instance_name , runinfo in instances_runs.items()
                                                 }
             for future in concurrent.futures.as_completed(future_to_instance):
                 inst = future_to_instance[future]
@@ -1050,8 +1063,15 @@ class CloudRunProvider(ABC):
         return pkg_resources.resource_stream(resource_package, resource_path)
 
     def _handle_instance_disconnect(self,instance,msg,processes=None):
-        # check the status on the instance with AWS
-        self.update_instance_info(instance)
+        try:
+            # check the status on the instance with AWS
+            self.update_instance_info(instance)
+        except Exception as e:
+            self.debug(1,e)
+            # we likely have an Internet connection problem ...
+            # let's just ignore the situation and continue
+            self.debug(1,"INTERNET connection error. The process will stop.")
+            return None , None
 
         # this is an Internet error
         if instance.get_state() == CloudRunInstanceState.RUNNING:
@@ -1129,7 +1149,7 @@ class CloudRunProvider(ABC):
                 ssh_client , processes = self._handle_instance_disconnect(instance,"could not get jobs states for instance. SSH connection lost with",
                                                 [processes_infos[uid]['process'] for uid in processes_infos])
                 if ssh_client is None:
-                    return
+                    return None
                 
                 if processes is not None:
                     processes_infos , jobsinfo = self._recompute_jobs_info(instance,processes)
@@ -1138,7 +1158,22 @@ class CloudRunProvider(ABC):
 
             cmd = global_path + "/state.sh " + jobsinfo
             self.debug(2,"Executing command",cmd)
-            stdin, stdout, stderr = ssh_client.exec_command(cmd)
+            try:
+                stdin, stdout, stderr = ssh_client.exec_command(cmd)
+            except Exception as e:
+                self.debug(1,"SSH connection error while sending state.sh command")
+                ssh_client , processes = self._handle_instance_disconnect(instance,"could not get jobs states for instance. SSH connection lost with",
+                                                [processes_infos[uid]['process'] for uid in processes_infos])
+                if ssh_client is None:
+                    return None
+                if processes is not None: # if processes have changed due to restart
+                    processes_infos , jobsinfo = self._recompute_jobs_info(instance,processes)
+                    cmd = global_path + "/state.sh " + jobsinfo
+                
+                # try one more time to re-run the command ...
+                stdin, stdout, stderr = ssh_client.exec_command(cmd)
+
+                processes = []
 
             while True: 
                 lines = stdout.readlines()
@@ -1259,8 +1294,11 @@ class CloudRunProvider(ABC):
                 #instanceid = inst.get_id()
                 #future.result()
                 fut_processes = future.result()
-                for p in fut_processes:
-                    processes.append(p)
+                if fut_procsses is not None:
+                    for p in fut_processes:
+                        processes.append(p)
+                else:
+                    self.debug(1,"There has been a problem with __get_jobs_states_internal")
             #pool.shutdown()
 
         return processes
