@@ -227,7 +227,8 @@ class CloudRunProvider(ABC):
 
             if instance.get_id() != old_id:
                 self.debug(2,"Instance has changed",old_id,"VS",instance.get_id())
-                instance.set_has_changed(True)
+                #self._instances_states[instance.get_id()] = { 'changed' : True }
+                self._instances_states[instance.get_name()] = { 'changed' : True }
 
         except CloudRunError as cre:
 
@@ -526,6 +527,7 @@ class CloudRunProvider(ABC):
 
 
     def start(self):
+        self._instances_states = dict() 
         with concurrent.futures.ThreadPoolExecutor(max_workers=10) as pool:
             future_to_instance = { pool.submit(self._start_and_update_instance,instance) : instance for instance in self._instances }
             for future in concurrent.futures.as_completed(future_to_instance):
@@ -635,9 +637,8 @@ class CloudRunProvider(ABC):
 
     def _check_run_state(self,runinfo):
         instance = runinfo.get('instance')
-        if instance.has_changed():
+        if instance.get_name() in self._instances_states and self._instances_states[instance.get_name()]['changed']==True:
            self.debug(1,"Instance has changed! States of old jobs should return UNKNOWN and a new batch of jobs will be started",color=bcolors.WARNING)
-           instance.set_has_changed(False)
            #let's just let the following logic do its job ... JOB CENTRIC 
            #return True , None , False
         last_processes_old = [] 
