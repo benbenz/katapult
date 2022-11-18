@@ -383,9 +383,9 @@ class CloudRunProvider(ABC):
     def _test_reupload(self,instance,file_test,ssh_client,isfile=True):
         re_upload = False
         if isfile:
-            stdin0, stdout0, stderr0 = ssh_client.exec_command("[ -f "+file_test+" ] && echo \"ok\" || echo \"not_ok\";")
+            stdin0, stdout0, stderr0 = self._exec_command(ssh_client,"[ -f "+file_test+" ] && echo \"ok\" || echo \"not_ok\";")
         else:
-            stdin0, stdout0, stderr0 = ssh_client.exec_command("[ -d "+file_test+" ] && echo \"ok\" || echo \"not_ok\";")
+            stdin0, stdout0, stderr0 = self._exec_command(ssh_client,"[ -d "+file_test+" ] && echo \"ok\" || echo \"not_ok\";")
         result = stdout0.read()
         if "not_ok" in result.decode():
             debug(1,"re-upload of files ...")
@@ -404,7 +404,7 @@ class CloudRunProvider(ABC):
         if re_upload:
 
             self.debug(2,"creating instance's directories ...")
-            stdin0, stdout0, stderr0 = ssh_client.exec_command("mkdir -p $HOME/run && rm -f $HOME/run/ready")
+            stdin0, stdout0, stderr0 = self._exec_command(ssh_client,"mkdir -p $HOME/run && rm -f $HOME/run/ready")
             self.debug(2,"directories created")
 
             self.debug(1,"uploading instance's files ... ")
@@ -424,7 +424,7 @@ class CloudRunProvider(ABC):
             ftp_client.putfo(self._get_resource_file('remote_files/getpid.sh'),'getpid.sh')
 
             self.debug(1,"Installing PyYAML for newly created instance ...")
-            stdin , stdout, stderr = ssh_client.exec_command("pip install pyyaml")
+            stdin , stdout, stderr = self._exec_command(ssh_client,"pip install pyyaml")
             self.debug(2,stdout.read())
             self.debug(2, "Errors")
             self.debug(2,stderr.read())
@@ -489,7 +489,7 @@ class CloudRunProvider(ABC):
                 global_path = "$HOME/run" # more robust
 
                 self.debug(2,"creating environment directories ...")
-                stdin0, stdout0, stderr0 = ssh_client.exec_command("mkdir -p "+files_path+" && rm -f "+dpl_env.get_path_abs()+'/ready')
+                stdin0, stdout0, stderr0 = self._exec_command(ssh_client,"mkdir -p "+files_path+" && rm -f "+dpl_env.get_path_abs()+'/ready')
                 self.debug(2,"directories created")
 
                 self.debug(1,"uploading files ... ")
@@ -555,9 +555,9 @@ class CloudRunProvider(ABC):
                     mkdir_cmd = mkdir_cmd + (" && " if mkdir_cmd else "") + "mkdir -p " + dpl_job.get_path()+'/'+dirname
 
             self.debug(2,"creating job directories ...")
-            stdin0, stdout0, stderr0 = ssh_client.exec_command("mkdir -p "+dpl_job.get_path())
+            stdin0, stdout0, stderr0 = self._exec_command(ssh_client,"mkdir -p "+dpl_job.get_path())
             if mkdir_cmd != "":
-                stdin0, stdout0, stderr0 = ssh_client.exec_command(mkdir_cmd)
+                stdin0, stdout0, stderr0 = self._exec_command(ssh_client,mkdir_cmd)
             self.debug(2,"directories created")
 
             re_upload_env = deploy_states[instance.get_name()][env.get_name()]['upload']
@@ -567,7 +567,7 @@ class CloudRunProvider(ABC):
 
             if re_upload: #or re_upload_env:
 
-                stdin0, stdout0, stderr0 = ssh_client.exec_command("rm -f "+dpl_job.get_path()+'/ready')
+                stdin0, stdout0, stderr0 = self._exec_command(ssh_client,"rm -f "+dpl_job.get_path()+'/ready')
 
                 self.debug(1,"uploading job files ... ",dpl_job.get_hash())
 
@@ -616,27 +616,45 @@ class CloudRunProvider(ABC):
 
         deploy_states[instance.get_name()] = { }
 
-        # instanceid , ssh_client , ftp_client = await self._wait_and_connect(instance)
-        instanceid , ssh_client , ftp_client = self._wait_and_connect_block(instance)
+        attempts = 0 
 
-        if ssh_client is None:
-            self.debug(1,"ERROR: could not deploy instance",instance)
-            return
+        while attempts < 5:
 
-        self.debug(1,"-- deploy instances --")
+            if attempts!=0:
+                self.debug(1,"Trying again ...")
 
-        self._deploy_instance(instance,deploy_states,ssh_client,ftp_client)
+            # instanceid , ssh_client , ftp_client = await self._wait_and_connect(instance)
+            instanceid , ssh_client , ftp_client = self._wait_and_connect_block(instance)
 
-        self.debug(1,"-- deploy environments --")
+            if ssh_client is None:
+                self.debug(1,"ERROR: could not deploy instance",instance)
+                return
 
-        self._deploy_environments(instance,deploy_states,ssh_client,ftp_client)
+            try :
 
-        self.debug(1,"-- deploy jobs --")
+                self.debug(1,"-- deploy instances --")
 
-        self._deploy_jobs(instance,deploy_states,ssh_client,ftp_client) 
+                self._deploy_instance(instance,deploy_states,ssh_client,ftp_client)
 
-        ftp_client.close()
-        ssh_client.close()
+                self.debug(1,"-- deploy environments --")
+
+                self._deploy_environments(instance,deploy_states,ssh_client,ftp_client)
+
+                self.debug(1,"-- deploy jobs --")
+
+                self._deploy_jobs(instance,deploy_states,ssh_client,ftp_client) 
+
+                ftp_client.close()
+                ssh_client.close()
+
+                break
+
+            except Exception as e:
+                self.debug(1,e)
+                self.debug(1,"Error while deploying")
+            
+            attempts = attempts + 1
+
 
     async def _wait_and_connect(self,instance):
 
@@ -734,6 +752,16 @@ class CloudRunProvider(ABC):
             if process.get_state() & state_mask:
                 process.set_state(CloudRunJobState.ABORTED)
 
+    def _exec_command(self,ssh_client,command):
+        self.debug(2,"Executing ",format( command ))
+        try:
+            stdin , stdout, stderr = ssh_client.exec_command(command)
+            return stdin , stdout , stderr 
+        except paramiko.ssh_exception.SSHException as sshe:
+            print("The SSH Client has been disconnected!")
+            print(sshe)
+            raise CloudRunError()  
+            
     def _run_ssh_commands(self,ssh_client,commands):
         for command in commands:
             self.debug(2,"Executing ",format( command['cmd'] ),"output",command['out'])
@@ -915,7 +943,11 @@ class CloudRunProvider(ABC):
                 inst = future_to_instance[future]
                 #instanceid = inst.get_id()
                 #future.result()
-                for process in future.result():
+                processes = future.result()
+                if processes is None:
+                    self.debug(1,"An error occured while running the jobs. Process will stop.")
+                    return None
+                for process in processes:
                     # switch to yield when the wait_for_state method is ready ...
                     #yield process
                     processes.append(process)
@@ -961,13 +993,13 @@ class CloudRunProvider(ABC):
         run_path    = dpl_job.get_path() + '/' + uid
 
         self.debug(1,"creating directories ...")
-        stdin0, stdout0, stderr0 = ssh_client.exec_command("mkdir -p "+run_path)
+        stdin0, stdout0, stderr0 = self._exec_command(ssh_client,"mkdir -p "+run_path)
         self.debug(1,"directories created")
 
         ln_command = self._get_ln_command(dpl_job,uid)
         self.debug(2,ln_command)
         if ln_command != "":
-            stdin0, stdout0, stderr0 = ssh_client.exec_command(ln_command)
+            stdin0, stdout0, stderr0 = self._exec_command(ssh_client,ln_command)
             self.debug(2,stdout0.read())
 
         # run
@@ -983,7 +1015,7 @@ class CloudRunProvider(ABC):
         getpid_cmd = global_path+"/getpid.sh \"" + pid_file + "\""
          
         self.debug(1,"Executing ",format( getpid_cmd ) )
-        stdin , stdout, stderr = ssh_client.exec_command(getpid_cmd)
+        stdin , stdout, stderr = self._exec_command(ssh_client,getpid_cmd)
         info = stdout.readline().strip().split(',')
         pid = int(info[1])
         #uid = info[0]
@@ -1159,7 +1191,7 @@ class CloudRunProvider(ABC):
             cmd = global_path + "/state.sh " + jobsinfo
             self.debug(2,"Executing command",cmd)
             try:
-                stdin, stdout, stderr = ssh_client.exec_command(cmd)
+                stdin, stdout, stderr = self._exec_command(ssh_client,cmd)
             except Exception as e:
                 self.debug(1,"SSH connection error while sending state.sh command")
                 ssh_client , processes = self._handle_instance_disconnect(instance,"could not get jobs states for instance. SSH connection lost with",
@@ -1171,7 +1203,7 @@ class CloudRunProvider(ABC):
                     cmd = global_path + "/state.sh " + jobsinfo
                 
                 # try one more time to re-run the command ...
-                stdin, stdout, stderr = ssh_client.exec_command(cmd)
+                stdin, stdout, stderr = self._exec_command(ssh_client,cmd)
 
                 processes = []
 
