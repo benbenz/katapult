@@ -254,7 +254,7 @@ class StateSerializer():
             }
             #json_data = json.dumps(state,indent=4,cls=CloudRunJSONEncoder)
             with open(self._state_file,'wb') as state_file:
-                pickle.dump(state,state_file)
+                pickle.dump(state,state_file)#,protocol=0) # protocol 0 = readable
                 #state_file.write(json_data)
         except Exception as e:
             self._provider.debug(1,"SERIALIZATION ERROR",e)
@@ -301,6 +301,4 @@ class StateSerializer():
             return False
 
     def transfer(self):
-        self._instances    = self._loaded['instances']
-        self._environments = self._loaded['environments']
-        self._jobs         = self._loaded['jobs']        
+        return self._loaded['instances'] , self._loaded['environments'] , self._loaded['jobs']

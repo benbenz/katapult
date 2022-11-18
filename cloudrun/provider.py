@@ -35,18 +35,21 @@ class CloudRunProvider(ABC):
         self._config_manager = ConfigManager(self,self._config,self._instances,self._environments,self._jobs)
         self._config_manager.load()
 
-        # load the state (if existing) and set the recovery mode accordingly
-        self._state_serializer = StateSerializer(self,self._instances,self._environments,self._jobs)
-        self._state_serializer.load()
+        if self._config.get('serialize',False):
+            # load the state (if existing) and set the recovery mode accordingly
+            self._state_serializer = StateSerializer(self,self._instances,self._environments,self._jobs)
+            self._state_serializer.load()
 
-        consistency = False #self._state_serializer.check_consistency()
-        if consistency:
-            self.debug(1,"State is consistent with configuration - LOADING old state")
-            self._recovery = True
-            self._state_serializer.transfer()
-            self.debug(1,self._instances)
-            self.debug(1,self._environments)
-            self.debug(1,self._jobs)
+            consistency = self._state_serializer.check_consistency()
+            if consistency:
+                self.debug(1,"State is consistent with configuration - LOADING old state")
+                self._recovery = True
+                self._instances , self._environments , self._jobs = self._state_serializer.transfer()
+                self.debug(2,self._instances)
+                self.debug(2,self._environments)
+                self.debug(2,self._jobs)
+            else:
+                self._recovery = False
         else:
             self._recovery = False
 
@@ -55,7 +58,8 @@ class CloudRunProvider(ABC):
             print(*args,**kwargs)
 
     def serialize_state(self):
-        self._state_serializer.serialize()
+        if self._config.get('serialize',False):
+            self._state_serializer.serialize()
 
     def _wait_for_instance(self,instance):
         # get the public DNS info when instance actually started (todo: check actual state)
@@ -679,7 +683,7 @@ class CloudRunProvider(ABC):
             instance = job.get_instance()
 
             #if instance_filter is not None:
-            #    if instance != instance_filter:
+            #    if instance is not instance_filter:
             #        continue 
             if except_done and job.has_completed():
                 continue
