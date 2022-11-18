@@ -1355,4 +1355,11 @@ DBG_LVL=1
 
 def debug(level,*args,**kwargs):
     if level <= DBG_LVL:
+        if 'color' in kwargs:
+            color = kwargs['color']
+            listargs = list(args)
+            listargs.insert(0,color)
+            listargs.append(bcolors.ENDC)
+            args = tuple(listargs)
+            kwargs.pop('color')
         print(*args,**kwargs)
