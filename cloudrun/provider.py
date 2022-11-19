@@ -72,7 +72,8 @@ class CloudRunProvider(ABC):
             if 'color' in kwargs:
                 color = kwargs['color']
                 listargs = list(args)
-                listargs.insert(0,color)
+                #listargs.insert(0,color)
+                listargs[0] = color + listargs[0]
                 listargs.append(bcolors.ENDC)
                 args = tuple(listargs)
                 kwargs.pop('color')
@@ -84,16 +85,10 @@ class CloudRunProvider(ABC):
 
     def _wait_for_instance(self,instance):
         
-        for job in instance.get_jobs():
-            self.debug(3,"PROCESS in _wait_for_instance",job.get_last_process())
-
         # get the public DNS info when instance actually started (todo: check actual state)
         waitFor = True
         while waitFor:
             self.update_instance_info(instance)
-
-            for job in instance.get_jobs():
-                self.debug(3,"PROCESS in _wait_for_instance (after update)",job.get_last_process())
 
             self.serialize_state()
 
@@ -269,13 +264,15 @@ class CloudRunProvider(ABC):
             # change dir to global dir (should be done once)
             global_path = "/home/" + instance.get_config('img_username') + '/run/'
             ftp_client.chdir(global_path)
-            ftp_client.putfo(self._get_resource_file('remote_files/config.py'),'config.py')
-            ftp_client.putfo(self._get_resource_file('remote_files/bootstrap.sh'),'bootstrap.sh')
-            ftp_client.putfo(self._get_resource_file('remote_files/run.sh'),'run.sh')
-            ftp_client.putfo(self._get_resource_file('remote_files/microrun.sh'),'microrun.sh')
-            ftp_client.putfo(self._get_resource_file('remote_files/state.sh'),'state.sh')
-            ftp_client.putfo(self._get_resource_file('remote_files/tail.sh'),'tail.sh')
-            ftp_client.putfo(self._get_resource_file('remote_files/getpid.sh'),'getpid.sh')
+            for file in ['config.py','bootstrap.sh','run.sh','microrun.sh','state.sh','tail.sh','getpid.sh']:
+                ftp_client.putfo(self._get_resource_file('remote_files/'+file),file)    
+            # ftp_client.putfo(self._get_resource_file('remote_files/config.py'),'config.py')
+            # ftp_client.putfo(self._get_resource_file('remote_files/bootstrap.sh'),'bootstrap.sh')
+            # ftp_client.putfo(self._get_resource_file('remote_files/run.sh'),'run.sh')
+            # ftp_client.putfo(self._get_resource_file('remote_files/microrun.sh'),'microrun.sh')
+            # ftp_client.putfo(self._get_resource_file('remote_files/state.sh'),'state.sh')
+            # ftp_client.putfo(self._get_resource_file('remote_files/tail.sh'),'tail.sh')
+            # ftp_client.putfo(self._get_resource_file('remote_files/getpid.sh'),'getpid.sh')
 
             self.debug(1,"Installing PyYAML for newly created instance ...")
             stdin , stdout, stderr = self._exec_command(ssh_client,"pip install pyyaml")
@@ -567,9 +564,12 @@ class CloudRunProvider(ABC):
     def revive(self,instance,rerun=False):
         self.debug(1,"REVIVING instance",instance)
 
-        if instance.get_state()==CloudRunInstanceState.STOPPED:
-            self.debug(1,"we just have to re-start the instance")
-            self.start_instance(instance)
+        jobs_can_be_saved = False
+        if instance.get_state()==CloudRunInstanceState.STOPPED or instance.get_state()==CloudRunInstanceState.STOPPING:
+            self.debug(1,"Instance is stopping/stopped, we just have to re-start the instance",instance,color=bcolors.OKCYAN)
+            jobs_can_be_saved = True
+            #self.start_instance(instance)
+            self._wait_for_instance(instance)
         else:
             # try restarting it
             self._start_and_update_instance(instance)
@@ -579,7 +579,7 @@ class CloudRunProvider(ABC):
             # re-deploy it
             self._deploy_all(instance)
         if rerun:
-            processes = self.run_jobs(instance,True) #will run the jobs for this instance
+            processes = self.run_jobs(instance,jobs_can_be_saved) #will run the jobs for this instance
             return processes #instance_processes, jobsinfo 
         else :
             return None 
@@ -762,11 +762,11 @@ class CloudRunProvider(ABC):
 
         return processes 
 
-    def run_jobs(self,instance_filter=None,except_done=False):#,wait=False):
+    def run_jobs(self,instance_filter=None,except_done=False):
 
-        # we're not coming from revive but we recovered a state ...
+        # we're not coming from revive but we've recovered a state ...
         if except_done == False and self._recovery == True:
-            self.debug(1,"WARNING: found serialized state: we will not restart jobs that have completed",color=bcolors.WARNING)
+            self.debug(1,"INFO: found serialized state: we will not restart jobs that have completed",color=bcolors.OKCYAN)
             except_done = True
 
         instances_runs = dict()
@@ -879,7 +879,7 @@ class CloudRunProvider(ABC):
         return processes 
 
         
-    def run_job(self,job):#,wait=False):
+    def run_job(self,job):
 
         if not job.get_instance():
             debug(1,"The job",job,"has not been assigned to an instance!")
@@ -1362,7 +1362,8 @@ def debug(level,*args,**kwargs):
         if 'color' in kwargs:
             color = kwargs['color']
             listargs = list(args)
-            listargs.insert(0,color)
+            #listargs.insert(0,color)
+            listargs[0] = color + listargs[0]
             listargs.append(bcolors.ENDC)
             args = tuple(listargs)
             kwargs.pop('color')
