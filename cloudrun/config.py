@@ -302,7 +302,7 @@ class StateSerializer():
             for i,env in enumerate(environments):
                 assert env.get_name() == _environments[i].get_name()
             for i,job in enumerate(jobs):
-                assert job.get_hash() == _jobs[i].get_hash()
+                assert job.get_hash() == _jobs[i].get_hash() # this ensures input,uploads and script are the same....
                 assert job.get_rank() == _jobs[i].get_rank()
             return True
         except Exception as e:
