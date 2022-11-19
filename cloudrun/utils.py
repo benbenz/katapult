@@ -219,7 +219,8 @@ def compute_job_command(script_dir,job_config):
         script_args.pop(0)
         if file_ext.lower() == '.py':
             # -u is to skip stdout buffering (used by tail function)
-            script_command = "python3 -u " + script_dir + '/' + filename + " " + " ".join(script_args)
+            #script_command = "python3 -u " + script_dir + '/' + filename + " " + " ".join(script_args)
+            script_command = "python3 " + script_dir + '/' + filename + " " + " ".join(script_args)
         elif file_ext.lower() == '.jl':
             script_command = "julia " + script_dir + '/' + filename + " " + " ".join(script_args)
         else:
