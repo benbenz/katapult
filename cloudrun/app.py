@@ -57,6 +57,10 @@ async def mainloop(cr_client):
 
     print("\n== DONE ==\n")
 
+    # if there was no processes to wait, lets just show the summary here and now
+    if len(processes)==0:
+        cr_client.print_jobs_summary()
+
 # run main loop
 def main():
 

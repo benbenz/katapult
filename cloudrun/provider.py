@@ -678,10 +678,9 @@ class CloudRunProvider(ABC):
             if all_done:
                 do_run = False
 
-            # it is now time to update the old processes 
+            # it is now time to update the old (memory connected) processes 
             # we've retrieved what we needed and we want to new state to be corrected for future prints
             # this should likely set the states to ABORTED if this is a new instance
-            #TODO: debug why states are not returned as aborted ...
             instances_processes = self._compute_instances_processes(last_processes_old)
             processes_infos = instances_processes[instance.get_name()]
             self.__get_jobs_states_internal(processes_infos,False,CloudRunJobState.ANY,True) # Programmatic >> no print, no serialize
@@ -696,14 +695,14 @@ class CloudRunProvider(ABC):
             return True , None , False
 
     def _run_jobs_for_instance(self,runinfo,batch_uid,dpl_jobs) :
-
         if self._recovery:
             do_run , processes , all_done = self._check_run_state(runinfo)
             if not do_run:
+                instance = runinfo.get('instance')
                 if all_done:
-                    self.debug(1,"Skipping run_jobs because the jobs have completed since we left them :)",color=bcolors.WARNING)
+                    self.debug(1,"Skipping run_jobs because the jobs have completed since we left them :)",instance,color=bcolors.WARNING)
                 else:
-                    self.debug(1,"Skipping run_jobs because the jobs have advanced as we left them :)",color=bcolors.WARNING)
+                    self.debug(1,"Skipping run_jobs because the jobs have advanced as we left them :)",instance,color=bcolors.WARNING)
                 return processes
 
         global_path = "$HOME/run" # more robust
@@ -852,12 +851,6 @@ class CloudRunProvider(ABC):
         
         processes = []
         
-        # for instance_name , runinfo in instances_runs.items():
-
-        #     for process in self._run_jobs_for_instance(batch_uid,runinfo,dpl_jobs):
-
-        #         processes.append( process )
-
         with concurrent.futures.ThreadPoolExecutor(max_workers=10) as pool:
             future_to_instance = { pool.submit(self._run_jobs_for_instance,
                                                 runinfo,batch_uid,dpl_jobs) : instance for instance_name , runinfo in instances_runs.items()
@@ -1169,7 +1162,7 @@ class CloudRunProvider(ABC):
 
             # print job status summary
             if not programmatic:
-                self._print_jobs_summary(instance)
+                self.print_jobs_summary(instance)
 
             # all retrived attributes need to be true
             retrieved = all( [ pinfo['retrieved'] for pinfo in processes_infos.values()] )
@@ -1187,6 +1180,11 @@ class CloudRunProvider(ABC):
                 break
 
         ssh_client.close() 
+
+        # this should not be necessary but it sometimes seems it needs to be there
+        # TODO: debug why ...
+        if not programmatic:
+            self.serialize_state()
 
         return processes
 
@@ -1238,13 +1236,19 @@ class CloudRunProvider(ABC):
 
     def wait_for_jobs_state(self,processes,job_state):
 
+        if not processes or len(processes)==0:
+            self.debug(1,"No process to wait for")
+
         return self.__get_or_wait_jobs_state(processes,True,job_state)
 
     def get_jobs_states(self,processes):
 
+        if not processes or len(processes)==0:
+            self.debug(1,"No process to get")
+
         return self.__get_or_wait_jobs_state(processes)
 
-    def _print_jobs_summary(self,instance=None):
+    def print_jobs_summary(self,instance=None):
         jobs = instance.get_jobs() if instance is not None else self._jobs
         self.debug(1,"\n----------------------------------------------------------------------------------------------------------------------------------------------------------")
         if instance:

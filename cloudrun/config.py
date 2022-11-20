@@ -297,12 +297,16 @@ class StateSerializer():
                 # more general to not compare the instances 
                 # this means we need to detect another way if the instance failed before 
                 # and reload the new instance in the state ?
+                # >> this is now done with instances_states in provider + jobs 'UNKNOWN' states detection ....
                 #assert instance.get_id()   == _instances[i].get_id()
                 assert instance.get_cpus() == _instances[i].get_cpus()
             for i,env in enumerate(environments):
                 assert env.get_name() == _environments[i].get_name()
             for i,job in enumerate(jobs):
                 assert job.get_hash() == _jobs[i].get_hash() # this ensures input,uploads and script are the same....
+                assert job.get_config('run_script') == _jobs[i].get_config('run_script') # hash doesnt capture the args 
+                assert job.get_config('run_command') == _jobs[i].get_config('run_command') # no need (dont with hash), but for symetry with run_script....
+                assert job.get_config('cpus_req') == _jobs[i].get_config('cpus_req')
                 assert job.get_rank() == _jobs[i].get_rank()
             return True
         except Exception as e:
