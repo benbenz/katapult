@@ -4,7 +4,7 @@ CloudRun is a Python package that allows you to run any script on a cloud servic
 
 # Features
 
-- Easily run scripts on AWS through by writing a simple configuration file
+- Easily run scripts on AWS by writing a simple configuration file
 - Handles Python and Julia scripts, or any command
 - Handles PyPi , Conda/Mamba and Apt-get environments
 - Multithreaded instance support
