@@ -193,9 +193,9 @@ class CloudRunProvider(ABC):
 
     def run_job(self,job,wait=False):
 
-    def wait_for_jobs_state(self,processes,job_state):
+    def wait_for_jobs_state(self,job_state,processes=None):
 
-    def get_jobs_states(self,processes):
+    def get_jobs_states(self,processes=None):
 
     @abstractmethod
     def get_user_region(self):

@@ -6,6 +6,7 @@ import paramiko
 import re
 import asyncio
 import concurrent.futures
+import multiprocessing
 import math , random
 import cloudrun.combopt as combopt
 from io import BytesIO
@@ -41,6 +42,9 @@ class CloudRunProvider(ABC):
         self._instances = []
         self._environments = []
         self._jobs = []
+
+        self._multiproc_man  = multiprocessing.Manager()
+        self._multiproc_lock = self._multiproc_man.Lock()
 
         # load the config
         self._config_manager = ConfigManager(self,self._config,self._instances,self._environments,self._jobs)
@@ -652,7 +656,7 @@ class CloudRunProvider(ABC):
             last_processes_new.append(copy.copy(last_process))
             last_processes_old.append(last_process)
        
-        instances_processes = self._compute_instances_processes(last_processes_new)
+        instances_processes = self._organize_instances_processes(last_processes_new)
         do_run = True
         if instance.get_name() in instances_processes:
             processes_infos = instances_processes[instance.get_name()]
@@ -681,7 +685,7 @@ class CloudRunProvider(ABC):
             # it is now time to update the old (memory connected) processes 
             # we've retrieved what we needed and we want to new state to be corrected for future prints
             # this should likely set the states to ABORTED if this is a new instance
-            instances_processes = self._compute_instances_processes(last_processes_old)
+            instances_processes = self._organize_instances_processes(last_processes_old)
             processes_infos = instances_processes[instance.get_name()]
             self.__get_jobs_states_internal(processes_infos,False,CloudRunJobState.ANY,True) # Programmatic >> no print, no serialize
 
@@ -1047,7 +1051,7 @@ class CloudRunProvider(ABC):
         return ssh_client , processes #processes_info , jobsinfo
 
     def _recompute_jobs_info(self,instance,processes):
-        instances_processes = self._compute_instances_processes(processes)
+        instances_processes = self._organize_instances_processes(processes)
         instance_processes  = instances_processes[instance.get_name()]
         jobsinfo , instance = self._compute_jobs_info(instance_processes)
         return instance_processes , jobsinfo 
@@ -1155,7 +1159,6 @@ class CloudRunProvider(ABC):
 
                     else:
                         debug(2,"Received UID info that was not requested")
-                        pass
 
                 if lines is None or len(lines)==0:
                     break
@@ -1188,7 +1191,13 @@ class CloudRunProvider(ABC):
 
         return processes
 
-    def _compute_instances_processes( self , processes ):
+    def get_last_processes(self):
+        processes = []
+        for job in self._jobs:
+            processes.append( job.get_last_process())
+        return processes
+
+    def _organize_instances_processes( self , processes ):
         instances_processes = dict()
         #instances_list      = dict()
         for process in processes:
@@ -1206,12 +1215,15 @@ class CloudRunProvider(ABC):
         return instances_processes
 
 
-    def __get_or_wait_jobs_state( self, processes , do_wait = False , job_state = CloudRunJobState.ANY ):    
+    def __get_or_wait_jobs_state( self, processes , do_wait = False , job_state = CloudRunJobState.ANY ):   
 
-        if not isinstance(processes,list):
+        if processes is None: 
+            processes = self.get_last_processes()
+
+        if processes and not isinstance(processes,list):
             processes = [ processes ]
 
-        instances_processes = self._compute_instances_processes(processes)
+        instances_processes = self._organize_instances_processes(processes)
 
         processes = [] 
 
@@ -1234,31 +1246,34 @@ class CloudRunProvider(ABC):
         return processes
         # done
 
-    def wait_for_jobs_state(self,processes,job_state):
+    def wait_for_jobs_state(self,job_state,processes=None):
 
         if not processes or len(processes)==0:
             self.debug(1,"No process to wait for")
 
         return self.__get_or_wait_jobs_state(processes,True,job_state)
 
-    def get_jobs_states(self,processes):
+    def get_jobs_states(self,processes=None):
 
         if not processes or len(processes)==0:
-            self.debug(1,"No process to get")
+            self.debug(1,"No process requested >> getting all jobs' processes")
 
         return self.__get_or_wait_jobs_state(processes)
 
     def print_jobs_summary(self,instance=None):
         jobs = instance.get_jobs() if instance is not None else self._jobs
-        self.debug(1,"\n----------------------------------------------------------------------------------------------------------------------------------------------------------")
-        if instance:
-            self.debug(1,instance.get_name(),instance.get_ip_addr())
-        for i,job in enumerate(jobs):
-            self.debug(1,"\nJob",job.get_rank(),"=",job.str_simple() if instance else job)
-            dpl_jobs = job.get_deployed_jobs()
-            for dpl_job in dpl_jobs:
-                for process in dpl_job.get_processes():
-                    self.debug(1,"|_",process.str_simple())
+        # the lock is to make sure the prints are not scrambled 
+        # when coming back from the instance at the same time ...
+        with self._multiproc_lock:
+            self.debug(1,"\n----------------------------------------------------------------------------------------------------------------------------------------------------------")
+            if instance:
+                self.debug(1,instance.get_name(),instance.get_ip_addr())
+            for i,job in enumerate(jobs):
+                self.debug(1,"\nJob",job.get_rank(),"=",job.str_simple() if instance else job)
+                dpl_jobs = job.get_deployed_jobs()
+                for dpl_job in dpl_jobs:
+                    for process in dpl_job.get_processes():
+                        self.debug(1,"|_",process.str_simple())
 
 
 

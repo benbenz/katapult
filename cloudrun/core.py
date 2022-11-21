@@ -384,15 +384,15 @@ class CloudRunProcess():
 
     def str_simple(self):
         if self._batch_uid:
-            return "CloudRunProcess: UID = {0} , PID = {1} , BATCH = {2} , STATE = {3}".format(self._uid,self._pid,self._batch_uid,self._state.name)
+            return "CloudRunProcess: UID = {0} , PID = {1} , BATCH = {2} , STATE = {3}".format(self._uid,str(self._pid).rjust(5),self._batch_uid,self._state.name)
         else:
-            return "CloudRunProcess: UID = {0} , PID = {1} , STATE = {2}".format(self._uid,self._pid,self._state.name)
+            return "CloudRunProcess: UID = {0} , PID = {1} , STATE = {2}".format(self._uid,str(self._pid).rjust(5),self._state.name)
 
     def __repr__(self):
-        return "CloudRunProcess: job = {0} , UID = {1} , PID = {2} , STATE = {3}".format(self._job,self._uid,self._pid,self._state.name)
+        return "CloudRunProcess: job = {0} , UID = {1} , PID = {2} , STATE = {3}".format(self._job,self._uid,str(self._pid).rjust(5),self._state.name)
          
     def __str__(self):
-        return "CloudRunProcess: job = {0} , UID = {1} , PID = {2} , STATE = {3}".format(self._job,self._uid,self._pid,self._state.name)
+        return "CloudRunProcess: job = {0} , UID = {1} , PID = {2} , STATE = {3}".format(self._job,self._uid,str(self._pid).rjust(5),self._state.name)
 
 
 

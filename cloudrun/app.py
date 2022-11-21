@@ -42,12 +42,12 @@ async def mainloop(cr_client):
     print("\n== WAIT ==\n")
 
     print("Waiting for DONE or ABORTED ...")
-    processes = cr_client.wait_for_jobs_state(processes,CloudRunJobState.DONE|CloudRunJobState.ABORTED)
+    processes = cr_client.wait_for_jobs_state(CloudRunJobState.DONE|CloudRunJobState.ABORTED,processes)
 
     print("\n== GET STATE ==\n")
 
     # just to show the API ...
-    processes = cr_client.get_jobs_states(processes)
+    cr_client.get_jobs_states()
 
     # print("\n== WAIT and TAIL ==\n")
 
@@ -56,10 +56,6 @@ async def mainloop(cr_client):
     # await asyncio.gather(task1,task2)
 
     print("\n== DONE ==\n")
-
-    # if there was no processes to wait, lets just show the summary here and now
-    if len(processes)==0:
-        cr_client.print_jobs_summary()
 
 # run main loop
 def main():
