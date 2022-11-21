@@ -2,11 +2,20 @@
 
 CloudRun is a Python package that allows you to run any script on a cloud service (for now AWS only).
 
-## Pre-requisites
+# Features
+
+- Easily run scripts on AWS through by writing a simple configuration file
+- Handles Python and Julia scripts, or any command
+- Handles PyPi , Conda/Mamba and Apt-get environments
+- Multithreaded instance support
+- Handles disconnections from instances, including stopped or terminated instances
+- Handles interruption of CloudRun, with state recovery
+
+# Pre-requisites
 
 In order to use the python AWS client (Boto3), you need to have an existing AWS account and to setup your computer for AWS.
 
-### with AWS CLI
+## with AWS CLI
 
 1. Go to [the AWS Signup page](https://portal.aws.amazon.com/billing/signup#/start/email) and create an account
 2. Download [the AWS CLI](https://docs.aws.amazon.com/cli/latest/userguide/getting-started-install.html)
@@ -18,14 +27,14 @@ aws configure
 ```
 See [https://docs.aws.amazon.com/cli/latest/userguide/cli-configure-quickstart.html](here)
 
-### manually
+## manually
 
 1. Go to [the AWS Signup page](https://portal.aws.amazon.com/billing/signup#/start/email) and create an account
 2. In the AWS web console, [create a user with administrator privilege](https://docs.aws.amazon.com/streams/latest/dev/setting-up.html)
 3. In the AWS web console, under the AMI section, click on the new user and make sure you create an access key under the tab "Security Credentials". Make sure "Console Password" is Enabled as well
 4. Add your new user credentials manually, [in the credentials file](https://docs.aws.amazon.com/cli/latest/userguide/cli-configure-profiles.html)
 
-##### example ~/.aws/config file
+##### '~/.aws/config' example
 
 ```
 [default]
@@ -33,7 +42,7 @@ region = eu-west-3
 output = json
 ```
 
-##### example ~/.aws/credentials file
+##### '~/.aws/credentials' example
 
 ```
 [default]
@@ -41,7 +50,7 @@ aws_access_key_id = YOUR_ACCESS_KEY_ID
 aws_secret_access_key = YOUR_SECRET_ACCESS_KEY
 ```
 
-## Installation
+# Installation
 
 ```bash
 python3 -m venv .venv
@@ -54,7 +63,7 @@ curl -sSL https://install.python-poetry.org | python3.8 -
 poetry install
 ```
 
-## Usage / Test runs
+# Usage / Test runs
 
 ```bash
 # copy the example file
@@ -75,7 +84,7 @@ poetry run demo
 # python3 cli.py wait SCRIPT_HASH UID
 ```
 
-## Check config example
+# Check config example
 
 ```python
 config = {
@@ -162,7 +171,7 @@ config = {
 }
 ```
 
-## Python API
+# Python API
 
 ```python
 class CloudRunError(Exception):
@@ -374,10 +383,10 @@ processes = provider.wait_for_jobs_state(processes,CloudRunJobState.DONE|CloudRu
 
 ```
 
-## Contributing
+# Contributing
 Pull requests are welcome. For major changes, please open an issue first to discuss what you would like to change.
 
 Please make sure to update tests as appropriate.
 
-## License
+# License
 [MIT](https://choosealicense.com/licenses/mit/)
