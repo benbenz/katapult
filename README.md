@@ -84,7 +84,7 @@ poetry run demo
 # python3 cli.py wait SCRIPT_HASH UID
 ```
 
-# Check config example
+# Configuration example
 
 ```python
 config = {
@@ -375,11 +375,21 @@ provider.assign_jobs_to_instances()
 # deploy the necessary stuff onto the instances
 provider.deploy()
 
-# run the jobs and get processes objects back
+# run the jobs and get active processes objects back
 processes = provider.run_jobs()
 
-# wait for the processes to be done and update the processes info if needed be (an instance terminated e.g.)
-processes = provider.wait_for_jobs_state(processes,CloudRunJobState.DONE|CloudRunJobState.ABORTED)
+# wait for the activate proccesses to be done:
+processes = provider.wait_for_jobs_state(CloudRunJobState.DONE|CloudRunJobState.ABORTED,processes)
+# OR wait for all processes to be done 
+provider.wait_for_jobs_state(CloudRunJobState.DONE|CloudRunJobState.ABORTED)
+
+# you can get the state of all jobs this way:
+processes = provider.get_jobs_states()
+# or get the state for a specific list of processes:
+processes = provider.get_jobs_states(processes)
+
+# you can print processes summary with:
+provider.print_jobs_summary()
 
 ```
 
