@@ -62,7 +62,7 @@ def main():
 
     try:
         sys.path.append(os.path.abspath(os.getcwd()))    
-        configModule = __import__("config")
+        configModule = __import__("config",globals(),locals())
         config = configModule.config
     except ModuleNotFoundError as mfe:
         print("\n\033[91mYou need to create a config.py file (see 'example/config.example.py')\033[0m\n")

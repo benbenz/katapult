@@ -1,0 +1,1 @@
+echo "env setup" > env_sh_ran.txt

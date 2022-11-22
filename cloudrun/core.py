@@ -171,13 +171,17 @@ class CloudRunEnvironment():
         else:
             self._name = self._config.get('name')
 
-        self._path     = "$HOME/run/" + self._name
+        self._path     = "$HOME/run/" + self.get_name_with_hash() #self._name
 
     def get_name(self):
         return self._name
 
+    def get_name_with_hash(self):
+        return self._name + '-' + self._hash
+
     def get_path(self):
         return self._path
+
     def get_config(self,key):
         return self._config.get(key)
 
@@ -197,7 +201,7 @@ class CloudRunDeployedEnvironment(CloudRunEnvironment):
         self._path     = env._path
         self._name     = env._name
         self._instance = instance
-        self._path_abs = "/home/" + instance.get_config('img_username') + '/run/' + self._name
+        self._path_abs = "/home/" + instance.get_config('img_username') + '/run/' + self.get_name_with_hash() #self._name
 
     def get_path_abs(self):
         return self._path_abs

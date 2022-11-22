@@ -7,7 +7,7 @@ from os import path
 # Note: we include market options (SPOT ON/OFF e.g.) for the instance because it defines how the 'hardware' will run 
 #       so it's considered part of the intrinsic characteristics of the machine
 cr_instance_keys       = [ 'region'  , 'cloud_id' , 'img_id' , 'type' , 'cpus' , 'gpu' , 'disk_size' , 'disk_type' , 'eco' , 'max_bid' ] 
-cr_environment_keys    = [ 'env_pypi' , 'env_conda' , 'env_apt-get' ]
+cr_environment_keys    = [ 'command' , 'env_pypi' , 'env_conda' , 'env_apt-get' ]
 
 def compute_instance_hash(instance_cfg):
     instance_config = { your_key: instance_cfg[your_key] for your_key in cr_instance_keys }
@@ -67,11 +67,24 @@ def update_requirements_path(env_dict,path):
 def compute_environment_object(env_config):
 
     environment_obj = {
+        'command'    : None ,
         'env_aptget' : None , 
         'env_conda'  : None , 
         'env_pypi'   : None , 
     }
     
+    if env_config.get('command'):
+
+        env_command = env_config['command']
+
+        if isinstance(env_command,str) and path.isfile(env_command):
+
+            with open(env_command, "r") as bash_file:
+                try:
+                    environment_obj['command'] = bash_file.read()
+                except Exception as exc:
+                    print(exc)
+            
     # conda+pip: https://stackoverflow.com/questions/35245401/combining-conda-environment-yml-with-pip-requirements-txt
     
     if env_config.get('env_aptget'):

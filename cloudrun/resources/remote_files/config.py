@@ -1,6 +1,10 @@
 import json , os , stat , yaml
 
 try:
+    os.remove('env_command.sh')
+except:
+    pass
+try:
     os.remove('environment.yml')
 except:
     pass
@@ -15,6 +19,13 @@ except:
 
 with open('config.json','r') as cfg_file:
     config = json.loads(cfg_file.read())
+
+if config['command'] is not None:
+    with open('env_command.sh','w') as sh_file:
+        sh_file.write(config['command'])
+        sh_file.close()
+        st = os.stat('env_command.sh')
+        os.chmod('env_command.sh', st.st_mode | stat.S_IEXEC)
 
 if config['env_conda'] is not None:
     with open('environment.yml','w') as yml_file:

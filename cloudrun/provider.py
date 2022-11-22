@@ -13,7 +13,7 @@ from io import BytesIO
 import csv , io
 import pkg_resources
 from cloudrun.core import *
-from .config import ConfigManager , StateSerializer
+from .config_state import ConfigManager , StateSerializer
 
 class bcolors:
     HEADER = '\033[95m'
@@ -323,21 +323,21 @@ class CloudRunProvider(ABC):
 
             if not re_upload_env:
                 if dpl_env.get_config('env_conda') is not None:
-                    re_upload_env_mamba = self._test_reupload(instance,'$HOME/micromamba/envs/'+dpl_env.get_name(), ssh_client,False)
+                    re_upload_env_mamba = self._test_reupload(instance,'$HOME/micromamba/envs/'+dpl_env.get_name_with_hash(), ssh_client,False)
                     re_upload_env = re_upload_env or re_upload_env_mamba
                 if dpl_env.get_config('env_pypi') is not None and dpl_env.get_config('env_conda') is None:
-                    re_upload_env_pip = self._test_reupload(instance,'$HOME/.'+dpl_env.get_name(), ssh_client, False)
+                    re_upload_env_pip = self._test_reupload(instance,'$HOME/.'+dpl_env.get_name_with_hash(), ssh_client, False)
                     re_upload_env = re_upload_env or re_upload_env_pip
                 # TODO: have an aptget install TEST
                 #if dpl_env.get_config('env_aptget') is not None:
                 #    re_upload_env_aptget = True
                 #    re_upload_env = True
 
-            debug(2,"re_upload_instance",re_upload_inst,"re_upload_env",re_upload_env,"re_upload_env_mamba",re_upload_env_mamba,"re_upload_env_pip",re_upload_env_pip,"re_upload_env_aptget",re_upload_env_aptget,"ENV",dpl_env.get_name())
+            debug(2,"re_upload_instance",re_upload_inst,"re_upload_env",re_upload_env,"re_upload_env_mamba",re_upload_env_mamba,"re_upload_env_pip",re_upload_env_pip,"re_upload_env_aptget",re_upload_env_aptget,"ENV",dpl_env.get_name_with_hash())
 
             re_upload = re_upload_env #or re_upload_inst
 
-            deploy_states[instance.get_name()][environment.get_name()] = { 'upload' : re_upload }
+            deploy_states[instance.get_name()][environment.get_name_with_hash()] = { 'upload' : re_upload }
 
             if re_upload:
                 files_path = dpl_env.get_path()
@@ -364,10 +364,10 @@ class CloudRunProvider(ABC):
                     # setup envs according to current config files state
                     # FIX: mamba is not handling well concurrency
                     # we run the mamba installs sequentially below
-                    #{ 'cmd': global_path+"/bootstrap.sh \"" + dpl_env.get_name() + "\" " + ("1" if self._config['dev'] else "0") , 'out': print_deploy , 'output': dpl_env.get_path()+'/bootstrap.log'},  
+                    #{ 'cmd': global_path+"/bootstrap.sh \"" + dpl_env.get_name_with_hash() + "\" " + ("1" if self._config['dev'] else "0") , 'out': print_deploy , 'output': dpl_env.get_path()+'/bootstrap.log'},  
                 ]
 
-                bootstrap_command = bootstrap_command + (" ; " if bootstrap_command else "") + global_path+"/bootstrap.sh \"" + dpl_env.get_name() + "\" " + ("1" if self._config['dev'] else "0")
+                bootstrap_command = bootstrap_command + (" ; " if bootstrap_command else "") + global_path+"/bootstrap.sh \"" + dpl_env.get_name_with_hash() + "\" " + ("1" if self._config['dev'] else "0")
 
                 self._run_ssh_commands(ssh_client,commands)
                 
@@ -415,7 +415,7 @@ class CloudRunProvider(ABC):
                 stdin0, stdout0, stderr0 = self._exec_command(ssh_client,mkdir_cmd)
             self.debug(2,"directories created")
 
-            re_upload_env = deploy_states[instance.get_name()][env.get_name()]['upload']
+            re_upload_env = deploy_states[instance.get_name()][env.get_name_with_hash()]['upload']
             re_upload = self._test_reupload(instance,dpl_job.get_path()+'/ready', ssh_client)
 
             self.debug(2,"re_upload_env",re_upload_env,"re_upload",re_upload)
@@ -509,6 +509,7 @@ class CloudRunProvider(ABC):
             except Exception as e:
                 self.debug(1,e)
                 self.debug(1,"Error while deploying")
+                traceback.stacktrace()
             
             attempts = attempts + 1
 
@@ -845,7 +846,7 @@ class CloudRunProvider(ABC):
                 cmd_run_pre = cmd_run_pre + ln_command + "\n"
 
             #cmd_run = cmd_run + "mkdir -p "+run_path + " && "
-            cmd_run = cmd_run + global_path+"/run.sh \"" + dpl_env.get_name() + "\" \""+dpl_job.get_command()+"\" " + job.get_config('input_file') + " " + job.get_config('output_file') + " " + job.get_hash()+" "+uid
+            cmd_run = cmd_run + global_path+"/run.sh \"" + dpl_env.get_name_with_hash() + "\" \""+dpl_job.get_command()+"\" " + job.get_config('input_file') + " " + job.get_config('output_file') + " " + job.get_hash()+" "+uid
             cmd_run = cmd_run + "\n"
             cmd_pid = cmd_pid + global_path+"/getpid.sh \"" + pid_file + "\"\n"
 
@@ -925,7 +926,7 @@ class CloudRunProvider(ABC):
         # run
         commands = [ 
             # execute main script (spawn) (this will wait for bootstraping)
-            { 'cmd': global_path+"/run.sh \"" + dpl_env.get_name() + "\" \""+dpl_job.get_command()+"\" " + job.get_config('input_file') + " " + job.get_config('output_file') + " " + job.get_hash()+" "+uid, 'out' : False }
+            { 'cmd': global_path+"/run.sh \"" + dpl_env.get_name_with_hash() + "\" \""+dpl_job.get_command()+"\" " + job.get_config('input_file') + " " + job.get_config('output_file') + " " + job.get_hash()+" "+uid, 'out' : False }
         ]
 
         self._run_ssh_commands(ssh_client,commands)
@@ -1068,9 +1069,9 @@ class CloudRunProvider(ABC):
             uid         = process.get_uid()
             pid         = process.get_pid()
             if jobsinfo:
-                jobsinfo = jobsinfo + " " + dpl_env.get_name() + " " + str(shash) + " " + str(uid) + " " + str(pid) + " \"" + str(job.get_config('output_file')) + "\""
+                jobsinfo = jobsinfo + " " + dpl_env.get_name_with_hash() + " " + str(shash) + " " + str(uid) + " " + str(pid) + " \"" + str(job.get_config('output_file')) + "\""
             else:
-                jobsinfo = dpl_env.get_name() + " " + str(shash) + " " + str(uid) + " " + str(pid) + " \"" + str(job.get_config('output_file')) + "\""
+                jobsinfo = dpl_env.get_name_with_hash() + " " + str(shash) + " " + str(uid) + " " + str(pid) + " \"" + str(job.get_config('output_file')) + "\""
             
             instance    = job.get_instance() # should be the same for all jobs
         

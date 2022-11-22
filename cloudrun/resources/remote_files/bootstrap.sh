@@ -12,6 +12,7 @@ else
   dev=$2; shift
 fi
 
+FILE_SH="$HOME/run/$env_name/env_command.sh"
 FILE_CONDA="$HOME/run/$env_name/environment.yml"
 FILE_PYPI="$HOME/run/$env_name/requirements.txt"
 FILE_APTGET="$HOME/run/$env_name/aptget.sh"
@@ -19,6 +20,10 @@ FILE_APTGET="$HOME/run/$env_name/aptget.sh"
 echo "bootstraping" > "$HOME/run/$env_name/state"
 
 rm -f "$HOME/run/$env_name/ready"
+
+if [ -f "$FILE_SH" ]; then
+  (cd "$HOME/run/$env_name/"; "$FILE_SH")
+fi
 
 if [ -f "$FILE_APTGET" ]; then
   $FILE_APTGET

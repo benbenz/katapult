@@ -89,8 +89,9 @@
     - terminate one of the instance that has the script running
     - restart the program
     - Note: it will do probably whats required but the state is wrong. The latest processes should be saying "ABORTED"
-  - [ ] DEBUG idem as before but by kiling the program in WAIT states
+  - [x] DEBUG idem as before but by kiling the program in WAIT states
   - [ ] improve more paths issue (local vs remote)
+  - [ ] add 'env_bash' to environment so we can handle a user script during deploy ...
 
 4) local mode:
   - [x] handle new config 
