@@ -50,6 +50,9 @@ class CloudRunProvider(ABC):
         self._config_manager = ConfigManager(self,self._config,self._instances,self._environments,self._jobs)
         self._config_manager.load()
 
+        # option
+        self._mutualize_uploads = conf.get('mutualize_uploads',True)
+
         if self._config.get('recover',False):
             # load the state (if existing) and set the recovery mode accordingly
             self._state_serializer = StateSerializer(self)
@@ -408,7 +411,7 @@ class CloudRunProvider(ABC):
             
             mkdir_cmd = ""
             for in_file in input_files:
-                local_path , abs_path , rel_remote_path , rel_path , external = cloudrunutils.resolve_paths(in_file,dpl_job.get_config('run_script'),'$HOME/run/files') #dpl_job.get_path()) #os.path.dirname(in_file)
+                local_path , abs_path , rel_remote_path , rel_path , external = self._resolve_paths(in_file,dpl_job)
                 dirname = os.path.dirname(abs_path)
                 if dirname:
                     mkdir_cmd = mkdir_cmd + (" && " if mkdir_cmd else "") + "mkdir -p " + dirname #dpl_job.get_path()+'/'+dirname
@@ -445,14 +448,15 @@ class CloudRunProvider(ABC):
 
                 # NEW ! WE now go to 
                 # COMMENT THIS IF YOU WANT TO PUT FILES in relation to the jobs' dir
-                ftp_client.chdir('/home/'+str(instance.get_config('img_username'))+'/run/files')
+                if self._mutualize_uploads:
+                    ftp_client.chdir('/home/'+str(instance.get_config('img_username'))+'/run/files')
+
                 if job.get_config('upload_files'):
                     files = job.get_config('upload_files')
                     if isinstance( files,str):
                         files = [ files ] 
                     for upfile in files:
-
-                        local_path , abs_path , rel_remote_path, rel_path , external = cloudrunutils.resolve_paths(upfile,job.get_config('run_script'),'$HOME/run/files') #dpl_job.get_path())
+                        local_path , abs_path , rel_remote_path, rel_path , external = self._resolve_paths(upfile,dpl_job)
                                 
                         # check if the remote path has already been uploaded ...
                         # NOTE: this is compatible with either way:
@@ -476,7 +480,7 @@ class CloudRunProvider(ABC):
                             print(e)
                 if job.get_config('input_file'):
 
-                    local_path , abs_path , rel_remote_path, rel_path , external = cloudrunutils.resolve_paths(job.get_config('input_file'),job.get_config('run_script'),'$HOME/run/files') #dpl_job.get_path())
+                    local_path , abs_path , rel_remote_path, rel_path , external = self._resolve_paths(job.get_config('input_file'),dpl_job)
 
                     if abs_path in file_uploaded:
                         self.debug(1,"skipping upload of file",upfile,"for job#",job.get_rank(),"(file has already been uploaded)")
@@ -541,6 +545,13 @@ class CloudRunProvider(ABC):
                 traceback.stacktrace()
             
             attempts = attempts + 1
+
+    def _resolve_paths(self,upfile,dpl_job):
+        if self._mutualize_uploads:
+            return cloudrunutils.resolve_paths(upfile,dpl_job.get_config('run_script'),'$HOME/run/files',True) 
+        else:
+            return cloudrunutils.resolve_paths(upfile,dpl_job.get_config('run_script'),dpl_job.get_path(),False)
+
 
     def _wait_and_connect(self,instance):
 
@@ -989,7 +1000,7 @@ class CloudRunProvider(ABC):
         if dpl_job.get_config('input_file'):
             files_to_ln.append(dpl_job.get_config('input_file'))
         for upfile in files_to_ln:
-            local_path , abs_path , rel_remote_path , rel_path , external = cloudrunutils.resolve_paths(upfile,dpl_job.get_config('run_script'),'$HOME/run/files') #dpl_job.get_path())
+            local_path , abs_path , rel_remote_path , rel_path , external = self._resolve_paths(upfile,dpl_job)
             filename    = os.path.basename(abs_path)
             filedir_abs = os.path.dirname(abs_path)
             filedir_rel = os.path.dirname(rel_path)

@@ -12,6 +12,7 @@ config = {
     'job_assign'   : None ,                               # algorithm used for job assignation / task scheduling ('random' | 'multi_knapsack')
     'recover'      : True ,                               # if True, CloudRun will always save the state and try to recover this state on the next execution
     'print_deploy' : False ,                              # if True, this will cause the deploy stage to print more (and lock)
+    'mutualize_uploads' : True ,                          # adjusts the directory structure of the uploads ... (per job or global)
 
     ################################################################################
     # INSTANCES / HARDWARE

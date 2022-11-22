@@ -246,7 +246,7 @@ def compute_job_command(script_dir,job_config):
 
     return script_command 
 
-def resolve_paths(the_file,ref_file,remote_ref_dir):
+def resolve_paths(the_file,ref_file,remote_ref_dir,mutualize=True):
 
     # if we have a script
     # let's make sure we upload the right directory structure so we dont have to change the script
@@ -285,7 +285,7 @@ def resolve_paths(the_file,ref_file,remote_ref_dir):
 
     # use the first case if you want to leave stuff in the job's directory
     # used with cloudrunutils.resolve_paths(upfile,job.get_config('run_script'),dpl_job.get_path())
-    if 1==0:
+    if not mutualize:
         abs_remote_path = path.join(remote_ref_dir,rel_path)
         rel_remote_path = rel_path
     # use the second case if you want to mutualize uploads
