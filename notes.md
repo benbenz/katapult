@@ -92,6 +92,13 @@
   - [x] DEBUG idem as before but by kiling the program in WAIT states
   - [ ] improve more paths issue (local vs remote)
   - [x] add 'env_bash' to environment so we can handle a user script during deploy ... >> 'command'
+  - [ ] if error with image not available for region: list the AMI for the region (Linux)
+  - [ ] HANDLE files separately (for all jobs):
+     - [ ] dictionnary with absolute local path as key
+     - [ ] put all of them in one place (once for all)
+     - [ ] have the ln_command create all the necessary links 
+     Basically we're only removing the files form the jobs' dirs and moving them to a separate folder, to mutualize them better ...
+  - [ ] improve UI with Python RICH
 
 4) local mode:
   - [x] handle new config 

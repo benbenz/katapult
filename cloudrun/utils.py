@@ -246,10 +246,7 @@ def compute_job_command(script_dir,job_config):
 
     return script_command 
 
-def get_remote_file_paths(the_file,ref_file,remote_ref_dir):
-
-    file_abs_path   = path.abspath(the_file)
-    file_abs_dir    = path.dirname(file_abs_path)
+def resolve_paths(the_file,ref_file,remote_ref_dir):
 
     # if we have a script
     # let's make sure we upload the right directory structure so we dont have to change the script
@@ -257,30 +254,55 @@ def get_remote_file_paths(the_file,ref_file,remote_ref_dir):
         ref_args        = ref_file.split()
         ref_abs_path    = path.abspath(ref_args[0])
         ref_abs_dir     = path.dirname(ref_abs_path)
+        if path.isabs(the_file):
+            file_abs_path   = the_file
+        else:
+            file_abs_path   = path.join(ref_abs_dir,the_file)
+        file_abs_dir    = path.dirname(file_abs_path)
     else:
         ref_abs_path    = path.abspath(os.getcwd())
         ref_abs_dir     = path.dirname(ref_abs_path)
-
-
-    if path.isabs(the_file):
-        # this is a subdir: we have to respect the structure
-        if file_abs_dir.startswith(ref_abs_dir):
-            rel_path = file_abs_path.replace(ref_abs_dir,"")
-            if rel_path.startswith(os.sep):
-                rel_path = rel_path[1:]
-            return path.join(remote_ref_dir,rel_path) , rel_path , False
-        # this is not a subdir ! we gotta create a virtual subdir that 
+        if path.isabs(the_file):
+            file_abs_path   = the_file
         else:
-            #rel_path = file_abs_path.replace(os.sep,'_')
-            # we gotta have to handle Windows situation here and transform the drive as a path bite
-            rel_path = file_abs_path # LETS USE THE ABS PATH as a REL PATH !
-            if rel_path.startswith(os.sep):
-                rel_path = rel_path[1:]
-            return path.join(remote_ref_dir,rel_path) , rel_path , True
+            file_abs_path   = path.join(ref_abs_dir,the_file)
+        file_abs_dir    = path.dirname(file_abs_path)
+    
+    # this is a subdir: we have to respect the structure
+    if file_abs_dir.startswith(ref_abs_dir):
+        rel_path = file_abs_path.replace(ref_abs_dir,"")
+        if rel_path.startswith(os.sep):
+            rel_path = rel_path[1:]
+        external = False
+    # this is not a subdir ! we gotta create a virtual subdir that 
     else:
-        rel_path = the_file
-        return path.join(remote_ref_dir,rel_path) , rel_path , False
+        #rel_path = file_abs_path.replace(os.sep,'_')
+        # we gotta have to handle Windows situation here and transform the drive as a path bite
+        rel_path = file_abs_path # LETS USE THE ABS PATH as a REL PATH !
+        if rel_path.startswith(os.sep):
+            rel_path = rel_path[1:]
+        external = True
 
+    # use the first case if you want to leave stuff in the job's directory
+    # used with cloudrunutils.resolve_paths(upfile,job.get_config('run_script'),dpl_job.get_path())
+    if 1==0:
+        abs_remote_path = path.join(remote_ref_dir,rel_path)
+        rel_remote_path = rel_path
+    # use the second case if you want to mutualize uploads
+    # used with cloudrunutils.resolve_paths(upfile,job.get_config('run_script'),'$HOME/run/files')
+    else:
+        abs_remote_path = file_abs_path # always use full path in one target directory
+        if abs_remote_path.startswith(os.sep):
+            abs_remote_path = abs_remote_path[1:] # make relative
+        rel_remote_path = abs_remote_path
+        abs_remote_path = path.join(remote_ref_dir,abs_remote_path)
+
+    # file_abs_path   = the local file path
+    # abs_remote_path = the absolute remote file path
+    # rel_remote_path = the relative remote path (from remote_ref_dir)
+    # rel_path        = the relative path (from the job directory / script dir)
+    # external        = is the file external to the script directory structure
+    return file_abs_path , abs_remote_path , rel_remote_path , rel_path , external
 
  
 

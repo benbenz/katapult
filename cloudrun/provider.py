@@ -257,7 +257,7 @@ class CloudRunProvider(ABC):
         if re_upload:
 
             self.debug(2,"creating instance's directories ...")
-            stdin0, stdout0, stderr0 = self._exec_command(ssh_client,"mkdir -p $HOME/run && rm -f $HOME/run/ready")
+            stdin0, stdout0, stderr0 = self._exec_command(ssh_client,"mkdir -p $HOME/run $HOME/run/files && rm -f $HOME/run/ready")
             self.debug(2,"directories created")
 
             self.debug(1,"uploading instance's files ... ")
@@ -387,6 +387,8 @@ class CloudRunProvider(ABC):
 
     def _deploy_jobs(self,instance,deploy_states,ssh_client,ftp_client):
 
+        file_uploaded = dict()
+
         # scan the instances environment (those are set when assigning a job to an instance)
         for job in instance.get_jobs():
             env      = job.get_env()        # get its environment
@@ -406,7 +408,7 @@ class CloudRunProvider(ABC):
             
             mkdir_cmd = ""
             for in_file in input_files:
-                abs_path , rel_path , external = cloudrunutils.get_remote_file_paths(in_file,dpl_job.get_config('run_script'),dpl_job.get_path()) #os.path.dirname(in_file)
+                local_path , abs_path , rel_remote_path , rel_path , external = cloudrunutils.resolve_paths(in_file,dpl_job.get_config('run_script'),'$HOME/run/files') #dpl_job.get_path()) #os.path.dirname(in_file)
                 dirname = os.path.dirname(abs_path)
                 if dirname:
                     mkdir_cmd = mkdir_cmd + (" && " if mkdir_cmd else "") + "mkdir -p " + dirname #dpl_job.get_path()+'/'+dirname
@@ -441,17 +443,31 @@ class CloudRunProvider(ABC):
                     except:
                         self.debug(1,"You defined a script that is not available",job.get_config('run_script'))
 
+                # NEW ! WE now go to 
+                # COMMENT THIS IF YOU WANT TO PUT FILES in relation to the jobs' dir
+                ftp_client.chdir('/home/'+str(instance.get_config('img_username'))+'/run/files')
                 if job.get_config('upload_files'):
                     files = job.get_config('upload_files')
                     if isinstance( files,str):
                         files = [ files ] 
                     for upfile in files:
-                        
-                        abs_path , rel_path , external = cloudrunutils.get_remote_file_paths(upfile,job.get_config('run_script'),dpl_job.get_path())
+
+                        local_path , abs_path , rel_remote_path, rel_path , external = cloudrunutils.resolve_paths(upfile,job.get_config('run_script'),'$HOME/run/files') #dpl_job.get_path())
                                 
+                        # check if the remote path has already been uploaded ...
+                        # NOTE: this is compatible with either way:
+                        # - all files in $HOME/run/files - new way:
+                        #   cloudrunutils.resolve_paths(upfile,job.get_config('run_script'),'$HOME/run/files')
+                        # - files distributed under the job's directory - old way: 
+                        #   cloudrunutils.resolve_paths(upfile,job.get_config('run_script'),dpl_job.get_path())
+                        if abs_path in file_uploaded:
+                            self.debug(1,"skipping upload of file",upfile,"for job#",job.get_rank(),"(file has already been uploaded)")
+                            continue
+                        file_uploaded[abs_path] = True
+                        
                         try:
                             try:
-                                ftp_client.put(upfile,rel_path) #os.path.basename(upfile))
+                                ftp_client.put(local_path,rel_remote_path) #os.path.basename(upfile))
                             except Exception as e:
                                 self.debug(1,"You defined an upload file that is not available",upfile)
                                 self.debug(1,e)
@@ -459,14 +475,21 @@ class CloudRunProvider(ABC):
                             print("Error while uploading file",upfile)
                             print(e)
                 if job.get_config('input_file'):
-                    abs_path , rel_path , external = cloudrunutils.get_remote_file_paths(job.get_config('input_file'),job.get_config('run_script'),dpl_job.get_path())
-                    #filename = os.path.basename(job.get_config('input_file'))
-                    try:
-                        ftp_client.put(job.get_config('input_file'),rel_path) #job.get_config('input_file')) #filename)
-                    except:
-                        self.debug(1,"You defined an input file that is not available:",job.get_config('input_file'))
+
+                    local_path , abs_path , rel_remote_path, rel_path , external = cloudrunutils.resolve_paths(job.get_config('input_file'),job.get_config('run_script'),'$HOME/run/files') #dpl_job.get_path())
+
+                    if abs_path in file_uploaded:
+                        self.debug(1,"skipping upload of file",upfile,"for job#",job.get_rank(),"(file has already been uploaded)")
+                    else:
+                        file_uploaded[abs_path] = True
+                        #filename = os.path.basename(job.get_config('input_file'))
+                        try:
+                            ftp_client.put(local_path,rel_remote_path) #job.get_config('input_file')) #filename)
+                        except:
+                            self.debug(1,"You defined an input file that is not available:",job.get_config('input_file'))
                 
                 # used to check if everything is uploaded
+                ftp_client.chdir(dpl_job.get_path())
                 ftp_client.putfo(BytesIO("".encode()), 'ready')
 
                 self.debug(1,"uploaded.",dpl_job.get_hash())
@@ -680,7 +703,8 @@ class CloudRunProvider(ABC):
                 # let's just run the jobs ...
                 #TODO: improve precision of recovery
                 self.debug(2,state_old.name,"vs",state_new.name)
-                if state_new!=CloudRunJobState.DONE and (state_new < state_old or (state_new == CloudRunJobState.ABORTED or state_old == CloudRunJobState.ABORTED)):
+                if state_new!=CloudRunJobState.DONE and (state_new < state_old or (state_new == CloudRunJobState.ABORTED or state_old == CloudRunJobState.ABORTED or state_new == CloudRunJobState.UNKNOWN or state_old == CloudRunJobState.UNKNOWN)):
+                    self.debug(1,"We will the following job because of an unsatisfying state",process_new)
                     do_run = True
                     # do not break cause we want to check all_done properly!
                     #break
@@ -965,7 +989,7 @@ class CloudRunProvider(ABC):
         if dpl_job.get_config('input_file'):
             files_to_ln.append(dpl_job.get_config('input_file'))
         for upfile in files_to_ln:
-            abs_path , rel_path , external = cloudrunutils.get_remote_file_paths(upfile,dpl_job.get_config('run_script'),dpl_job.get_path())
+            local_path , abs_path , rel_remote_path , rel_path , external = cloudrunutils.resolve_paths(upfile,dpl_job.get_config('run_script'),'$HOME/run/files') #dpl_job.get_path())
             filename    = os.path.basename(abs_path)
             filedir_abs = os.path.dirname(abs_path)
             filedir_rel = os.path.dirname(rel_path)

@@ -25,7 +25,7 @@ config = {
             'img_id'       : 'ami-077fd75cd229c811b' ,    # OS image: has to be valid and available for the profile (user/region)
             'img_username' : 'ubuntu' ,                   # the SSH user for the image
             'type'         : 't2.micro' ,                 # proprietary type spec (has to be valid)
-            'cpus'         : 120 ,                        # number of CPU cores
+            'cpus'         : None ,                       # number of CPU cores
             'gpu'          : None ,                       # the proprietary type of the GPU 
             'disk_size'    : None ,                       # the disk size of this instance type (in GB)
             'disk_type'    : None ,                       # the proprietary disk type of this instance type: 'standard', 'io1', 'io2', 'st1', etc
