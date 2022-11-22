@@ -1,6 +1,7 @@
 import hashlib , os , subprocess , json
 import jcs , yaml
 import uuid
+import os
 from os import path
 
 # keys used for hash computation
@@ -244,4 +245,44 @@ def compute_job_command(script_dir,job_config):
         script_command = "echo 'NO SCRIPT DEFINED'" 
 
     return script_command 
+
+def get_remote_file_paths(the_file,ref_file,remote_ref_dir):
+
+    file_abs_path   = path.abspath(the_file)
+    file_abs_dir    = path.dirname(file_abs_path)
+
+    # if we have a script
+    # let's make sure we upload the right directory structure so we dont have to change the script
+    if ref_file:
+        ref_args        = ref_file.split()
+        ref_abs_path    = path.abspath(ref_args[0])
+        ref_abs_dir     = path.dirname(ref_abs_path)
+    else:
+        ref_abs_path    = path.abspath(os.getcwd())
+        ref_abs_dir     = path.dirname(ref_abs_path)
+
+
+    if path.isabs(the_file):
+        # this is a subdir: we have to respect the structure
+        if file_abs_dir.startswith(ref_abs_dir):
+            rel_path = file_abs_path.replace(ref_abs_dir,"")
+            if rel_path.startswith(os.sep):
+                rel_path = rel_path[1:]
+            return path.join(remote_ref_dir,rel_path) , rel_path , False
+        # this is not a subdir ! we gotta create a virtual subdir that 
+        else:
+            #rel_path = file_abs_path.replace(os.sep,'_')
+            # we gotta have to handle Windows situation here and transform the drive as a path bite
+            rel_path = file_abs_path # LETS USE THE ABS PATH as a REL PATH !
+            if rel_path.startswith(os.sep):
+                rel_path = rel_path[1:]
+            return path.join(remote_ref_dir,rel_path) , rel_path , True
+    else:
+        rel_path = the_file
+        return path.join(remote_ref_dir,rel_path) , rel_path , False
+
+
+ 
+
+
 

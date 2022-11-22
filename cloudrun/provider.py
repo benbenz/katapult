@@ -399,15 +399,17 @@ class CloudRunProvider(ABC):
                 if isinstance(upload_files,str):
                     input_files.append(upload_files)
                 else:
-                    input_files.append(*upload_files)
+                    for upf in upload_files:
+                        input_files.append(upf)
             if job.get_config('input_file'):
                 input_files.append(job.get_config('input_file'))
             
             mkdir_cmd = ""
             for in_file in input_files:
-                dirname = os.path.dirname(in_file)
+                abs_path , rel_path , external = cloudrunutils.get_remote_file_paths(in_file,dpl_job.get_config('run_script'),dpl_job.get_path()) #os.path.dirname(in_file)
+                dirname = os.path.dirname(abs_path)
                 if dirname:
-                    mkdir_cmd = mkdir_cmd + (" && " if mkdir_cmd else "") + "mkdir -p " + dpl_job.get_path()+'/'+dirname
+                    mkdir_cmd = mkdir_cmd + (" && " if mkdir_cmd else "") + "mkdir -p " + dirname #dpl_job.get_path()+'/'+dirname
 
             self.debug(2,"creating job directories ...")
             stdin0, stdout0, stderr0 = self._exec_command(ssh_client,"mkdir -p "+dpl_job.get_path())
@@ -444,9 +446,12 @@ class CloudRunProvider(ABC):
                     if isinstance( files,str):
                         files = [ files ] 
                     for upfile in files:
+                        
+                        abs_path , rel_path , external = cloudrunutils.get_remote_file_paths(upfile,job.get_config('run_script'),dpl_job.get_path())
+                                
                         try:
                             try:
-                                ftp_client.put(upfile,upfile) #os.path.basename(upfile))
+                                ftp_client.put(upfile,rel_path) #os.path.basename(upfile))
                             except Exception as e:
                                 self.debug(1,"You defined an upload file that is not available",upfile)
                                 self.debug(1,e)
@@ -454,9 +459,10 @@ class CloudRunProvider(ABC):
                             print("Error while uploading file",upfile)
                             print(e)
                 if job.get_config('input_file'):
-                    filename = os.path.basename(job.get_config('input_file'))
+                    abs_path , rel_path , external = cloudrunutils.get_remote_file_paths(job.get_config('input_file'),job.get_config('run_script'),dpl_job.get_path())
+                    #filename = os.path.basename(job.get_config('input_file'))
                     try:
-                        ftp_client.put(job.get_config('input_file'),job.get_config('input_file')) #filename)
+                        ftp_client.put(job.get_config('input_file'),rel_path) #job.get_config('input_file')) #filename)
                     except:
                         self.debug(1,"You defined an input file that is not available:",job.get_config('input_file'))
                 
@@ -954,20 +960,26 @@ class CloudRunProvider(ABC):
         upload_files = dpl_job.get_config('upload_files')
         lnstr = ""
         if upload_files:
-            files_to_ln.append(*upload_files)
+            for up_file in upload_files:
+                files_to_ln.append(up_file)
         if dpl_job.get_config('input_file'):
             files_to_ln.append(dpl_job.get_config('input_file'))
         for upfile in files_to_ln:
-            filename  = os.path.basename(upfile)
-            filedir   = os.path.dirname(upfile)
-            if filedir and filedir != '/':
-                fulldir   = os.path.join(dpl_job.get_path() , uid , filedir)
-                uploaddir = os.path.join(dpl_job.get_path() , filedir )
-                lnstr = lnstr + (" && " if lnstr else "") + "mkdir -p " + fulldir + " && ln -sf " + uploaddir + '/' + filename + " " + fulldir + '/' + filename
+            abs_path , rel_path , external = cloudrunutils.get_remote_file_paths(upfile,dpl_job.get_config('run_script'),dpl_job.get_path())
+            filename    = os.path.basename(abs_path)
+            filedir_abs = os.path.dirname(abs_path)
+            filedir_rel = os.path.dirname(rel_path)
+            if filedir_rel and filedir_rel != '/':
+                fulldir   = os.path.join(dpl_job.get_path() , uid , filedir_rel)
+                uploaddir = os.path.join(dpl_job.get_path() , filedir_rel )
+                #lnstr = lnstr + (" && " if lnstr else "") + "mkdir -p " + fulldir + " && ln -sf " + uploaddir + '/' + filename + " " + fulldir + '/' + filename
+                lnstr = lnstr + (" && " if lnstr else "") + "mkdir -p " + fulldir + " && ln -sf " + abs_path + " " + fulldir + '/' + filename
             else:
                 fulldir   = os.path.join( dpl_job.get_path() , uid )
                 uploaddir = dpl_job.get_path()
-                lnstr = lnstr + (" && " if lnstr else "") + "ln -sf " + uploaddir + '/' + filename + " " + fulldir + '/' + filename
+                #lnstr = lnstr + (" && " if lnstr else "") + "ln -sf " + uploaddir + '/' + filename + " " + fulldir + '/' + filename
+                lnstr = lnstr + (" && " if lnstr else "") + "ln -sf " + abs_path + " " + fulldir + '/' + filename
+
         return lnstr
 
     def _get_instancetypes_attribute(self,inst_cfg,resource_file,type_col,attr,return_type):

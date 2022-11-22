@@ -91,7 +91,7 @@
     - Note: it will do probably whats required but the state is wrong. The latest processes should be saying "ABORTED"
   - [x] DEBUG idem as before but by kiling the program in WAIT states
   - [ ] improve more paths issue (local vs remote)
-  - [ ] add 'env_bash' to environment so we can handle a user script during deploy ...
+  - [x] add 'env_bash' to environment so we can handle a user script during deploy ... >> 'command'
 
 4) local mode:
   - [x] handle new config 
