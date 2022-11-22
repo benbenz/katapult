@@ -16,6 +16,7 @@ FILE_SH="$HOME/run/$env_name/env_command.sh"
 FILE_CONDA="$HOME/run/$env_name/environment.yml"
 FILE_PYPI="$HOME/run/$env_name/requirements.txt"
 FILE_APTGET="$HOME/run/$env_name/aptget.sh"
+FILE_JULIA="$HOME/run/$env_name/env_julia.jl"
 
 echo "bootstraping" > "$HOME/run/$env_name/state"
 
@@ -120,6 +121,13 @@ if ([ -f "$FILE_PYPI" ] && ! [ -f "$FILE_CONDA" ]); then
   fi
   
 fi # FILE_PYPI
+
+
+if [ -f "$FILE_JULIA" ]; then
+  julia $FILE_JULIA
+  echo "Julia packages installed"
+fi
+
 
 echo "bootstraped" > "$HOME/run/$env_name/state"
 

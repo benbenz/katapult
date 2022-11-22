@@ -16,6 +16,10 @@ try:
     os.remove('aptget.sh')
 except:
     pass
+try:    
+    os.remove('env_julia.jl')
+except:
+    pass
 
 with open('config.json','r') as cfg_file:
     config = json.loads(cfg_file.read())
@@ -47,3 +51,12 @@ if config['env_aptget'] is not None:
         st = os.stat('aptget.sh')
         os.chmod('aptget.sh', st.st_mode | stat.S_IEXEC)
 
+if config['env_julia'] is not None:
+    with open('env_julia.jl','w') as julia_file:
+        #sh_file.write('#!/usr/bin/bash\n\nsudo apt-get install -y')
+        julia_file.write("using Pkg\n")
+        for pkg in config['env_julia']:
+            julia_file.write('Pkg.add("' + pkg + '")\n')
+        julia_file.close()
+        st = os.stat('env_julia.jl')
+        #os.chmod('env_julia.jl', st.st_mode | stat.S_IEXEC)        

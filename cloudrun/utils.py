@@ -8,7 +8,7 @@ from os import path
 # Note: we include market options (SPOT ON/OFF e.g.) for the instance because it defines how the 'hardware' will run 
 #       so it's considered part of the intrinsic characteristics of the machine
 cr_instance_keys       = [ 'region'  , 'cloud_id' , 'img_id' , 'type' , 'cpus' , 'gpu' , 'disk_size' , 'disk_type' , 'eco' , 'max_bid' ] 
-cr_environment_keys    = [ 'command' , 'env_pypi' , 'env_conda' , 'env_apt-get' ]
+cr_environment_keys    = [ 'command' , 'env_pypi' , 'env_conda' , 'env_aptget' , 'env_julia' ]
 
 def compute_instance_hash(instance_cfg):
     instance_config = { your_key: instance_cfg[your_key] for your_key in cr_instance_keys }
@@ -72,6 +72,7 @@ def compute_environment_object(env_config):
         'env_aptget' : None , 
         'env_conda'  : None , 
         'env_pypi'   : None , 
+        'env_julia'  : None
     }
     
     if env_config.get('command'):
@@ -171,6 +172,18 @@ def compute_environment_object(env_config):
 
         else:
             print("\033[93menv_pypi is specified but the file or directory doesn't exist\033[0m")
+
+    if env_config.get('env_julia'):
+
+        env_julia = env_config['env_julia']
+
+        if isinstance(env_julia,str):
+
+            env_julia = [ env_julia ]
+
+        # set dependencies as this
+        env_apt_get = list(map(str.strip,env_julia)) # strip the strings
+        environment_obj['env_julia'] = env_julia                
 
 
     return environment_obj      
