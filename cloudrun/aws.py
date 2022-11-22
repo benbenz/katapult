@@ -3,7 +3,7 @@ import os
 from .utils import *
 from .core     import CloudRunError , CloudRunInstance , CloudRunInstanceState 
 from .core     import cr_keypairName , cr_secGroupName , cr_bucketName , cr_vpcName , init_instance_name
-from .provider import CloudRunProvider , debug
+from .provider import CloudRunProvider , debug , bcolors
 from botocore.exceptions import ClientError
 from datetime import datetime , timedelta
 from botocore.config import Config
@@ -380,6 +380,18 @@ def aws_create_instance(instance_config,vpc,subnet,secGroup):
         errmsg = str(ce)
         if 'InsufficientInstanceCapacity' in errmsg: # Amazon doesnt have enough resources at the moment
             debug(1,"AWS doesnt have enough SPOT resources at the moment, retrying in 2 minutes ...",errmsg)
+        elif 'InvalidAMIID.Malformed' in errmsg:
+            debug(1,errmsg,color=bcolors.FAIL)
+            images = ec2_client.describe_images(Filters=[{'Name':'name','Values':['*Ubuntu*']}]) #Owners=['self'])
+            for image in images['Images']:
+                debug(1,"{0} - {1}".format(image['ImageId'],image['Name']))
+            sys.exit()
+        elif 'InvalidAMIID.NotFound' in errmsg:
+            debug(1,errmsg,color=bcolors.FAIL)
+            images = ec2_client.describe_images(Filters=[{'Name':'name','Values':['*Ubuntu*']}]) #Owners=['self'])
+            for image in images['Images']:
+                debug(1,"{0} - {1}".format(image['ImageId'],image['Name']))
+            sys.exit()
         else:
             debug(1,"An error occured while trying to create this instance",errmsg)
         raise CloudRunError()

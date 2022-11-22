@@ -63,7 +63,7 @@
   - [ ] online vs offline bin packing >> online bin packing used by the nano instance (use yield?)
   - [x] improve handling of uploaded files: 
     - [x] keep tree structure (what to do when absolute files?)
-    - [ ] define 'upload_base_path' in config?
+    - [x] define 'upload_base_path' in config?
     - [x] add symbolic links under the run_dir to point to the job_dir where its uploaded (parent dir)
     - [x] if there is no directory involve we need to create a symbolic link for each file 
   - [x] fix bug with missing environment when using instance.get_environments() in _deploy_environments
@@ -90,13 +90,13 @@
     - restart the program
     - Note: it will do probably whats required but the state is wrong. The latest processes should be saying "ABORTED"
   - [x] DEBUG idem as before but by kiling the program in WAIT states
-  - [ ] improve more paths issue (local vs remote)
+  - [x] improve more paths issue (local vs remote)
   - [x] add 'env_bash' to environment so we can handle a user script during deploy ... >> 'command'
   - [ ] if error with image not available for region: list the AMI for the region (Linux)
-  - [ ] HANDLE files separately (for all jobs):
-     - [ ] dictionnary with absolute local path as key
-     - [ ] put all of them in one place (once for all)
-     - [ ] have the ln_command create all the necessary links 
+  - [x] HANDLE files separately (for all jobs):
+     - [x] dictionnary with absolute local path as key
+     - [x] put all of them in one place (once for all)
+     - [x] have the ln_command create all the necessary links 
      Basically we're only removing the files form the jobs' dirs and moving them to a separate folder, to mutualize them better ...
   - [ ] improve UI with Python RICH
 

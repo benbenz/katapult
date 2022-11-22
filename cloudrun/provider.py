@@ -575,7 +575,7 @@ class CloudRunProvider(ABC):
             for future in concurrent.futures.as_completed(future_to_instance):
                 inst = future_to_instance[future]
                 if inst.is_invalid():
-                    self.debug(1,"ERROR: Your configuration is causing an instance to not be created. Please fix.",instance.get_config_DIRTY(),color=bcolors.FAIL)
+                    self.debug(1,"ERROR: Your configuration is causing an instance to not be created. Please fix.",inst.get_config_DIRTY(),color=bcolors.FAIL)
                     sys.exit()
 
                 
