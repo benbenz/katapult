@@ -182,7 +182,7 @@ class CloudRunError(Exception):
     pass
 
 
-class CloudRunJobState(IntFlag):
+class CloudRunProcessState(IntFlag):
     UNKNOWN   = 0
     WAIT      = 1  # waiting for bootstraping
     QUEUE     = 2  # queued (for sequential scripts)
@@ -361,7 +361,7 @@ Usually you may use the CloudRunProvider the following way:
 ```python
 
 from cloudrun      import provider as cloudrun
-from cloudrun.core import CloudRunJobState
+from cloudrun.core import CloudRunProcessState
 import asyncio 
 
 # load config
@@ -383,9 +383,9 @@ provider.deploy()
 processes = provider.run_jobs()
 
 # wait for the activate proccesses to be done:
-processes = provider.wait_for_jobs_state(CloudRunJobState.DONE|CloudRunJobState.ABORTED,processes)
+processes = provider.wait_for_jobs_state(CloudRunProcessState.DONE|CloudRunProcessState.ABORTED,processes)
 # OR wait for all processes to be done 
-provider.wait_for_jobs_state(CloudRunJobState.DONE|CloudRunJobState.ABORTED)
+provider.wait_for_jobs_state(CloudRunProcessState.DONE|CloudRunProcessState.ABORTED)
 
 # you can get the state of all jobs this way:
 processes = provider.get_jobs_states()

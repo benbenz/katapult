@@ -26,7 +26,7 @@ class CloudRunInstanceState(IntFlag):
     ANY         = 32 + 16 + 8 + 4 + 2 + 1     
 
 
-class CloudRunJobState(IntFlag):
+class CloudRunProcessState(IntFlag):
 #    FOO = 100
     UNKNOWN   = 0
     WAIT      = 1  # waiting for bootstraping
@@ -50,7 +50,7 @@ class CloudRunInstance():
         self._ip_addr  = None
         self._dns_addr = None
         # state
-        self._state    = CloudRunJobState.UNKNOWN
+        self._state    = CloudRunProcessState.UNKNOWN
         # the config the instance has been created on
         self._config   = config 
         # dict data associated with it (AWS response data e.g.)
@@ -213,8 +213,8 @@ class CloudRunDeployedEnvironment(CloudRunEnvironment):
         _env_obj = cloudrunutils.compute_environment_object(self._config)
         # overwrite name in conda config as well
         if _env_obj['env_conda'] is not None:
-            _env_obj['env_conda']['name'] = self._name 
-        _env_obj['name'] = self._name
+            _env_obj['env_conda']['name'] = self.get_name_with_hash()
+        _env_obj['name'] = self.get_name_with_hash()
         # replace __REQUIREMENTS_TXT_LINK__ with the actual requirements.txt path (dependent of config and env hash)
         # the file needs to be absolute
         _env_obj = cloudrunutils.update_requirements_path(_env_obj,self._path_abs)
@@ -265,7 +265,7 @@ class CloudRunJob():
     def has_completed(self):
         for dpl_job in self._deployed:
             for process in dpl_job.get_processes():
-                if process.get_state() == CloudRunJobState.DONE:
+                if process.get_state() == CloudRunProcessState.DONE:
                     return True
         return False
 
@@ -362,7 +362,7 @@ class CloudRunProcess():
         self._uid   = uid
         self._pid   = pid
         self._batch_uid = batch_uid
-        self._state = CloudRunJobState.UNKNOWN
+        self._state = CloudRunProcessState.UNKNOWN
         self._job.attach_process(self)
      
     def get_uid(self):

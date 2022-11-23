@@ -42,7 +42,8 @@ config = {
     # ENVIRONMENTS / SOFTWARE
     ################################################################################
 
-    'environments' : [
+   'environments' : [
+        # INSTALL Julia with .sh
         {
             'name'         : 'env1' ,                       # name of the environment - should be unique if not 'None'. 'None' only when len(environments)==1
 
@@ -56,6 +57,7 @@ config = {
             'env_pypi'     : "example/requirements.txt" , # None, an array of libraries, a path to requirements.txt file, or a path to the root of a venv environment 
             'env_julia'    : ["Wavelets"] ,                       # None, a string or an array of Julia packages to install (requires julia)
         },
+        # INSTALL Julia with mamba
         {
             'name'         : 'env2' ,                       # name of the environment - should be unique if not 'None'. 'None' only when len(environments)==1
 
@@ -66,8 +68,21 @@ config = {
             'env_aptget'   : None,        # None, an array of librarires/binaries for apt-get
             'env_conda'    : "example/environment2.yml",   # None, an array of libraries, a path to environment.yml  file, or a path to the root of a conda environment
             'env_pypi'     : None , # None, an array of libraries, a path to requirements.txt file, or a path to the root of a venv environment 
-            'env_julia'    : ["Wavelets"]  ,                       # None, a string or an array of Julia packages to install (requires julia)
-        }
+            'env_julia'    : None  ,                       # None, a string or an array of Julia packages to install (requires julia)
+        },
+        # Python env ...
+        {
+            'name'         : 'env3' ,                       # name of the environment - should be unique if not 'None'. 'None' only when len(environments)==1
+
+            # env_conda + env_pypi  : mamba is used to setup the env (pip dependencies included)
+            # env_conda (only)      : mamba is used to setup the env
+            # env_pypi  (only)      : venv + pip is used to setup the env 
+
+            'env_aptget'   : None,        # None, an array of librarires/binaries for apt-get
+            'env_conda'    : "example/environment.yml",   # None, an array of libraries, a path to environment.yml  file, or a path to the root of a conda environment
+            'env_pypi'     : "example/requirements.txt" , # None, an array of libraries, a path to requirements.txt file, or a path to the root of a venv environment 
+            'env_julia'    : None  ,                       # None, a string or an array of Julia packages to install (requires julia)
+        }       
     ] ,
 
     ################################################################################
@@ -76,16 +91,25 @@ config = {
 
     'jobs' : [
         {
-            'env_name'     : 'env1' ,                     # the environment to use (can be 'None' if solely one environment is provided above)
+            'env_name'     : 'env1' ,                       # the environment to use (can be 'None' if solely one environment is provided above)
             'cpus_req'     : None ,                       # the CPU(s) requirements for the process (can be None)
             'run_script'   : 'example/run_julia.jl 1 10',# the script to run (Python (.py) or Julia (.jl) for now) (prioritised vs 'run_command')
             'run_command'  : None ,                       # the command to run
-            'upload_files' : [ "uploaded.txt"] ,          # any file to upload (array or string) - will be put in the same directory
+            'upload_files' : [ "/Users/ben/config.log" , "uploaded.txt"] ,  # any file to upload (array or string) - will be put in the same directory
+            'input_file'   : 'input.dat' ,                # the input file name (used by the script)
+            'output_file'  : 'output.dat' ,               # the output file name (used by the script)
+        } ,        
+        {
+            'env_name'     : 'env2' ,                       # the environment to use (can be 'None' if solely one environment is provided above)
+            'cpus_req'     : None ,                       # the CPU(s) requirements for the process (can be None)
+            'run_script'   : 'example/run_julia.jl 1 10',# the script to run (Python (.py) or Julia (.jl) for now) (prioritised vs 'run_command')
+            'run_command'  : None ,                       # the command to run
+            'upload_files' : [ "/Users/ben/config.log" , "uploaded.txt"] ,  # any file to upload (array or string) - will be put in the same directory
             'input_file'   : 'input.dat' ,                # the input file name (used by the script)
             'output_file'  : 'output.dat' ,               # the output file name (used by the script)
         } ,
         {
-            'env_name'     : 'env1' ,                     # the environment to use (can be 'None' if solely one environment is provided above)
+            'env_name'     : 'env1' ,                       # the environment to use (can be 'None' if solely one environment is provided above)
             'cpus_req'     : None ,                       # the CPU(s) requirements for the process (can be None)
             'run_script'   : 'example/run_julia.jl 2 12',# the script to run (Python (.py) or Julia (.jl) for now) (prioritised vs 'run_command')
             'run_command'  : None ,                       # the command to run
@@ -94,40 +118,40 @@ config = {
             'output_file'  : 'output.dat' ,               # the output file name (used by the script)
         },
         {
-            'env_name'     : 'env2' ,                     # the environment to use (can be 'None' if solely one environment is provided above)
-            'cpus_req'     : None ,                       # the CPU(s) requirements for the process (can be None)
-            'run_script'   : 'example/run_julia.jl 2 5', # the script to run (Python (.py) or Julia (.jl) for now) (prioritised vs 'run_command')
-            'run_command'  : None ,                       # the command to run
-            'upload_files' : [ "uploaded.txt"] ,          # any file to upload (array or string) - will be put in the same directory
-            'input_file'   : 'input.dat' ,                # the input file name (used by the script)
-            'output_file'  : 'output.dat' ,               # the output file name (used by the script)
+            'env_name'     : 'env3' ,                      # the environment to use (can be 'None' if solely one environment is provided above)
+            'cpus_req'     : None ,                        # the CPU(s) requirements for the process (can be None)
+            'run_script'   : 'example/run_remote.py 2 5',  # the script to run (Python (.py) or Julia (.jl) for now) (prioritised vs 'run_command')
+            'run_command'  : None ,                        # the command to run
+            'upload_files' : [ "uploaded.txt"] ,           # any file to upload (array or string) - will be put in the same directory
+            'input_file'   : 'input.dat' ,                 # the input file name (used by the script)
+            'output_file'  : 'output.dat' ,                # the output file name (used by the script)
         },
         {
-            'env_name'     : 'env2' ,                       # the environment to use (can be 'None' if solely one environment is provided above)
-            'cpus_req'     : None ,                       # the CPU(s) requirements for the process (can be None)
-            'run_script'   : 'example/run_remote.py 2 7', # the script to run (Python (.py) or Julia (.jl) for now) (prioritised vs 'run_command')
-            'run_command'  : None ,                       # the command to run
-            'upload_files' : [ "uploaded.txt"] ,          # any file to upload (array or string) - will be put in the same directory
-            'input_file'   : 'input.dat' ,                # the input file name (used by the script)
-            'output_file'  : 'output.dat' ,               # the output file name (used by the script)
+            'env_name'     : 'env3' ,                      # the environment to use (can be 'None' if solely one environment is provided above)
+            'cpus_req'     : None ,                        # the CPU(s) requirements for the process (can be None)
+            'run_script'   : 'example/run_remote.py 2 7',  # the script to run (Python (.py) or Julia (.jl) for now) (prioritised vs 'run_command')
+            'run_command'  : None ,                        # the command to run
+            'upload_files' : [ "uploaded.txt"] ,           # any file to upload (array or string) - will be put in the same directory
+            'input_file'   : 'input.dat' ,                 # the input file name (used by the script)
+            'output_file'  : 'output.dat' ,                # the output file name (used by the script)
         },
         {
-            'env_name'     : 'env2' ,                       # the environment to use (can be 'None' if solely one environment is provided above)
-            'cpus_req'     : None ,                       # the CPU(s) requirements for the process (can be None)
-            'run_script'   : 'example/run_remote.py 2 8',# the script to run (Python (.py) or Julia (.jl) for now) (prioritised vs 'run_command')
-            'run_command'  : None ,                       # the command to run
-            'upload_files' : [ "uploaded.txt"] ,          # any file to upload (array or string) - will be put in the same directory
-            'input_file'   : 'input.dat' ,                # the input file name (used by the script)
-            'output_file'  : 'output.dat' ,               # the output file name (used by the script)
+            'env_name'     : 'env3' ,                       # the environment to use (can be 'None' if solely one environment is provided above)
+            'cpus_req'     : None ,                        # the CPU(s) requirements for the process (can be None)
+            'run_script'   : 'example/run_remote.py 2 8', # the script to run (Python (.py) or Julia (.jl) for now) (prioritised vs 'run_command')
+            'run_command'  : None ,                        # the command to run
+            'upload_files' : [ "uploaded.txt"] ,           # any file to upload (array or string) - will be put in the same directory
+            'input_file'   : 'input.dat' ,                 # the input file name (used by the script)
+            'output_file'  : 'output.dat' ,                # the output file name (used by the script)
         },
         {
-            'env_name'     : 'env2' ,                     # the environment to use (can be 'None' if solely one environment is provided above)
-            'cpus_req'     : None ,                       # the CPU(s) requirements for the process (can be None)
-            'run_script'   : 'example/run_remote.py 2 11',# the script to run (Python (.py) or Julia (.jl) for now) (prioritised vs 'run_command')
-            'run_command'  : None ,                       # the command to run
-            'upload_files' : [ "uploaded.txt"] ,          # any file to upload (array or string) - will be put in the same directory
-            'input_file'   : 'input.dat' ,                # the input file name (used by the script)
-            'output_file'  : 'output.dat' ,               # the output file name (used by the script)
+            'env_name'     : 'env3' ,                      # the environment to use (can be 'None' if solely one environment is provided above)
+            'cpus_req'     : None ,                        # the CPU(s) requirements for the process (can be None)
+            'run_script'   : 'example/run_remote.py 2 11', # the script to run (Python (.py) or Julia (.jl) for now) (prioritised vs 'run_command')
+            'run_command'  : None ,                        # the command to run
+            'upload_files' : [ "uploaded.txt"] ,           # any file to upload (array or string) - will be put in the same directory
+            'input_file'   : 'input.dat' ,                 # the input file name (used by the script)
+            'output_file'  : 'output.dat' ,                # the output file name (used by the script)
         }
     ]
 }

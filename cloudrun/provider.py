@@ -80,7 +80,11 @@ class CloudRunProvider(ABC):
                 color = kwargs['color']
                 listargs = list(args)
                 #listargs.insert(0,color)
-                listargs[0] = color + listargs[0]
+                if isinstance(listargs[0], (bytes, bytearray)):
+                    str_concat = listargs[0].decode()
+                else:
+                    str_concat = str(listargs[0])
+                listargs[0] = color + str_concat
                 listargs.append(bcolors.ENDC)
                 args = tuple(listargs)
                 kwargs.pop('color')
@@ -355,6 +359,8 @@ class CloudRunProvider(ABC):
 
                 self.debug(2,"creating environment directories ...")
                 stdin0, stdout0, stderr0 = self._exec_command(ssh_client,"mkdir -p "+files_path+" && rm -f "+dpl_env.get_path_abs()+'/ready')
+                self.debug(2,"STDOUT for mkdir -p ",files_path,"...",stdout0.read())
+                self.debug(2,"STDERR for mkdir -p ",files_path,"...",stderr0.read())
                 self.debug(2,"directories created")
 
                 self.debug(1,"uploading files ... ")
@@ -389,7 +395,7 @@ class CloudRunProvider(ABC):
             ftp_client.putfo(io.StringIO(bootstrap_command),'generate_envs.sh')
             commands = [
                 {'cmd': 'chmod +x $HOME/run/generate_envs.sh' , 'out':False},
-                {'cmd': '$HOME/run/generate_envs.sh' , 'out':False, 'output': '$HOME/run/bootstrap.log'}
+                {'cmd': '$HOME/run/generate_envs.sh' , 'out':print_deploy, 'output': '$HOME/run/bootstrap.log'}
                 #{'cmd': bootstrap_command ,'out': print_deploy , 'output': '$HOME/run/bootstrap.log'}
             ]
             self._run_ssh_commands(ssh_client,commands)
@@ -546,10 +552,22 @@ class CloudRunProvider(ABC):
 
                 break
 
+            except FileNotFoundError as fne:
+                self.debug(1,e)
+                self.debug(1,"Filename = ",e.filename)
+                self.debug(1,"Error while deploying")
+                #sys.exit() # this only kills the thread
+                #os.kill(os.getpid(), signal.SIGINT)
+                os._exit(1)
+                raise fne
+
             except Exception as e:
                 self.debug(1,e)
                 self.debug(1,"Error while deploying")
-                traceback.stacktrace()
+                #sys.exit() # this only kills the thread
+                #os.kill(os.getpid(), signal.SIGINT)
+                os._exit(1)
+                raise e
             
             attempts = attempts + 1
 
@@ -640,7 +658,19 @@ class CloudRunProvider(ABC):
 
         for process in processes:
             if process.get_state() & state_mask:
-                process.set_state(CloudRunJobState.ABORTED)
+                process.set_state(CloudRunProcessState.ABORTED)
+
+    def get_log(self,process,ssh_client):
+        uid   = process.get_uid()
+        job   = process.get_job()
+        env   = job.get_env()
+        jhash = job.get_hash()
+        path  = env.get_path()
+        try:
+            stdin , stdout , stderr = self._exec_command(ssh_client,"cat "+path+'/'+jhash+'/'+uid+'/run.log')
+            return stdout.read()
+        except:
+            return None
 
     def _exec_command(self,ssh_client,command):
         self.debug(2,"Executing ",format( command ))
@@ -708,7 +738,7 @@ class CloudRunProvider(ABC):
         do_run = True
         if instance.get_name() in instances_processes:
             processes_infos = instances_processes[instance.get_name()]
-            last_processes_new = self.__get_jobs_states_internal(processes_infos,False,CloudRunJobState.ANY,True) # Programmatic >> no print, no serialize
+            last_processes_new = self.__get_jobs_states_internal(processes_infos,False,CloudRunProcessState.ANY,True) # Programmatic >> no print, no serialize
             do_run = False
             all_done = True
             for process_old in last_processes_old:
@@ -721,12 +751,12 @@ class CloudRunProvider(ABC):
                 # let's just run the jobs ...
                 #TODO: improve precision of recovery
                 self.debug(2,state_old.name,"vs",state_new.name)
-                if state_new!=CloudRunJobState.DONE and (state_new < state_old or (state_new == CloudRunJobState.ABORTED or state_old == CloudRunJobState.ABORTED or state_new == CloudRunJobState.UNKNOWN or state_old == CloudRunJobState.UNKNOWN)):
+                if state_new!=CloudRunProcessState.DONE and (state_new < state_old or (state_new == CloudRunProcessState.ABORTED or state_old == CloudRunProcessState.ABORTED or state_new == CloudRunProcessState.UNKNOWN or state_old == CloudRunProcessState.UNKNOWN)):
                     self.debug(1,"We will run the following job because of an unsatisfying state. Job#",process_new.get_job().get_rank(),"=",process_new.get_state())
                     do_run = True
                     # do not break cause we want to check all_done properly!
                     #break
-                all_done = all_done and state_new == CloudRunJobState.DONE
+                all_done = all_done and state_new == CloudRunProcessState.DONE
 
             if all_done:
                 do_run = False
@@ -736,7 +766,7 @@ class CloudRunProvider(ABC):
             # this should likely set the states to ABORTED if this is a new instance
             instances_processes = self._organize_instances_processes(last_processes_old)
             processes_infos = instances_processes[instance.get_name()]
-            self.__get_jobs_states_internal(processes_infos,False,CloudRunJobState.ANY,True) # Programmatic >> no print, no serialize
+            self.__get_jobs_states_internal(processes_infos,False,CloudRunProcessState.ANY,True) # Programmatic >> no print, no serialize
 
             if do_run:
                 return True , None, False
@@ -1093,10 +1123,10 @@ class CloudRunProvider(ABC):
         if processes is not None:
             if instance.get_state() & (CloudRunInstanceState.STOPPING | CloudRunInstanceState.STOPPED) :
                 # mark any type of process as aborted, but DONE
-                self._mark_aborted(processes,CloudRunJobState.ANY - CloudRunJobState.DONE) 
+                self._mark_aborted(processes,CloudRunProcessState.ANY - CloudRunProcessState.DONE) 
             elif instance.get_state() & (CloudRunInstanceState.TERMINATING | CloudRunInstanceState.TERMINATED):
                 # mark any type of process as aborted
-                self._mark_aborted(processes,CloudRunJobState.ANY) 
+                self._mark_aborted(processes,CloudRunProcessState.ANY) 
         rerun_jobs = processes is not None
         #processes_info , jobsinfo   = self.revive(instance,rerun_jobs) #re-run the jobs and get an updated processes/jobsinfo 
         processes = self.revive(instance,rerun_jobs)
@@ -1200,7 +1230,7 @@ class CloudRunProvider(ABC):
                         if process.get_pid() is None and pid != "None":
                             process.set_pid( int(pid) )
                         try:
-                            state = CloudRunJobState[statestr.upper()]
+                            state = CloudRunProcessState[statestr.upper()]
                             process.set_state(state)
                             self.debug(2,process)
                             processes_infos[uid]['retrieved'] = True
@@ -1208,7 +1238,7 @@ class CloudRunProvider(ABC):
                         except Exception as e:
                             debug(1,"\nUnhandled state received by state.sh!!!",statestr,"\n")
                             debug(2,e)
-                            state = CloudRunJobState.UNKNOWN
+                            state = CloudRunProcessState.UNKNOWN
 
                         processes.append(process)
 
@@ -1272,7 +1302,7 @@ class CloudRunProvider(ABC):
         return instances_processes
 
 
-    def __get_or_wait_jobs_state( self, processes , do_wait = False , job_state = CloudRunJobState.ANY ):   
+    def __get_or_wait_jobs_state( self, processes , do_wait = False , job_state = CloudRunProcessState.ANY ):   
 
         if processes is None: 
             processes = self.get_last_processes()
@@ -1331,6 +1361,19 @@ class CloudRunProvider(ABC):
                 for dpl_job in dpl_jobs:
                     for process in dpl_job.get_processes():
                         self.debug(1,"|_",process.str_simple())
+
+    def print_aborted_logs(self,instance=None):
+        instances = self._instances if instance is None else [ instance ]
+        for _instance in instances:
+            ssh_client = self._connect_to_instance(_instance)
+            for job in _instance.get_jobs():
+                process = job.get_last_process()
+                if process.get_state() == CloudRunProcessState.ABORTED:
+                    self.debug(1,"----------------------------------------------------------------------",color=bcolors.WARNING)
+                    self.debug(1,"Job #",job.get_rank(),"has ABORTED with errors:",color=bcolors.WARNING)
+                    self.debug(1,self.get_log(process,ssh_client),color=bcolors.WARNING)
+                    self.debug(1,process,color=bcolors.WARNING)
+            ssh_client.close()
 
 
     def _tail_execute_command(self,ssh,files_path,uid,line_num):
@@ -1438,7 +1481,11 @@ def debug(level,*args,**kwargs):
             color = kwargs['color']
             listargs = list(args)
             #listargs.insert(0,color)
-            listargs[0] = color + listargs[0]
+            if isinstance(listargs[0], (bytes, bytearray)):
+                str_concat = listargs[0].decode()
+            else:
+                str_concat = str(listargs[0])
+            listargs[0] = color + str_concat
             listargs.append(bcolors.ENDC)
             args = tuple(listargs)
             kwargs.pop('color')

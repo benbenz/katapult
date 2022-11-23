@@ -1,6 +1,6 @@
 from cloudrun import provider as cr
 import asyncio , os , sys
-from cloudrun.core import CloudRunJobState
+from cloudrun.core import CloudRunProcessState
 import traceback
 
 async def tail_loop(script_hash,uid):
@@ -42,7 +42,7 @@ async def mainloop(cr_client):
     print("\n== WAIT ==\n")
 
     print("Waiting for DONE or ABORTED ...")
-    processes = cr_client.wait_for_jobs_state(CloudRunJobState.DONE|CloudRunJobState.ABORTED,processes)
+    processes = cr_client.wait_for_jobs_state(CloudRunProcessState.DONE|CloudRunProcessState.ABORTED,processes)
 
     print("\n== GET STATE ==\n")
 
@@ -51,9 +51,10 @@ async def mainloop(cr_client):
 
     # print("\n== WAIT and TAIL ==\n")
 
-    # task1 = asyncio.create_task(cr_client.wait_for_script_state(CloudRunJobState.DONE|CloudRunJobState.ABORTED,script_hash,uid))
+    # task1 = asyncio.create_task(cr_client.wait_for_script_state(CloudRunProcessState.DONE|CloudRunProcessState.ABORTED,script_hash,uid))
     # task2 = asyncio.create_task(tail_loop(script_hash,uid))
     # await asyncio.gather(task1,task2)
+    cr_client.print_aborted_logs()
 
     print("\n== DONE ==\n")
 

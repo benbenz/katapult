@@ -1,6 +1,6 @@
 import cloudrun as cr
 import asyncio
-from cloudrun import CloudRunError , CloudRunJobState , CloudRunJobRuntimeInfo
+from cloudrun import CloudRunError , CloudRunProcessState , CloudRunJobRuntimeInfo
 import sys
 
 if len(sys.argv)<2:
@@ -38,7 +38,7 @@ async def tail_loop(process):
 if command=="wait":
     # run main loop
     process = CloudRunProcess( sys.argv[2] )
-    asyncio.run( cr_client.wait_for_script_state(CloudRunJobState.DONE|CloudRunJobState.ABORTED,process))
+    asyncio.run( cr_client.wait_for_script_state(CloudRunProcessState.DONE|CloudRunProcessState.ABORTED,process))
 elif command=="getstate":
     process = CloudRunProcess( sys.argv[2] )
     asyncio.run( cr_client.get_script_state(scriptRuntime) )
