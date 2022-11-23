@@ -301,7 +301,7 @@ class StateSerializer():
                 #assert instance.get_id()   == _instances[i].get_id()
                 assert instance.get_cpus() == _instances[i].get_cpus()
             for i,env in enumerate(environments):
-                assert env.get_name() == _environments[i].get_name()
+                assert env.get_name_with_hash() == _environments[i].get_name_with_hash()
             for i,job in enumerate(jobs):
                 assert job.get_hash() == _jobs[i].get_hash() # this ensures input,uploads and script are the same....
                 assert job.get_config('run_script') == _jobs[i].get_config('run_script') # hash doesnt capture the args 

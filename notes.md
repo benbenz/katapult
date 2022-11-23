@@ -101,7 +101,7 @@
   - [ ] debug regression with state recovery after terminating instances and re-running 
   - [x] debug regression with bootstraping not printing out with option
   - [x] fetch log when process has aborted, and print it
-  - [ ] improve UI with Python RICH
+  - [ ] improve UI with Python RICH , OR https://towardsdatascience.com/a-complete-guide-to-using-progress-bars-in-python-aa7f4130cda8
 
 4) local mode:
   - [x] handle new config 

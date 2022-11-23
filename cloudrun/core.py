@@ -330,6 +330,10 @@ class CloudRunDeployedJob(CloudRunJob):
         raise CloudRunError('Can not attach env to deployed job')
 
     # proxied
+    def get_rank(self):
+        return self._job._rank
+
+    # proxied
     def get_hash(self):
         return self._job._hash
 
