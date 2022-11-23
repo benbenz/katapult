@@ -236,6 +236,13 @@ class CloudRunProvider(ABC):
 
             instance.set_invalid(True)
 
+            self.debug(1,cre)
+        
+        except Exception as e:
+            self.debug(1,e)
+
+            raise e
+
     def _test_reupload(self,instance,file_test,ssh_client,isfile=True):
         re_upload = False
         if isfile:
@@ -715,7 +722,7 @@ class CloudRunProvider(ABC):
                 #TODO: improve precision of recovery
                 self.debug(2,state_old.name,"vs",state_new.name)
                 if state_new!=CloudRunJobState.DONE and (state_new < state_old or (state_new == CloudRunJobState.ABORTED or state_old == CloudRunJobState.ABORTED or state_new == CloudRunJobState.UNKNOWN or state_old == CloudRunJobState.UNKNOWN)):
-                    self.debug(1,"We will the following job because of an unsatisfying state",process_new)
+                    self.debug(1,"We will run the following job because of an unsatisfying state. Job#",process_new.get_job().get_rank(),"=",process_new.get_state())
                     do_run = True
                     # do not break cause we want to check all_done properly!
                     #break
@@ -1249,6 +1256,8 @@ class CloudRunProvider(ABC):
         instances_processes = dict()
         #instances_list      = dict()
         for process in processes:
+            if process is None:
+                continue
             job         = process.get_job()   # deployed job
             instance    = job.get_instance()
             if instance is None:
@@ -1322,7 +1331,6 @@ class CloudRunProvider(ABC):
                 for dpl_job in dpl_jobs:
                     for process in dpl_job.get_processes():
                         self.debug(1,"|_",process.str_simple())
-
 
 
     def _tail_execute_command(self,ssh,files_path,uid,line_num):

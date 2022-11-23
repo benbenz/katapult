@@ -1,0 +1,7 @@
+name: econ21340-julia-env
+channels:
+#  - defaults
+  - conda-forge
+dependencies:
+  - python>=3.7 
+  - julia

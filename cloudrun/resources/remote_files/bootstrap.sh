@@ -93,7 +93,7 @@ if [ -f "$FILE_CONDA" ]; then
   fi
 
   # 3. activate the environment
-  
+  micromamba activate $env_name
 
   # we activate in run.sh now
   #$HOME/miniconda/bin/activate $env_name >/dev/null
@@ -117,7 +117,7 @@ if ([ -f "$FILE_PYPI" ] && ! [ -f "$FILE_CONDA" ]); then
   else
     echo "virtual environment exists"
     # we activate in run.sh now
-    #source ".$env_name/bin/activate"
+    source ".$env_name/bin/activate"
   fi
   
 fi # FILE_PYPI

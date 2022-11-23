@@ -98,6 +98,7 @@
      - [x] put all of them in one place (once for all)
      - [x] have the ln_command create all the necessary links 
      Basically we're only removing the files form the jobs' dirs and moving them to a separate folder, to mutualize them better ...
+  - [ ] fetch log when process has aborted, and print it
   - [ ] improve UI with Python RICH
 
 4) local mode:
