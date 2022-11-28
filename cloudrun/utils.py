@@ -67,12 +67,18 @@ def update_requirements_path(env_dict,path):
 # this is also used to compute the hash for the environment
 def compute_environment_object(env_config):
 
+    # the configuration is already computed (usually by the LightProvider)
+    # we just have to return this env object for deployment
+    if env_config.get("_computed_") == True:
+        return env_config
+
     environment_obj = {
         'command'    : None ,
         'env_aptget' : None , 
         'env_conda'  : None , 
         'env_pypi'   : None , 
-        'env_julia'  : None
+        'env_julia'  : None ,
+        'name'       : env_config.get('name')
     }
     
     if env_config.get('command'):

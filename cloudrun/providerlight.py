@@ -4,7 +4,7 @@ from cloudrun.provider import CloudRunProvider
 from cloudrun.core import *
 import copy , io
 from zipfile import ZipFile
-import os
+import os , fnmatch
 import re
 from os.path import basename
 import pkg_resources
@@ -66,7 +66,7 @@ class CloudRunLightProvider(CloudRunProvider,ABC):
 
         # let's redeploy the code every time for now ... (if not already done in re_init)
         if not re_init:
-            self._deploy_cloudrun_code(ssh_client,ftp_client)
+            self._deploy_cloudrun_files(ssh_client,ftp_client)
 
         ftp_client.close()
         ssh_client.close()
@@ -74,19 +74,25 @@ class CloudRunLightProvider(CloudRunProvider,ABC):
         self.debug(1,"MAESTRO is READY")
 
 
-    def _deploy_cloudrun_code(self,ssh_client,ftp_client):
+    def _deploy_cloudrun_files(self,ssh_client,ftp_client):
         ftp_client.chdir(self._get_cloudrun_dir())
         ftp_client.putfo(self._create_cloudrun_zip(),'cloudrun.zip')
         commands = [
             { 'cmd' : 'cd $HOME/cloudrun && unzip -o cloudrun.zip && rm cloudrun.zip' , 'out' : True } ,
         ]
         self._run_ssh_commands(ssh_client,commands) 
+        
+        filesOfDirectory = os.listdir('.')
+        pattern = "cloudrun-*.pem"
+        for file in filesOfDirectory:
+            if fnmatch.fnmatch(file, pattern):
+                ftp_client.put(os.path.abspath(file),os.path.basename(file))
 
 
     def _deploy_cloudrun(self,ssh_client,ftp_client):
 
         # upload cloudrun files
-        self._deploy_cloudrun_code(ssh_client,ftp_client)
+        self._deploy_cloudrun_files(ssh_client,ftp_client)
         
         # upload env files 
         for file in ['maestroenv.sh']:
@@ -103,12 +109,37 @@ class CloudRunLightProvider(CloudRunProvider,ABC):
         self._run_ssh_commands(ssh_client,commands) 
 
     def _deploy_config(self,ssh_client,ftp_client):
-        config = copy.deepcopy(self._config)
-        config['maestro'] = 'local' # this config will be for the maestro which needs to run local
-
+        config = self._translate_config_for_maestro()
         # serialize the config and send it to the maestro
         ftp_client.chdir(self._get_cloudrun_dir())
         ftp_client.putfo(io.StringIO(json.dumps(config)),'config.json')
+
+    def _translate_config_for_maestro(self):
+        config = copy.deepcopy(self._config)
+
+        config['maestro'] = 'local' # the config is for maestro, which needs to run local
+
+        config['region'] = self.get_user_region()
+
+        for i , inst_cfg in enumerate(config.get('instances')):
+            # we need to freeze the region within each instance config ...
+            if not config['instances'][i].get('region'):
+                config['instances'][i]['region'] = self.get_user_region()
+
+        for i , env_cfg in enumerate(config.get('environments')):
+            # Note: we are using a simple CloudRunEnvironment here 
+            # we're not deploying at this stage
+            # but this will help use re-use all the business logic in cloudrunutils / env
+            # in order to standardize the environment and create an inline version 
+            # through the CloudRunEnvironment::json() method
+            env = CloudRunEnvironment(self._config.get('project'),env_cfg)
+            config['environments'][i] = env.get_env_obj()
+            config['environments'][i]['_computed_'] = True
+
+        self.debug(2,config)
+
+        return config
+
 
     def _get_home_dir(self):
         return '/home/' + self._maestro.get_config('img_username') 

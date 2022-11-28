@@ -189,6 +189,13 @@ class CloudRunEnvironment():
     def get_config(self,key):
         return self._config.get(key)
 
+    def get_env_obj(self):
+        _env_obj = cloudrunutils.compute_environment_object(self._config)
+        return _env_obj 
+
+    def json(self):
+        return json.dumps(self.get_env_obj())          
+
     def deploy(self,instance):
         return CloudRunDeployedEnvironment(self,instance)
 
@@ -214,10 +221,10 @@ class CloudRunDeployedEnvironment(CloudRunEnvironment):
         return self._instance
 
     def json(self):
-        _env_obj = cloudrunutils.compute_environment_object(self._config)
+        _env_obj = super().get_env_obj()
         # overwrite name in conda config as well
         if _env_obj['env_conda'] is not None:
-            _env_obj['env_conda']['name'] = self.get_name_with_hash()
+           _env_obj['env_conda']['name'] = self.get_name_with_hash()
         _env_obj['name'] = self.get_name_with_hash()
         # replace __REQUIREMENTS_TXT_LINK__ with the actual requirements.txt path (dependent of config and env hash)
         # the file needs to be absolute
