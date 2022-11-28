@@ -182,6 +182,13 @@ class CloudRunLightProvider(CloudRunProvider,ABC):
         #     f.write(zip_buffer.getvalue())            
         return zip_buffer
 
+    def _exec_maestro_command(self,maestro_command):
+        cmd = "source $HOME/.venv/maestro/bin/activate && cd $HOME/cloudrun && python3 -m cloudrun.maestro " + maestro_command
+        stdin , stdout , stderr = self._exec_command(ssh_client,cmd)
+        for l in line_buffered(stdout):
+            self.debug(1,l,end='')
+
+
     def start(self):
         self._instances_states = dict()        
         self._start_and_update_instance(self._maestro)

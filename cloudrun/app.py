@@ -79,3 +79,8 @@ def main():
     cr_client = cr.get_client(config)
 
     asyncio.run( mainloop(cr_client) )
+
+
+
+if __name__ == '__main__':
+    main()    
