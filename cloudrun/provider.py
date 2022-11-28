@@ -88,11 +88,17 @@ class CloudRunProvider():
 
             raise e
 
-    def _resolve_paths(self,upfile,dpl_job):
+    def _resolve_job_paths(self,upfile,dpl_job):
         if self._mutualize_uploads:
             return cloudrunutils.resolve_paths(upfile,dpl_job.get_config('run_script'),'$HOME/run/files',True) 
         else:
             return cloudrunutils.resolve_paths(upfile,dpl_job.get_config('run_script'),dpl_job.get_path(),False)
+
+    def _resolve_env_paths(self,upfile,env):
+        if self._mutualize_uploads:
+            return cloudrunutils.resolve_paths(upfile,None,'$HOME/run/files',True) 
+        else:
+            return cloudrunutils.resolve_paths(upfile,None,dpl_job.get_path(),False)
 
 
     def _wait_and_connect(self,instance):

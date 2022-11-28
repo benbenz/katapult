@@ -297,12 +297,10 @@ def resolve_paths(the_file,ref_file,remote_ref_dir,mutualize=True):
         external = True
 
     # use the first case if you want to leave stuff in the job's directory
-    # used with cloudrunutils.resolve_paths(upfile,job.get_config('run_script'),dpl_job.get_path())
     if not mutualize:
         abs_remote_path = path.join(remote_ref_dir,rel_path)
         rel_remote_path = rel_path
     # use the second case if you want to mutualize uploads
-    # used with cloudrunutils.resolve_paths(upfile,job.get_config('run_script'),'$HOME/run/files')
     else:
         abs_remote_path = file_abs_path # always use full path in one target directory
         if abs_remote_path.startswith(os.sep):

@@ -267,7 +267,7 @@ class CloudRunFatProvider(CloudRunProvider,ABC):
             
             mkdir_cmd = ""
             for in_file in input_files:
-                local_path , abs_path , rel_remote_path , rel_path , external = self._resolve_paths(in_file,dpl_job)
+                local_path , abs_path , rel_remote_path , rel_path , external = self._resolve_job_paths(in_file,dpl_job)
                 dirname = os.path.dirname(abs_path)
                 if dirname:
                     mkdir_cmd = mkdir_cmd + (" && " if mkdir_cmd else "") + "mkdir -p " + dirname #dpl_job.get_path()+'/'+dirname
@@ -312,14 +312,9 @@ class CloudRunFatProvider(CloudRunProvider,ABC):
                     if isinstance( files,str):
                         files = [ files ] 
                     for upfile in files:
-                        local_path , abs_path , rel_remote_path, rel_path , external = self._resolve_paths(upfile,dpl_job)
+                        local_path , abs_path , rel_remote_path, rel_path , external = self._resolve_job_paths(upfile,dpl_job)
                                 
                         # check if the remote path has already been uploaded ...
-                        # NOTE: this is compatible with either way:
-                        # - all files in $HOME/run/files - new way:
-                        #   cloudrunutils.resolve_paths(upfile,job.get_config('run_script'),'$HOME/run/files')
-                        # - files distributed under the job's directory - old way: 
-                        #   cloudrunutils.resolve_paths(upfile,job.get_config('run_script'),dpl_job.get_path())
                         if abs_path in file_uploaded:
                             self.debug(1,"skipping upload of file",upfile,"for job#",job.get_rank(),"(file has already been uploaded)")
                             continue
@@ -336,7 +331,7 @@ class CloudRunFatProvider(CloudRunProvider,ABC):
                             print(e)
                 if job.get_config('input_file'):
 
-                    local_path , abs_path , rel_remote_path, rel_path , external = self._resolve_paths(job.get_config('input_file'),dpl_job)
+                    local_path , abs_path , rel_remote_path, rel_path , external = self._resolve_job_paths(job.get_config('input_file'),dpl_job)
 
                     if abs_path in file_uploaded:
                         self.debug(1,"skipping upload of file",upfile,"for job#",job.get_rank(),"(file has already been uploaded)")
@@ -821,7 +816,7 @@ class CloudRunFatProvider(CloudRunProvider,ABC):
         if dpl_job.get_config('input_file'):
             files_to_ln.append(dpl_job.get_config('input_file'))
         for upfile in files_to_ln:
-            local_path , abs_path , rel_remote_path , rel_path , external = self._resolve_paths(upfile,dpl_job)
+            local_path , abs_path , rel_remote_path , rel_path , external = self._resolve_job_paths(upfile,dpl_job)
             filename    = os.path.basename(abs_path)
             filedir_abs = os.path.dirname(abs_path)
             filedir_rel = os.path.dirname(rel_path)

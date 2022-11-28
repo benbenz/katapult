@@ -73,7 +73,7 @@ class CloudRunLightProvider(CloudRunProvider,ABC):
 
         self.debug(1,"MAESTRO is READY")
 
-        # THEN should trigger maestro::deploy
+
     def _deploy_cloudrun_code(self,ssh_client,ftp_client):
         ftp_client.chdir(self._get_cloudrun_dir())
         ftp_client.putfo(self._create_cloudrun_zip(),'cloudrun.zip')
