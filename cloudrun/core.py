@@ -9,7 +9,11 @@ cr_secGroupName        = 'cloudrun-sec-group-allow-ssh'
 cr_bucketName          = 'cloudrun-bucket'
 cr_vpcName             = 'cloudrun-vpc'
 cr_instanceNameRoot    = 'cloudrun-instance'
+cr_instanceMaestro     = 'cloudrun-maestro'
 cr_environmentNameRoot = 'cloudrun-env'
+cr_maestroProfileName  = 'cloudrun-maestro-profile'
+cr_maestroRoleName     = 'cloudrun-maestro-role'
+cr_maestroPolicyName   = 'cloudrun-maestro-policy'
 
 
 class CloudRunError(Exception):
@@ -405,16 +409,26 @@ class CloudRunProcess():
 
 
 def init_instance_name(instance_config):
-    if instance_config.get('dev',False)==True:
-        append_str = '' 
-    else:
-        append_str = '-' + cloudrunutils.compute_instance_hash(instance_config)
+    
+    if 'maestro' not in instance_config:
 
-    if 'rank' not in instance_config:
-        debug(1,"\033[93mDeveloper: you need to set dynamically a 'rank' attribute in the config for the new instance\033[0m")
-        sys.exit(300) # this is a developer error, this should never happen so we can use exit here
-        
-    if 'project' in instance_config:
-        return cr_instanceNameRoot + '-' + instance_config['project'] + '-' + instance_config['rank'] + append_str
+        if instance_config.get('dev',False)==True:
+            append_str = '' 
+        else:
+            append_str = '-' + cloudrunutils.compute_instance_hash(instance_config)
+
+        if 'rank' not in instance_config:
+            debug(1,"\033[93mDeveloper: you need to set dynamically a 'rank' attribute in the config for the new instance\033[0m")
+            sys.exit(300) # this is a developer error, this should never happen so we can use exit here
+            
+        if 'project' in instance_config:
+            return cr_instanceNameRoot + '-' + instance_config['project'] + '-' + instance_config['rank'] + append_str
+        else:
+            return cr_instanceNameRoot + '-' + instance_config['rank'] + append_str
+    
     else:
-        return cr_instanceNameRoot + '-' + instance_config['rank'] + append_str
+
+        if 'project' in instance_config:
+            return cr_instanceMaestro + '-' + instance_config['project'] 
+        else:
+            return cr_instanceMaestro

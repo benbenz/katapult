@@ -26,6 +26,11 @@ In order to use the python AWS client (Boto3), you need to have an existing AWS 
 aws configure
 ```
 See [https://docs.aws.amazon.com/cli/latest/userguide/cli-configure-quickstart.html](here)
+6. To run in `nano` mode, you also need to [add the following credentials to your user](https://docs.aws.amazon.com/AWSEC2/latest/UserGuide/iam-roles-for-amazon-ec2.html):
+- iam:PassRole
+- ec2:AssociateIamInstanceProfile
+- ec2:ReplaceIamInstanceProfileAssociation
+
 
 ## manually
 

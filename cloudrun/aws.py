@@ -1,9 +1,11 @@
 import boto3
 import os
 from .utils import *
-from .core     import CloudRunError , CloudRunInstance , CloudRunInstanceState 
-from .core     import cr_keypairName , cr_secGroupName , cr_bucketName , cr_vpcName , init_instance_name
-from .provider import CloudRunProvider , debug , bcolors
+from cloudrun.core     import CloudRunError , CloudRunInstance , CloudRunInstanceState 
+from cloudrun.core     import cr_keypairName , cr_secGroupName , cr_bucketName , cr_vpcName , cr_maestroRoleName , cr_maestroProfileName, cr_maestroPolicyName , init_instance_name
+from cloudrun.provider import debug , bcolors
+from cloudrun.providerfat import CloudRunFatProvider
+from cloudrun.providerlight import CloudRunLightProvider
 from botocore.exceptions import ClientError
 from datetime import datetime , timedelta
 from botocore.config import Config
@@ -224,7 +226,7 @@ def aws_find_instance(instance_config):
     debug(1,"Searching INSTANCE ...")
 
     instanceName = init_instance_name(instance_config)
-    region = instance_config['region']
+    region = instance_config.get('region')
 
     ec2_client = boto3.client("ec2", config=aws_get_config(region))
 
@@ -265,7 +267,7 @@ def aws_create_instance(instance_config,vpc,subnet,secGroup):
 
     instanceName = init_instance_name(instance_config)
 
-    region = instance_config['region']
+    region = instance_config.get('region')
 
     ec2_client = boto3.client("ec2", config=aws_get_config(region))
 
@@ -406,7 +408,7 @@ def aws_create_instance(instance_config,vpc,subnet,secGroup):
     return instance , created
 
 def aws_create_instance_objects(instance_config):
-    region   = instance_config['region']
+    region   = instance_config.get('region')
     keypair  = aws_create_keypair(region)
     vpc      = aws_create_vpc(region,instance_config.get('cloud_id')) 
     secGroup = aws_create_security_group(region,vpc)
@@ -485,14 +487,143 @@ def aws_update_instance_info(instance):
 
     return instance
 
+
+def aws_grant_admin_rights(instance,region=None):
+
+    iam_client = boto3.client('iam')
+    id_client  = boto3.client("sts")
+    ec2_client = boto3.client("ec2")
+    session    = boto3.session.Session()
+
+    account_id = id_client.get_caller_identity()["Account"]
+    region_flt = session.region_name if not region else region
+
+
+    #Following trust relationship policy can be used to provide access to assume this role by a particular AWS service in the same account
+    trust_relationship_policy_another_aws_service = {
+        "Version": "2012-10-17",
+        "Statement": [
+            {
+                "Effect": "Allow",
+                "Principal": {
+                    "Service": "ec2.amazonaws.com"
+                },
+                "Action": "sts:AssumeRole"
+            }
+        ]
+    }
+
+    try:
+        create_role_res = iam_client.create_role(
+            RoleName=cr_maestroRoleName,
+            AssumeRolePolicyDocument=json.dumps(trust_relationship_policy_another_aws_service),
+            Description='CloudRun Admin Role'
+        )
+    except ClientError as error:
+        if error.response['Error']['Code'] == 'EntityAlreadyExists':
+            #print('Role already exists... hence exiting from here')
+            #sys.exit(1)
+            debug(2,'Role already exists ...')
+        else:
+            debug(1,'Unexpected error occurred... Role could not be created', error)
+            return
+            
+    policy_json = {
+        "Version": "2012-10-17",
+        "Statement": [{
+            "Effect": "Allow",
+            "Action": [
+                "ec2:*"
+            ],
+            "Resource": "*",
+            "Condition": {
+                "StringEquals": {
+                    "ec2:Region": region_flt
+                }
+            }
+        }]
+    }
+
+    policy_arn = ''
+
+    try:
+        policy_res = iam_client.create_policy(
+            PolicyName=cr_maestroPolicyName,
+            PolicyDocument=json.dumps(policy_json)
+        )
+        policy_arn = policy_res['Policy']['Arn']
+    except ClientError as error:
+        if error.response['Error']['Code'] == 'EntityAlreadyExists':
+            debug(2,'Policy already exists... hence using the same policy')
+            policy_arn = 'arn:aws:iam::' + account_id + ':policy/' + cr_maestroPolicyName
+        else:
+            debug(1,'Unexpected error occurred... hence cleaning up', error)
+            iam_client.delete_role(
+                RoleName= cr_maestroRoleName
+            )
+            debug(1,'Role could not be created...', error)
+            return
+
+    try:
+        policy_attach_res = iam_client.attach_role_policy(
+            RoleName=cr_maestroRoleName,
+            PolicyArn=policy_arn
+        )
+    except ClientError as error:
+        debug(1,'Unexpected error occurred... hence cleaning up')
+        iam_client.delete_role(
+            RoleName= cr_maestroRoleName
+        )
+        debug(1,'Role could not be created...', error)
+        return
+
+    debug(2,'Role {0} successfully got created'.format(cr_maestroRoleName))
+
+
+    profile_arn = ''
+    try:
+        profile_response = iam_client.create_instance_profile(InstanceProfileName=cr_maestroProfileName)
+        profile_arn = profile_response['InstanceProfile']['Arn']
+    except ClientError as error:
+        if error.response['Error']['Code'] == 'EntityAlreadyExists':
+            #print('Role already exists... hence exiting from here')
+            #sys.exit(1)
+            debug(2,'Instance profile already exists ...')
+            profile_response = iam_client.get_instance_profile(InstanceProfileName=cr_maestroProfileName)
+            profile_arn = profile_response['InstanceProfile']['Arn']
+    try:
+        iam_client.add_role_to_instance_profile(InstanceProfileName=cr_maestroProfileName,RoleName=cr_maestroRoleName)
+    except ClientError as error:
+        if error.response['Error']['Code'] == 'LimitExceeded':
+            debug(2,'Role has already been added ...')
+        else:
+            debug(1,error)
+            return
+
+    try:
+        response = ec2_client.associate_iam_instance_profile(
+            IamInstanceProfile={
+                'Arn': profile_arn,
+                'Name': cr_maestroProfileName
+            },
+            InstanceId=instance.get_id()
+        )
+    except ClientError as error:
+        if error.response['Error']['Code'] == 'IncorrectState':
+            debug(2,'Instance Profile already associated ...')
+        else:
+            debug(1,error)
+
+    debug(1,"MAESTRO role added to instance",instance.get_id())
+
 ##########
 # PUBLIC #
 ##########
 
-class AWSCloudRunProvider(CloudRunProvider):
+class AWSCloudRunFatProvider(CloudRunFatProvider):
 
     def __init__(self, conf):
-        CloudRunProvider.__init__(self,conf)
+        CloudRunFatProvider.__init__(self,conf)
 
     def create_instance_objects(self,config):
         return aws_create_instance_objects(config)
@@ -515,10 +646,33 @@ class AWSCloudRunProvider(CloudRunProvider):
     def get_user_region(self):
         my_session = boto3.session.Session()
         region = my_session.region_name     
-        return region     
+        return region  
 
     def get_recommended_cpus(self,inst_cfg):
         return self._get_instancetypes_attribute(inst_cfg,"instancetypes-aws.csv","Instance type","Valid cores",list)
 
     def get_cpus_cores(self,inst_cfg):
         return self._get_instancetypes_attribute(inst_cfg,"instancetypes-aws.csv","Instance type","Cores",int)
+
+
+class AWSCloudRunLightProvider(CloudRunLightProvider):        
+
+    def __init__(self, conf):
+        CloudRunLightProvider.__init__(self,conf)
+
+    def find_instance(self,config):
+        return aws_find_instance(config)    
+
+    def update_instance_info(self,instance):
+        aws_update_instance_info(instance)
+
+    def create_instance_objects(self,config):
+        return aws_create_instance_objects(config)
+
+    def grant_admin_rights(self,instance):
+        aws_grant_admin_rights(instance)   
+
+    def get_user_region(self):
+        my_session = boto3.session.Session()
+        region = my_session.region_name     
+        return region  
