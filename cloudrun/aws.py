@@ -669,6 +669,15 @@ class AWSCloudRunLightProvider(CloudRunLightProvider):
     def create_instance_objects(self,config):
         return aws_create_instance_objects(config)
 
+    def start_instance(self,instance):
+        aws_start_instance(instance)
+
+    def stop_instance(self,instance):
+        aws_stop_instance(instance)
+
+    def terminate_instance(self,instance):
+        aws_terminate_instance(instance)
+
     def grant_admin_rights(self,instance):
         aws_grant_admin_rights(instance)   
 

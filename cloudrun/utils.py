@@ -274,52 +274,52 @@ def resolve_paths(the_file,ref_file,remote_ref_dir,mutualize=True):
         ref_abs_path    = path.abspath(ref_args[0])
         ref_abs_dir     = path.dirname(ref_abs_path)
         if path.isabs(the_file):
-            file_abs_path   = the_file
+            local_abs_path   = the_file
         else:
-            file_abs_path   = path.join(ref_abs_dir,the_file)
-        file_abs_dir    = path.dirname(file_abs_path)
+            local_abs_path   = path.join(ref_abs_dir,the_file)
+        file_abs_dir    = path.dirname(local_abs_path)
     else:
         ref_abs_path    = path.abspath(os.getcwd())
-        ref_abs_dir     = path.dirname(ref_abs_path)
+        ref_abs_dir     = ref_abs_path #path.dirname(ref_abs_path)
         if path.isabs(the_file):
-            file_abs_path   = the_file
+            local_abs_path   = the_file
         else:
-            file_abs_path   = path.join(ref_abs_dir,the_file)
-        file_abs_dir    = path.dirname(file_abs_path)
+            local_abs_path   = path.join(ref_abs_dir,the_file)
+        file_abs_dir    = path.dirname(local_abs_path)
     
     # this is a subdir: we have to respect the structure
     if file_abs_dir.startswith(ref_abs_dir):
-        rel_path = file_abs_path.replace(ref_abs_dir,"")
+        rel_path = local_abs_path.replace(ref_abs_dir,"")
         if rel_path.startswith(os.sep):
             rel_path = rel_path[1:]
         external = False
     # this is not a subdir ! we gotta create a virtual subdir that 
     else:
-        #rel_path = file_abs_path.replace(os.sep,'_')
+        #rel_path = local_abs_path.replace(os.sep,'_')
         # we gotta have to handle Windows situation here and transform the drive as a path bite
-        rel_path = file_abs_path # LETS USE THE ABS PATH as a REL PATH !
+        rel_path = local_abs_path # LETS USE THE ABS PATH as a REL PATH !
         if rel_path.startswith(os.sep):
             rel_path = rel_path[1:]
         external = True
 
     # use the first case if you want to leave stuff in the job's directory
     if not mutualize:
-        abs_remote_path = path.join(remote_ref_dir,rel_path)
-        rel_remote_path = rel_path
+        remote_abs_path = path.join(remote_ref_dir,rel_path)
+        remote_rel_path = rel_path
     # use the second case if you want to mutualize uploads
     else:
-        abs_remote_path = file_abs_path # always use full path in one target directory
-        if abs_remote_path.startswith(os.sep):
-            abs_remote_path = abs_remote_path[1:] # make relative
-        rel_remote_path = abs_remote_path
-        abs_remote_path = path.join(remote_ref_dir,abs_remote_path)
+        remote_abs_path = local_abs_path # always use full path in one target directory
+        if remote_abs_path.startswith(os.sep):
+            remote_abs_path = remote_abs_path[1:] # make relative
+        remote_rel_path = remote_abs_path
+        remote_abs_path = path.join(remote_ref_dir,remote_abs_path)
 
-    # file_abs_path   = the local file path
-    # abs_remote_path = the absolute remote file path
-    # rel_remote_path = the relative remote path (from remote_ref_dir)
+    # local_abs_path   = the local file path
+    # remote_abs_path = the absolute remote file path
+    # remote_rel_path = the relative remote path (from remote_ref_dir)
     # rel_path        = the relative path (from the job directory / script dir)
     # external        = is the file external to the script directory structure
-    return file_abs_path , abs_remote_path , rel_remote_path , rel_path , external
+    return local_abs_path , rel_path, remote_abs_path , remote_rel_path , external
 
  
 

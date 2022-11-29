@@ -269,7 +269,7 @@ class CloudRunFatProvider(CloudRunProvider,ABC):
             
             mkdir_cmd = ""
             for in_file in input_files:
-                local_path , abs_path , rel_remote_path , rel_path , external = self._resolve_job_paths(in_file,dpl_job)
+                local_path , rel_path , abs_path , rel_remote_path , external = self._resolve_dpl_job_paths(in_file,dpl_job)
                 dirname = os.path.dirname(abs_path)
                 if dirname:
                     mkdir_cmd = mkdir_cmd + (" && " if mkdir_cmd else "") + "mkdir -p " + dirname #dpl_job.get_path()+'/'+dirname
@@ -314,7 +314,7 @@ class CloudRunFatProvider(CloudRunProvider,ABC):
                     if isinstance( files,str):
                         files = [ files ] 
                     for upfile in files:
-                        local_path , abs_path , rel_remote_path, rel_path , external = self._resolve_job_paths(upfile,dpl_job)
+                        local_path , rel_path , abs_path , rel_remote_path , external = self._resolve_dpl_job_paths(upfile,dpl_job)
                                 
                         # check if the remote path has already been uploaded ...
                         if abs_path in file_uploaded:
@@ -333,7 +333,7 @@ class CloudRunFatProvider(CloudRunProvider,ABC):
                             print(e)
                 if job.get_config('input_file'):
 
-                    local_path , abs_path , rel_remote_path, rel_path , external = self._resolve_job_paths(job.get_config('input_file'),dpl_job)
+                    local_path , rel_path , abs_path , rel_remote_path , external = self._resolve_dpl_job_paths(job.get_config('input_file'),dpl_job)
 
                     if abs_path in file_uploaded:
                         self.debug(1,"skipping upload of file",upfile,"for job#",job.get_rank(),"(file has already been uploaded)")
@@ -815,7 +815,7 @@ class CloudRunFatProvider(CloudRunProvider,ABC):
 
         return process
 
-        
+
     def print_jobs_summary(self,instance=None):
         jobs = instance.get_jobs() if instance is not None else self._jobs
         # the lock is to make sure the prints are not scrambled 
@@ -854,7 +854,7 @@ class CloudRunFatProvider(CloudRunProvider,ABC):
         if dpl_job.get_config('input_file'):
             files_to_ln.append(dpl_job.get_config('input_file'))
         for upfile in files_to_ln:
-            local_path , abs_path , rel_remote_path , rel_path , external = self._resolve_job_paths(upfile,dpl_job)
+            local_path , rel_path , abs_path , rel_remote_path , external = self._resolve_dpl_job_paths(upfile,dpl_job)
             filename    = os.path.basename(abs_path)
             filedir_abs = os.path.dirname(abs_path)
             filedir_rel = os.path.dirname(rel_path)

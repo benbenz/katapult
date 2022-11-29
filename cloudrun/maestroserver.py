@@ -59,7 +59,7 @@ def process_command(cr_client,command,conn):
     except Exception as e:
         io_pipe.flush()
 
-    print("DONE")
+    #print("DONE")
     io_pipe.flush()
     io_pipe.close()
 
