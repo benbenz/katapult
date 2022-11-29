@@ -11,6 +11,14 @@
             "program": "${workspaceFolder}/cloudrun/demo.py",
             "console": "integratedTerminal",
             "cwd": "${workspaceFolder}"
-        }
+        },
+        {
+            "name": "Maestro Server",
+            "type": "python",
+            "request": "launch",
+            "program": "${workspaceFolder}/cloudrun/maestroserver.py",
+            "console": "integratedTerminal",
+            "cwd": "${workspaceFolder}"
+        }      
     ]
 }

@@ -78,7 +78,7 @@ cp example/config.example.py config.py
 #
 
 # to run
-python3 -m cloudrun.app 
+python3 -m cloudrun.demo 
 # OR
 poetry run demo
 

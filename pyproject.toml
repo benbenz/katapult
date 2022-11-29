@@ -20,7 +20,7 @@ requires = ["poetry-core"]
 build-backend = "poetry.core.masonry.api"
 
 [tool.poetry.scripts]
-demo = 'cloudrun.app:main'
+demo = 'cloudrun.demo:main'
 
 [tool.pytest.ini_options]
 asyncio_mode="strict"

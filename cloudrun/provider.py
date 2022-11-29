@@ -7,6 +7,15 @@ from io import BytesIO
 import csv , io
 import pkg_resources
 from cloudrun.core import *
+from enum import IntFlag
+
+class CloudRunProviderState(IntFlag):
+    NEW           = 0  # provider created
+    STARTED       = 1  # provider started
+    ALLOCATED     = 2  # provider allocated jobs
+    DEPLOYED      = 4  # provider deployed  
+    RUN           = 8  # provider ran jobs
+    ANY           = 8 + 4 + 2 + 1     
 
 class bcolors:
     HEADER = '\033[95m'
@@ -22,6 +31,8 @@ class bcolors:
 class CloudRunProvider():
 
     def __init__(self, conf):
+
+        self._state = CloudRunProviderState.NEW
 
         self.DBG_LVL = conf.get('debug',1)
         global DBG_LVL
@@ -44,6 +55,8 @@ class CloudRunProvider():
                 args = tuple(listargs)
                 kwargs.pop('color')
             print(*args,**kwargs) 
+            sys.stdout.flush()
+            sys.stderr.flush()
 
     def _get_or_create_instance(self,instance):
 
@@ -154,12 +167,12 @@ class CloudRunProvider():
             waitFor = lookForDNS or lookForState  
             if waitFor:
                 if lookForDNS:
-                    debug(1,"waiting for DNS address and  state",instance.get_name(),"...",instanceState.name)
+                    debug(1,"waiting for",instance.get_name(),"...",instanceState.name)
                 else:
                     if lookForIP:
-                        debug(1,"waiting for state",instance.get_name(),"...",instanceState.name)
+                        debug(1,"waiting for",instance.get_name(),"...",instanceState.name)
                     else:
-                        debug(1,"waiting for state",instance.get_name(),"...",instanceState.name," IP =",instance.get_ip_addr())
+                        debug(1,"waiting for",instance.get_name(),"...",instanceState.name," IP =",instance.get_ip_addr())
                  
                 time.sleep(10)
 
@@ -299,34 +312,6 @@ class CloudRunProvider():
         #self._csv_reader = csv.DictReader(io.StringIO(csvstr.decode()))              
         return pkg_resources.resource_stream(resource_package, resource_path)    
 
-    def print_jobs_summary(self,instance=None):
-        jobs = instance.get_jobs() if instance is not None else self._jobs
-        # the lock is to make sure the prints are not scrambled 
-        # when coming back from the instance at the same time ...
-        with self._multiproc_lock:
-            self.debug(1,"\n----------------------------------------------------------------------------------------------------------------------------------------------------------")
-            if instance:
-                self.debug(1,instance.get_name(),instance.get_ip_addr())
-            for i,job in enumerate(jobs):
-                self.debug(1,"\nJob",job.get_rank(),"=",job.str_simple() if instance else job)
-                dpl_jobs = job.get_deployed_jobs()
-                for dpl_job in dpl_jobs:
-                    for process in dpl_job.get_processes():
-                        self.debug(1,"|_",process.str_simple())
-
-    def print_aborted_logs(self,instance=None):
-        instances = self._instances if instance is None else [ instance ]
-        for _instance in instances:
-            ssh_client = self._connect_to_instance(_instance)
-            for job in _instance.get_jobs():
-                process = job.get_last_process()
-                if process.get_state() == CloudRunProcessState.ABORTED:
-                    self.debug(1,"----------------------------------------------------------------------",color=bcolors.WARNING)
-                    self.debug(1,"Job #",job.get_rank(),"has ABORTED with errors:",color=bcolors.WARNING)
-                    self.debug(1,self.get_log(process,ssh_client),color=bcolors.WARNING)
-                    self.debug(1,process,color=bcolors.WARNING)
-            ssh_client.close()  
-
     @abstractmethod
     def start(self):
         pass
@@ -348,9 +333,16 @@ class CloudRunProvider():
         pass
 
     @abstractmethod
-    def get_jobs_states(self,job_state,processes=None):
+    def get_jobs_states(self,processes=None):
         pass
 
+    @abstractmethod
+    def print_jobs_summary(self,instance=None):
+        pass
+
+    @abstractmethod
+    def print_aborted_logs(self,instance=None):
+        pass
         
 def get_client(config):
 

@@ -9,7 +9,6 @@ from cloudrun.core import *
 from datetime import date, datetime
 import traceback
 
-
 class ConfigManager():
 
     def __init__(self,provider,conf,instances,environments,jobs):
@@ -243,9 +242,10 @@ class StateSerializer():
         self._state_file = 'state.pickle' #'state.json'
         self._loaded = None
 
-    def serialize(self,instances,environments,jobs):
+    def serialize(self,provider_state,instances,environments,jobs):
         try:
             state = {
+                'state' : provider_state ,
                 'instances' : instances ,
                 'environments' : environments ,
                 'jobs' : jobs
@@ -277,17 +277,19 @@ class StateSerializer():
 
     # check if the state is consistent with the provider objects that have been loaded from the config...
     # TODO: do that
-    def check_consistency(self,instances,environments,jobs):
+    def check_consistency(self,state,instances,environments,jobs):
         if self._loaded is None:
             self._provider.debug(2,"Seralized data not loaded. No consistency")
             return False 
         try:
+            _state        = self._loaded['state']
             _instances    = self._loaded['instances']
             _environments = self._loaded['environments']
             _jobs         = self._loaded['jobs']
             for job in jobs:
                 lastp = job.get_last_process()
                 self._provider.debug(3,"DESERIALIZED PROCESS",lastp)
+            assert state==_state 
             assert len(instances)==len(_instances)
             assert len(environments)==len(_environments)
             assert len(jobs)==len(_jobs)
@@ -314,4 +316,4 @@ class StateSerializer():
             return False
 
     def transfer(self):
-        return self._loaded['instances'] , self._loaded['environments'] , self._loaded['jobs']
+        return self._loaded['state'] , self._loaded['instances'] , self._loaded['environments'] , self._loaded['jobs']

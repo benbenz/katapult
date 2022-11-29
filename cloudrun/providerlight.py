@@ -1,6 +1,6 @@
 
 from abc import ABC , abstractmethod
-from cloudrun.provider import CloudRunProvider
+from cloudrun.provider import CloudRunProvider , line_buffered
 from cloudrun.core import *
 import copy , io
 from zipfile import ZipFile
@@ -18,6 +18,9 @@ class CloudRunLightProvider(CloudRunProvider,ABC):
     def __init__(self,conf):
         CloudRunProvider.__init__(self,conf)
         self._load()
+
+        self.ssh_client = None
+        self.ftp_client = None
     
     def _load(self):
         self._maestro = None
@@ -68,6 +71,9 @@ class CloudRunLightProvider(CloudRunProvider,ABC):
         if not re_init:
             self._deploy_cloudrun_files(ssh_client,ftp_client)
 
+        # start the server (if not already started)
+        self._run_server(ssh_client)
+
         ftp_client.close()
         ssh_client.close()
 
@@ -88,25 +94,32 @@ class CloudRunLightProvider(CloudRunProvider,ABC):
             if fnmatch.fnmatch(file, pattern):
                 ftp_client.put(os.path.abspath(file),os.path.basename(file))
 
+        commands = [
+            { 'cmd' : 'chmod +x $HOME/cloudrun/cloudrun/resources/remote_files/*.sh' , 'out' : True } ,
+        ]
+        self._run_ssh_commands(ssh_client,commands) 
+
 
     def _deploy_cloudrun(self,ssh_client,ftp_client):
 
         # upload cloudrun files
         self._deploy_cloudrun_files(ssh_client,ftp_client)
         
-        # upload env files 
-        for file in ['maestroenv.sh']:
-            ftp_client.putfo(self._get_resource_file('remote_files/'+file),file)    
-
         # unzip cloudrun files, install and run
         commands = [
-            { 'cmd' : 'chmod +x $HOME/cloudrun/maestroenv.sh' , 'out' : True } ,
-            { 'cmd' : '$HOME/cloudrun/maestroenv.sh' , 'out' : True } ,
+            { 'cmd' : '$HOME/cloudrun/cloudrun/resources/remote_files/maestroenv.sh' , 'out' : True } ,
 #            { 'cmd' : 'cd $HOME/cloudrun && curl -sSL https://install.python-poetry.org | python3 -' , 'out' : True } ,
 #            { 'cmd' : 'cd $HOME/cloudrun && $HOME/.local/bin/poetry install' , 'out' : True } ,
 #            { 'cmd' : 'cd $HOME/cloudrun && $HOME/.local/bin/poetry run demo' , 'out' : True }
         ]
-        self._run_ssh_commands(ssh_client,commands) 
+        self._run_ssh_commands(ssh_client,commands)
+
+    def _run_server(self,ssh_client):
+        # run the server
+        commands = [
+            { 'cmd' : '$HOME/cloudrun/cloudrun/resources/remote_files/startmaestro.sh' , 'out' : False , 'output' : 'server.log' }
+        ]
+        self._run_ssh_commands(ssh_client,commands)
 
     def _deploy_config(self,ssh_client,ftp_client):
         config = self._translate_config_for_maestro()
@@ -183,35 +196,51 @@ class CloudRunLightProvider(CloudRunProvider,ABC):
         return zip_buffer
 
     def _exec_maestro_command(self,maestro_command):
-        cmd = "source $HOME/.venv/maestro/bin/activate && cd $HOME/cloudrun && python3 -m cloudrun.maestro " + maestro_command
-        stdin , stdout , stderr = self._exec_command(ssh_client,cmd)
+        if self.ssh_client is None:
+            instanceid , self.ssh_client , self.ftp_client = self._wait_and_connect(self._maestro)
+
+        cmd = "cd $HOME/cloudrun && python3 -m cloudrun.maestroclient " + maestro_command
+        stdin , stdout , stderr = self._exec_command(self.ssh_client,cmd)
         for l in line_buffered(stdout):
+            if not l:
+                break
             self.debug(1,l,end='')
 
 
     def start(self):
+        # this will block for some time the first time...
         self._instances_states = dict()        
         self._start_and_update_instance(self._maestro)
         self._deploy_maestro() # deploy the maestro now !
 
+        # now really start 
+        self._exec_maestro_command("start")
+
     def assign_jobs_to_instances(self):
         # should trigger maestro::assign_jobs_to_instances
-        pass
+        self._exec_maestro_command("allocate")
 
     def deploy(self):
         # should trigger maestro::deploy
-        pass
+        self._exec_maestro_command("deploy")
 
     def run_jobs(self):
         # should trigger maestro::run_jobs
-        pass
+        self._exec_maestro_command("run_jobs")
 
     def wait_for_jobs_state(self,job_state,processes=None):
         # should trigger maestro::
-        pass
+        self._exec_maestro_command("wait")
 
-    def get_jobs_states(self,job_state,processes=None):
-        pass    
+    def get_jobs_states(self,processes=None):
+        self._exec_maestro_command("get_states")
+
+    def print_jobs_summary(self,instance=None):
+        self._exec_maestro_command("print_summary")
+
+    def print_aborted_logs(self,instance=None):
+        self._exec_maestro_command("print_aborted")
+
 
     @abstractmethod
     def get_user_region(self):

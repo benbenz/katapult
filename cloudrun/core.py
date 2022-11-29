@@ -435,7 +435,10 @@ def init_instance_name(instance_config):
     
     else:
 
-        if 'project' in instance_config:
-            return cr_instanceMaestro + '-' + instance_config['project'] 
-        else:
-            return cr_instanceMaestro
+        # if 'project' in instance_config:
+        #     return cr_instanceMaestro + '-' + instance_config['project'] 
+        # else:
+        #     return cr_instanceMaestro
+
+        # ultimately, the maestro will be shared across projects... (to save $)
+        return cr_instanceMaestro

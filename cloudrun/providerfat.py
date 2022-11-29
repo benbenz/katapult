@@ -45,11 +45,11 @@ class CloudRunFatProvider(CloudRunProvider,ABC):
             self._state_serializer = StateSerializer(self)
             self._state_serializer.load()
 
-            consistency = self._state_serializer.check_consistency(self._instances,self._environments,self._jobs)
+            consistency = self._state_serializer.check_consistency(self._state,self._instances,self._environments,self._jobs)
             if consistency:
                 self.debug(1,"State is consistent with configuration - LOADING old state")
                 self._recovery = True
-                self._instances , self._environments , self._jobs = self._state_serializer.transfer()
+                self._state , self._instances , self._environments , self._jobs = self._state_serializer.transfer()
                 self.debug(2,self._instances)
                 self.debug(2,self._environments)
                 self.debug(2,self._jobs)
@@ -63,7 +63,7 @@ class CloudRunFatProvider(CloudRunProvider,ABC):
 
     def serialize_state(self):
         if self._config.get('recover',False):
-            self._state_serializer.serialize(self._instances,self._environments,self._jobs)
+            self._state_serializer.serialize(self._state,self._instances,self._environments,self._jobs)
 
   
     # def get_job(self,index):
@@ -99,6 +99,8 @@ class CloudRunFatProvider(CloudRunProvider,ABC):
         else: #if assignation is None or assignation=='multi_knapsack':
 
             combopt.multiple_knapsack_assignation(self._jobs,self._instances)   
+
+        self._state = CloudRunProviderState.ALLOCATED            
 
         self.serialize_state()         
                
@@ -418,6 +420,8 @@ class CloudRunFatProvider(CloudRunProvider,ABC):
                 if inst.is_invalid():
                     self.debug(1,"ERROR: Your configuration is causing an instance to not be created. Please fix.",inst.get_config_DIRTY(),color=bcolors.FAIL)
                     sys.exit()
+        self._state = CloudRunProviderState.STARTED
+
 
                 
 
@@ -445,6 +449,7 @@ class CloudRunFatProvider(CloudRunProvider,ABC):
                 instanceid = inst.get_id()
                 #future.result()
             #pool.shutdown()
+        self._state = CloudRunProviderState.DEPLOYED    
 
     def revive(self,instance,rerun=False):
         self.debug(1,"REVIVING instance",instance)
@@ -731,6 +736,10 @@ class CloudRunFatProvider(CloudRunProvider,ABC):
                     processes.append(process)
             #pool.shutdown()        
 
+        self._state = CloudRunProviderState.RUN
+
+        self.serialize_state()
+
         return processes 
 
         
@@ -805,6 +814,35 @@ class CloudRunFatProvider(CloudRunProvider,ABC):
         self.debug(1,process) 
 
         return process
+
+        
+    def print_jobs_summary(self,instance=None):
+        jobs = instance.get_jobs() if instance is not None else self._jobs
+        # the lock is to make sure the prints are not scrambled 
+        # when coming back from the instance at the same time ...
+        with self._multiproc_lock:
+            self.debug(1,"\n----------------------------------------------------------------------------------------------------------------------------------------------------------")
+            if instance:
+                self.debug(1,instance.get_name(),instance.get_ip_addr())
+            for i,job in enumerate(jobs):
+                self.debug(1,"\nJob",job.get_rank(),"=",job.str_simple() if instance else job)
+                dpl_jobs = job.get_deployed_jobs()
+                for dpl_job in dpl_jobs:
+                    for process in dpl_job.get_processes():
+                        self.debug(1,"|_",process.str_simple())
+
+    def print_aborted_logs(self,instance=None):
+        instances = self._instances if instance is None else [ instance ]
+        for _instance in instances:
+            ssh_client = self._connect_to_instance(_instance)
+            for job in _instance.get_jobs():
+                process = job.get_last_process()
+                if process.get_state() == CloudRunProcessState.ABORTED:
+                    self.debug(1,"----------------------------------------------------------------------",color=bcolors.WARNING)
+                    self.debug(1,"Job #",job.get_rank(),"has ABORTED with errors:",color=bcolors.WARNING)
+                    self.debug(1,self.get_log(process,ssh_client),color=bcolors.WARNING)
+                    self.debug(1,process,color=bcolors.WARNING)
+            ssh_client.close()          
 
     def _get_ln_command(self,dpl_job,uid):
         files_to_ln = []
