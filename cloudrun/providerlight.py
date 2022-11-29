@@ -272,7 +272,8 @@ class CloudRunLightProvider(CloudRunProvider,ABC):
 
     def deploy(self):
         # should trigger maestro::deploy
-        self._exec_maestro_command("deploy",self._config.get('print_deploy',False))
+        #self._exec_maestro_command("deploy",self._config.get('print_deploy',False))
+        self._exec_maestro_command("deploy") # use output - the deploy part will be skipped depending on option ...
 
     def run_jobs(self):
         # should trigger maestro::run_jobs

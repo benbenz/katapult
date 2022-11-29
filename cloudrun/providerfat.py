@@ -12,7 +12,7 @@ from io import BytesIO
 import csv , io
 import pkg_resources
 from cloudrun.core import *
-from cloudrun.provider import CloudRunProvider , bcolors , debug
+from cloudrun.provider import CloudRunProvider , CloudRunProviderState , bcolors , debug
 from cloudrun.config_state import ConfigManager , StateSerializer
 
 random.seed()
