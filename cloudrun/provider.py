@@ -197,22 +197,22 @@ class CloudRunProvider():
             except Exception as cexc:
             #except paramiko.ssh_exception.NoValidConnectionsError as cexc:
                 if retrys < 5:
-                    print(cexc)
+                    self.debug(1,cexc)
                     time.sleep(4)
                     self.debug(1,"Retrying ...")
                     retrys = retrys + 1
                 else:
-                    print(cexc)
+                    self.debug(1,cexc)
                     self.debug(0,"ERROR! instance is unreachable: ",instance,color=bcolors.FAIL)
                     return None
             # except OSError as ose:
             #     if retrys < 5:
-            #         print(ose)
+            #         self.debug(1,ose)
             #         time.sleep(4)
             #         self.debug(1,"Retrying (2) ...")
             #         retrys = retrys + 1
             #     else:
-            #         print(cexc)
+            #         self.debug(1,cexc)
             #         self.debug(0,"ERROR! instance is unreachable: ",instance)
             #         return None
 
@@ -227,15 +227,14 @@ class CloudRunProvider():
             stdin , stdout, stderr = ssh_client.exec_command(command)
             return stdin , stdout , stderr 
         except paramiko.ssh_exception.SSHException as sshe:
-            print("The SSH Client has been disconnected!")
-            print(sshe)
+            self.debug(1,"The SSH Client has been disconnected!")
+            self.debug(1,sshe)
             raise CloudRunError()  
             
     def _run_ssh_commands(self,ssh_client,commands):
         for command in commands:
             self.debug(2,"Executing ",format( command['cmd'] ),"output",command['out'])
             try:
-                #print(stdout.read())
                 if command['out']:
                     stdin , stdout, stderr = ssh_client.exec_command(command['cmd'])
                     for l in line_buffered(stdout):
@@ -254,8 +253,8 @@ class CloudRunProvider():
                     #stdout.read()
                     #pid = int(stdout.read().strip().decode("utf-8"))
             except paramiko.ssh_exception.SSHException as sshe:
-                print("The SSH Client has been disconnected!")
-                print(sshe)
+                self.debug(1,"The SSH Client has been disconnected!")
+                self.debug(1,sshe)
                 raise CloudRunError()  
 
     def _test_reupload(self,instance,file_test,ssh_client,isfile=True):
@@ -369,7 +368,7 @@ def get_client(config):
 
     else:
 
-        print(config.get('provider'), " not implemented yet")
+        debug(1,config.get('provider'), " not implemented yet")
 
         raise CloudRunError()
 

@@ -592,7 +592,7 @@ class CloudRunFatProvider(CloudRunProvider,ABC):
             ftp_client.putfo(BytesIO(cmd_pid.encode()), batch_pid_file)
             # run
             commands = [ 
-                { 'cmd': "chmod +x "+global_path+"/"+batch_run_file+" "+global_path+"/"+batch_pid_file, 'out' : False } ,  
+                { 'cmd': "chmod +x "+global_path+"/"+batch_run_file+" "+global_path+"/"+batch_pid_file, 'out' : True } ,  # important to wait for it >> True !!!
                 # execute main script (spawn) (this will wait for bootstraping)
                 { 'cmd': global_path+"/"+batch_run_file , 'out' : False } 
             ]
