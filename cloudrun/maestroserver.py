@@ -85,8 +85,8 @@ def client_handler(cr_client,conn):
                 if cmd == 'watch': # we want to start running the command for ever
                     kill_thread = False
                 process_command(cr_client,cmd,conn)
-                if kill_thread:
-                    break # one shot command
+                kill_thread = True
+                break # one-shot command
             except ConnectionResetError as cre:
                 sys.stdout = old_stdout
                 print(cre)
