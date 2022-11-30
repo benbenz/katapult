@@ -214,7 +214,7 @@ class CloudRunFatProvider(CloudRunProvider,ABC):
 
                 commands = [
                     # recreate pip+conda files according to config
-                    { 'cmd': "cd " + files_path + " && python3 "+global_path+"/config.py" , 'out' : False },
+                    { 'cmd': "cd " + files_path + " && python3 "+global_path+"/config.py" , 'out' : True },
                     # setup envs according to current config files state
                     # FIX: mamba is not handling well concurrency
                     # we run the mamba installs sequentially below
@@ -232,7 +232,7 @@ class CloudRunFatProvider(CloudRunProvider,ABC):
             ftp_client.chdir('/home/'+instance.get_config('img_username')+'/run')
             ftp_client.putfo(io.StringIO(bootstrap_command),'generate_envs.sh')
             commands = [
-                {'cmd': 'chmod +x $HOME/run/generate_envs.sh' , 'out':False},
+                {'cmd': 'chmod +x $HOME/run/generate_envs.sh' , 'out':True}, # import to wait for this to be done !
                 {'cmd': '$HOME/run/generate_envs.sh' , 'out':print_deploy, 'output': '$HOME/run/bootstrap.log'}
                 #{'cmd': bootstrap_command ,'out': print_deploy , 'output': '$HOME/run/bootstrap.log'}
             ]
@@ -480,7 +480,8 @@ class CloudRunFatProvider(CloudRunProvider,ABC):
         jhash = job.get_hash()
         path  = env.get_path()
         try:
-            stdin , stdout , stderr = self._exec_command(ssh_client,"cat "+path+'/'+jhash+'/'+uid+'/run.log')
+            run_path = path+'/'+jhash+'/'+uid
+            stdin , stdout , stderr = self._exec_command(ssh_client,"cat "+run_path+'/run-'+uid+'.log '+run_path+'/run.log')
             return stdout.read()
         except:
             return None

@@ -44,7 +44,7 @@ def process_command(cr_client,command,conn):
 
             cr_client.get_jobs_states()
 
-        elif command == 'print_summary':
+        elif command == 'print_summary' or command == 'print':
 
             cr_client.print_jobs_summary()
 

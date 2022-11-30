@@ -35,7 +35,7 @@ class CloudRunLightProvider(CloudRunProvider,ABC):
                     'maestro'      : True ,
                     'img_id'       : img_id ,
                     'img_username' : img_user ,                 
-                    'type'         : 't2.nano' ,  
+                    'type'         : 't2.micro' , #t2.nano' ,  
                     'dev'          : self._config.get('dev',False) ,
                     'project'      : self._config.get('project',None)
                 }
@@ -260,7 +260,7 @@ class CloudRunLightProvider(CloudRunProvider,ABC):
 
     def start(self):
         # this will block for some time the first time...
-        self.debug_set_prefix('INSTALLING MAESTRO: ')
+        self.debug_set_prefix(bcolors.BOLD+'INSTALLING MAESTRO: '+bcolors.ENDC)
         self._instances_states = dict()        
         self._start_and_update_instance(self._maestro)
         self._deploy_maestro() # deploy the maestro now !

@@ -43,7 +43,8 @@ class CloudRunProvider():
 
     def debug_set_prefix(self,value):
         self.DBG_PREFIX = value
-        debug_set_prefix(value)
+        global DBG_PREFIX
+        DBG_PREFIX = value
 
     def debug(self,level,*args,**kwargs):
         if level <= self.DBG_LVL:
@@ -395,9 +396,6 @@ def line_buffered(f):
 
 DBG_LVL=1
 DBG_PREFIX=None
-
-def debug_set_prefix(value):
-    DBG_PREFIX=value
 
 def debug(level,*args,**kwargs):
     if level <= DBG_LVL:

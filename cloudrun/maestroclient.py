@@ -18,8 +18,17 @@ with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
     #sys.stdout = sock_pipe
     sock_pipe.write(command+"\n")
     sock_pipe.flush()
-    while True:
-        line = sock_pipe.readline()
-        if not line:
-            break
+    try:
+        while True:
+            line = sock_pipe.readline()
+            if not line:
+                break
+            print(line.strip())
+    except ConnectionResetError as cre:
+        sock_pipe.readline()
         print(line.strip())
+        sock_pipe.flush()
+        sock_pipe.close()
+    except Exception as e:
+        sock_pipe.flush()
+        sock_pipe.close()        
