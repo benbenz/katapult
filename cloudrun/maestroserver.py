@@ -36,6 +36,10 @@ def process_command(cr_client,command,conn):
 
             cr_client.run_jobs()
         
+        elif command == 'watch':
+
+            cr_client.watch()
+
         elif command == 'wait':
 
             cr_client.wait_for_jobs_state(CloudRunProcessState.DONE|CloudRunProcessState.ABORTED)
@@ -69,6 +73,7 @@ def process_command(cr_client,command,conn):
     io_pipe.close()
 
 def client_handler(cr_client,conn):
+    kill_thread = True
     with conn:
         old_stdout = sys.stdout
         conn_pipe = conn.makefile(mode='rw')
@@ -77,20 +82,26 @@ def client_handler(cr_client,conn):
                 cmd = conn_pipe.readline()
                 if not cmd:
                     break
+                if cmd == 'watch': # we want to start running the command for ever
+                    kill_thread = False
                 process_command(cr_client,cmd,conn)
-                break # one shot command
+                if kill_thread:
+                    break # one shot command
             except ConnectionResetError as cre:
                 sys.stdout = old_stdout
                 print(cre)
                 print("DISCONNECTION")
-                break    
+                if kill_thread:
+                    break    
             except Exception as e:
                 sys.stdout = old_stdout
                 print(e)
-                break
+                if kill_thread:
+                    break  
         conn_pipe.flush()
         conn_pipe.close()
-    sys.exit(99) #force exit thread 
+    if kill_thread:
+        sys.exit(99) #force exit thread 
 
 async def mainloop(cr_client):
 

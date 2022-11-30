@@ -331,6 +331,10 @@ class CloudRunProvider():
         pass
 
     @abstractmethod
+    def watch(self,processes=None):
+        pass
+
+    @abstractmethod
     def wait_for_jobs_state(self,job_state,processes=None):
         pass
 

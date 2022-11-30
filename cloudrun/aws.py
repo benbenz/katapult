@@ -288,8 +288,6 @@ def aws_create_instance(instance_config,vpc,subnet,secGroup):
         ]
     )
 
-    #print(existing)
-
     created = False
 
     if len(existing['Reservations']) > 0 and len(existing['Reservations'][0]['Instances']) >0 :
@@ -521,8 +519,6 @@ def aws_grant_admin_rights(instance,region=None):
         )
     except ClientError as error:
         if error.response['Error']['Code'] == 'EntityAlreadyExists':
-            #print('Role already exists... hence exiting from here')
-            #sys.exit(1)
             debug(2,'Role already exists ...')
         else:
             debug(1,'Unexpected error occurred... Role could not be created', error)
@@ -586,8 +582,6 @@ def aws_grant_admin_rights(instance,region=None):
         profile_arn = profile_response['InstanceProfile']['Arn']
     except ClientError as error:
         if error.response['Error']['Code'] == 'EntityAlreadyExists':
-            #print('Role already exists... hence exiting from here')
-            #sys.exit(1)
             debug(2,'Instance profile already exists ...')
             profile_response = iam_client.get_instance_profile(InstanceProfileName=cr_maestroProfileName)
             profile_arn = profile_response['InstanceProfile']['Arn']

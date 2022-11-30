@@ -164,8 +164,13 @@ class CloudRunLightProvider(CloudRunProvider,ABC):
 
         for i , job_cfg in enumerate(config.get('jobs')):
             job = CloudRunJob(job_cfg,i)
-            ref_file0 = job.get_config('run_script') 
-            for attr,use_ref in [ ('run_script',False) , ('upload_files',True) , ('input_file',True) , ('output_file',True) ] :
+            run_script = job.get_config('run_script')  
+            ref_file0  = run_script
+            args       = ref_file0.split(' ')
+            if args:
+                ref_file0 = args[0]
+            #for attr,use_ref in [ ('run_script',False) , ('upload_files',True) , ('input_file',True) , ('output_file',True) ] :
+            for attr,use_ref in [ ('run_script',False) , ('upload_files',True) , ('input_file',True) ] :
                 upfiles = job_cfg.get(attr)
                 ref_file = ref_file0 if use_ref else None
                 if not upfiles:
@@ -178,7 +183,12 @@ class CloudRunLightProvider(CloudRunProvider,ABC):
                     local_abs_path , local_rel_path , remote_abs_path , remote_rel_path , external = self._resolve_maestro_job_paths(upfiles,ref_file,self._get_home_dir())
                     if local_abs_path not in files_to_upload:
                         files_to_upload[local_abs_path] = { 'local' : local_abs_path , 'remote' : remote_abs_path }
-                    config['jobs'][i][attr] = remote_abs_path
+                    if attr == 'run_script':
+                        args = run_script.split(' ')
+                        args[0] = remote_abs_path
+                        config['jobs'][i][attr] = (' ').join(args)
+                    else:
+                        config['jobs'][i][attr] = remote_abs_path
                 else:
                     config['jobs'][i][attr] = []
                     for upfile in upfiles:
@@ -282,6 +292,10 @@ class CloudRunLightProvider(CloudRunProvider,ABC):
     def run_jobs(self):
         # should trigger maestro::run_jobs
         self._exec_maestro_command("run")
+
+    def watch(self,processes=None):
+        # should trigger maestro::wait_for_jobs_state
+        self._exec_maestro_command("watch")
 
     def wait_for_jobs_state(self,job_state,processes=None):
         # should trigger maestro::wait_for_jobs_state

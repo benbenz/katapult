@@ -115,6 +115,9 @@ class CloudRunInstance():
             return None
         return self._config.get(key,None)
 
+    def reset_jobs(self):
+        self._jobs = []
+
     def append_job(self,job):
         self._jobs.append(job)
         env = job.get_env()

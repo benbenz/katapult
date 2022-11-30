@@ -35,7 +35,7 @@ do
     echo "Waiting on environment to be bootstraped"
     sleep 15 # sleep 15 seconds
     waittime=waittime+15
-    if [waittime>3600]; then
+    if [$waittime>3600]; then
       echo "Waited too long for bootstraped environment\nexiting"
       exit 99
     fi

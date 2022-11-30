@@ -7,7 +7,6 @@ import json
 async def tail_loop(script_hash,uid):
 
     generator = await cr_client.tail(script_hash,uid) 
-    #print('\n\n\nwe are here\n\n\n')
     for line in generator:
         print(line)
 
@@ -40,9 +39,15 @@ async def mainloop(cr_client):
     # processes = [ process1 , process2 ]
     processes = cr_client.run_jobs()
 
+    print("\n== WATCH ==\n")
+
+    processes = cr_client.watch(processes)
+
     print("\n== WAIT ==\n")
 
     print("Waiting for DONE or ABORTED ...")
+    # now that we have 'watch' before 'wait' , this will exit instantaneously
+    # because watch includes 'wait' mode intrinsiquely
     processes = cr_client.wait_for_jobs_state(CloudRunProcessState.DONE|CloudRunProcessState.ABORTED,processes)
 
     print("\n== GET STATE ==\n")
