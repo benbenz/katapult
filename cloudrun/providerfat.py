@@ -129,13 +129,6 @@ class CloudRunFatProvider(CloudRunProvider,ABC):
             ftp_client.chdir(global_path)
             for file in ['config.py','bootstrap.sh','run.sh','microrun.sh','state.sh','tail.sh','getpid.sh']:
                 ftp_client.putfo(self._get_resource_file('remote_files/'+file),file)    
-            # ftp_client.putfo(self._get_resource_file('remote_files/config.py'),'config.py')
-            # ftp_client.putfo(self._get_resource_file('remote_files/bootstrap.sh'),'bootstrap.sh')
-            # ftp_client.putfo(self._get_resource_file('remote_files/run.sh'),'run.sh')
-            # ftp_client.putfo(self._get_resource_file('remote_files/microrun.sh'),'microrun.sh')
-            # ftp_client.putfo(self._get_resource_file('remote_files/state.sh'),'state.sh')
-            # ftp_client.putfo(self._get_resource_file('remote_files/tail.sh'),'tail.sh')
-            # ftp_client.putfo(self._get_resource_file('remote_files/getpid.sh'),'getpid.sh')
 
             self.debug(1,"Installing PyYAML for newly created instance ...")
             stdin , stdout, stderr = self._exec_command(ssh_client,"pip install pyyaml")
@@ -708,7 +701,7 @@ class CloudRunFatProvider(CloudRunProvider,ABC):
                 cmd_run_pre = cmd_run_pre + ln_command + "\n"
 
             #cmd_run = cmd_run + "mkdir -p "+run_path + " && "
-            cmd_run = cmd_run + global_path+"/run.sh \"" + dpl_env.get_name_with_hash() + "\" \""+dpl_job.get_command()+"\" " + job.get_config('input_file') + " " + job.get_config('output_file') + " " + job.get_hash()+" "+uid
+            cmd_run = cmd_run + global_path+"/run.sh \"" + dpl_env.get_name_with_hash() + "\" \""+dpl_job.get_command()+"\" " + job.get_config('input_file') + " " + job.get_config('output_file') + " " + job.get_hash()+" "+uid+">"+run_path+"/run-"+uid+".log 2>&1"
             cmd_run = cmd_run + "\n"
             cmd_pid = cmd_pid + global_path+"/getpid.sh \"" + pid_file + "\"\n"
 
@@ -792,7 +785,7 @@ class CloudRunFatProvider(CloudRunProvider,ABC):
         # run
         commands = [ 
             # execute main script (spawn) (this will wait for bootstraping)
-            { 'cmd': global_path+"/run.sh \"" + dpl_env.get_name_with_hash() + "\" \""+dpl_job.get_command()+"\" " + job.get_config('input_file') + " " + job.get_config('output_file') + " " + job.get_hash()+" "+uid, 'out' : False }
+            { 'cmd': global_path+"/run.sh \"" + dpl_env.get_name_with_hash() + "\" \""+dpl_job.get_command()+"\" " + job.get_config('input_file') + " " + job.get_config('output_file') + " " + job.get_hash()+" "+uid+">"+run_path+"/run-"+uid+".log 2>&1", 'out' : False }
         ]
 
         self._run_ssh_commands(ssh_client,commands)
