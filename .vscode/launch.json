@@ -18,7 +18,8 @@
             "request": "launch",
             "program": "${workspaceFolder}/cloudrun/maestroserver.py",
             "console": "integratedTerminal",
-            "cwd": "${workspaceFolder}"
+            "cwd": "${workspaceFolder}",
+            "args": ["-u"]
         }      
     ]
 }

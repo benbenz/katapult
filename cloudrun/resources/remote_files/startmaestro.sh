@@ -6,5 +6,5 @@ else
     echo "Starting maestro server ..."
     cd $HOME/cloudrun
     source $HOME/cloudrun/.venv/maestro/bin/activate
-    $HOME/cloudrun/.venv/maestro/bin/python3 -m cloudrun.maestroserver
+    $HOME/cloudrun/.venv/maestro/bin/python3 -u -m cloudrun.maestroserver
 fi

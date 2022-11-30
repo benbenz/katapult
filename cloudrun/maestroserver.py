@@ -59,7 +59,6 @@ def process_command(cr_client,command,conn):
     except Exception as e:
         io_pipe.flush()
 
-    #print("DONE")
     io_pipe.flush()
     io_pipe.close()
 
@@ -83,6 +82,9 @@ def client_handler(cr_client,conn):
                 sys.stdout = old_stdout
                 print(e)
                 break
+        conn_pipe.flush()
+        conn_pipe.close()
+    sys.exit(99) #exit thread?
 
 async def mainloop(cr_client):
 
@@ -94,7 +96,12 @@ async def mainloop(cr_client):
         while True:
             conn, addr = s.accept()
             t = Thread(target=client_handler, args=(cr_client,conn,))
-            t.start()        
+            t.start()  
+            t.join()      
+            # p = Process(target=client_handler, args=(cr_client,conn,))
+            # p.start()
+            # p.join()
+            # p.terminate()
 
 # run main loop
 def main():

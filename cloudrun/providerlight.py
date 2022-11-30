@@ -248,7 +248,8 @@ class CloudRunLightProvider(CloudRunProvider,ABC):
         if self.ssh_client is None:
             instanceid , self.ssh_client , self.ftp_client = self._wait_and_connect(self._maestro)
 
-        cmd = "cd $HOME/cloudrun && python3 -m cloudrun.maestroclient " + maestro_command
+        # -u for no buffering
+        cmd = "cd $HOME/cloudrun && python3 -u -m cloudrun.maestroclient " + maestro_command
         stdin , stdout , stderr = self._exec_command(self.ssh_client,cmd)
         if with_output:
             for l in line_buffered(stdout):
@@ -264,6 +265,7 @@ class CloudRunLightProvider(CloudRunProvider,ABC):
         self._deploy_maestro() # deploy the maestro now !
 
         # now really start 
+        self.debug(1,"\n\nSTARTING instances now ...\n")
         self._exec_maestro_command("start")
 
     def assign_jobs_to_instances(self):
@@ -271,6 +273,7 @@ class CloudRunLightProvider(CloudRunProvider,ABC):
         self._exec_maestro_command("allocate")
 
     def deploy(self):
+        sys.exit()
         # should trigger maestro::deploy
         #self._exec_maestro_command("deploy",self._config.get('print_deploy',False))
         self._exec_maestro_command("deploy") # use output - the deploy part will be skipped depending on option ...
