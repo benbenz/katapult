@@ -117,7 +117,8 @@ class CloudRunLightProvider(CloudRunProvider,ABC):
     def _run_server(self,ssh_client):
         # run the server
         commands = [
-            { 'cmd' : '$HOME/cloudrun/cloudrun/resources/remote_files/startmaestro.sh' , 'out' : False , 'output' : 'server.log' }
+            { 'cmd' : '$HOME/cloudrun/cloudrun/resources/remote_files/startmaestro.sh' , 'out' : False , 'output' : 'server.log' },
+            { 'cmd' : 'crontab -r && echo "0 * * * * /home/ubuntu/cloudrun/cloudrun/resources/remote_files/startmaestro.sh" | crontab', 'out' : True }            
         ]
         self._run_ssh_commands(ssh_client,commands)
 
