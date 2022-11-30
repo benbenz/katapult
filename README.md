@@ -201,13 +201,15 @@ class CloudRunProvider(ABC):
 
     def debug(self,level,*args,**kwargs):
 
+    def wakeup(self)
+
     def start(self):
 
-    def assign_jobs_to_instances(self):
+    def assign(self):
 
     def deploy(self):
 
-    def run_jobs(self,wait=False):
+    def run(self,wait=False):
 
     def run_job(self,job,wait=False):
 
@@ -379,15 +381,17 @@ provider = cloudrun.get_client(config)
 provider.start()
 
 # assign the jobs onto the instances
-provider.assign_jobs_to_instances()
+provider.assign()
 
 # deploy the necessary stuff onto the instances
 provider.deploy()
 
 # run the jobs and get active processes objects back
-processes = provider.run_jobs()
+processes = provider.run()
 
-# wait for the activate proccesses to be done:
+# watch mode: wait + revive instances
+processes = provider.watch(processes)
+# OR wait for the activate proccesses to be done:
 processes = provider.wait_for_jobs_state(CloudRunProcessState.DONE|CloudRunProcessState.ABORTED,processes)
 # OR wait for all processes to be done 
 provider.wait_for_jobs_state(CloudRunProcessState.DONE|CloudRunProcessState.ABORTED)

@@ -118,7 +118,7 @@ class CloudRunLightProvider(CloudRunProvider,ABC):
         # run the server
         commands = [
             { 'cmd' : '$HOME/cloudrun/cloudrun/resources/remote_files/startmaestro.sh' , 'out' : False , 'output' : 'server.log' },
-            { 'cmd' : 'crontab -r && echo "0 * * * * /home/ubuntu/cloudrun/cloudrun/resources/remote_files/startmaestro.sh" | crontab', 'out' : True }            
+            { 'cmd' : 'crontab -r && echo "* * * * * /home/ubuntu/cloudrun/cloudrun/resources/remote_files/startmaestro.sh" | crontab', 'out' : True }            
         ]
         self._run_ssh_commands(ssh_client,commands)
 
@@ -268,7 +268,6 @@ class CloudRunLightProvider(CloudRunProvider,ABC):
                     break
                 self.debug(1,l,end='')
 
-
     def start(self):
         # this will block for some time the first time...
         self.debug_set_prefix(bcolors.BOLD+'INSTALLING MAESTRO: '+bcolors.ENDC)
@@ -281,8 +280,12 @@ class CloudRunLightProvider(CloudRunProvider,ABC):
         self.debug(1,"\n\nSTARTING instances now ...\n",color=bcolors.OKCYAN)
         self._exec_maestro_command("start")
 
-    def assign_jobs_to_instances(self):
-        # should trigger maestro::assign_jobs_to_instances
+    def wakeup(self):
+        # should trigger maestro::wakeup
+        self._exec_maestro_command("wakeup")
+
+    def assign(self):
+        # should trigger maestro::assiggn
         self._exec_maestro_command("allocate")
 
     def deploy(self):
@@ -290,8 +293,8 @@ class CloudRunLightProvider(CloudRunProvider,ABC):
         #self._exec_maestro_command("deploy",self._config.get('print_deploy',False))
         self._exec_maestro_command("deploy") # use output - the deploy part will be skipped depending on option ...
 
-    def run_jobs(self):
-        # should trigger maestro::run_jobs
+    def run(self):
+        # should trigger maestro::run
         self._exec_maestro_command("run")
 
     def watch(self,processes=None):

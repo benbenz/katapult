@@ -20,13 +20,17 @@ def process_command(cr_client,command,conn):
     command = command.strip()
     try:
 
-        if command == 'start':
+        if command == 'wakeup':
+
+            cr_client.wakeup()
+
+        elif command == 'start':
 
             cr_client.start()
 
         elif command == 'allocate' or command == 'assign':
 
-            cr_client.assign_jobs_to_instances()
+            cr_client.assign()
 
         elif command == 'deploy':
 
@@ -34,7 +38,7 @@ def process_command(cr_client,command,conn):
 
         elif command == 'run':
 
-            cr_client.run_jobs()
+            cr_client.run()
         
         elif command == 'watch':
 
@@ -138,6 +142,10 @@ def main():
             raise mfe
 
     cr_client = cr.get_client(config)
+
+    # may be we've just restarted a crashed maestro server process
+    # let's test for WATCH state and reach it back again if thats needed
+    cr_client.wakeup()
 
     asyncio.run( mainloop(cr_client) )
 

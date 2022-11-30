@@ -15,7 +15,8 @@ class CloudRunProviderState(IntFlag):
     ALLOCATED     = 2  # provider allocated jobs
     DEPLOYED      = 4  # provider deployed  
     RUN           = 8  # provider ran jobs
-    ANY           = 8 + 4 + 2 + 1     
+    WATCH         = 16 # provider is watching jobs
+    ANY           = 16 + 8 + 4 + 2 + 1     
 
 class bcolors:
     HEADER = '\033[95m'
@@ -66,6 +67,9 @@ class CloudRunProvider():
                 print(*args,**kwargs) 
             sys.stdout.flush()
             sys.stderr.flush()
+
+    def get_state(self):
+        return self._state
 
     def _get_or_create_instance(self,instance):
 
@@ -315,11 +319,15 @@ class CloudRunProvider():
         return pkg_resources.resource_stream(resource_package, resource_path)    
 
     @abstractmethod
+    def wakeup(self):
+        pass
+
+    @abstractmethod
     def start(self):
         pass
 
     @abstractmethod
-    def assign_jobs_to_instances(self):
+    def assign(self):
         pass
 
     @abstractmethod
@@ -327,7 +335,7 @@ class CloudRunProvider():
         pass
 
     @abstractmethod
-    def run_jobs(self):
+    def run(self):
         pass
 
     @abstractmethod

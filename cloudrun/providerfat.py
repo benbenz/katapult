@@ -77,7 +77,7 @@ class CloudRunFatProvider(CloudRunProvider,ABC):
 
     #     return self._jobs[index] 
 
-    def assign_jobs_to_instances(self):
+    def assign(self):
 
         if self._recovery == True:
             assign_jobs = False
@@ -472,7 +472,7 @@ class CloudRunFatProvider(CloudRunProvider,ABC):
             # re-deploy it
             self._deploy_all(instance)
         if rerun:
-            processes = self.run_jobs(instance,jobs_can_be_saved) #will run the jobs for this instance
+            processes = self.run(instance,jobs_can_be_saved) #will run the jobs for this instance
             return processes #instance_processes, jobsinfo 
         else :
             return None 
@@ -632,7 +632,7 @@ class CloudRunFatProvider(CloudRunProvider,ABC):
 
         return processes 
 
-    def run_jobs(self,instance_filter=None,except_done=False):
+    def run(self,instance_filter=None,except_done=False):
 
         # we're not coming from revive but we've recovered a state ...
         if except_done == False and self._recovery == True:
@@ -1109,11 +1109,29 @@ class CloudRunFatProvider(CloudRunProvider,ABC):
         return processes
         # done
 
+    def wakeup(self):
+        if self._state != CloudRunProviderState.WATCH:
+            self.debug(1,"Provider was not watching: cancelling automatic wakeup")
+            return 
+        else:
+            self.start()
+            self.assign()
+            self.deploy()
+            self.run()
+            self.watch()
+
     def watch(self,processes=None):
 
         if not processes or len(processes)==0:
             self.debug(1,"No process to wait for")
         job_state = CloudRunProcessState.DONE|CloudRunProcessState.ABORTED
+        
+        # switch the state to watch mode ... 
+        # this will allow to check if the Provider needs to run all methods until watch, on wakeup
+        # (no matter the state recovery)
+        self._state = CloudRunProviderState.WATCH
+        self.serialize_state()
+
         return self.__get_or_wait_jobs_state(processes,CloudRunProviderStateWaitMode.WAIT|CloudRunProviderStateWaitMode.WATCH,job_state)
 
 

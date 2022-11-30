@@ -21,7 +21,7 @@ async def mainloop(cr_client):
     print("\n== ALLOCATE JOBS ==\n")
 
     # distribute the jobs on the instances (dummy algo for now)
-    cr_client.assign_jobs_to_instances()
+    cr_client.assign()
 
     print("\n== DEPLOY ==\n")
 
@@ -37,7 +37,7 @@ async def mainloop(cr_client):
     # process1  = await cr_client.run_job(cr_client.get_job(0)) 
     # process2  = await cr_client.run_job(cr_client.get_job(1)) 
     # processes = [ process1 , process2 ]
-    processes = cr_client.run_jobs()
+    processes = cr_client.run()
 
     print("\n== WATCH ==\n")
 
