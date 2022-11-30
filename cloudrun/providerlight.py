@@ -1,6 +1,6 @@
 
 from abc import ABC , abstractmethod
-from cloudrun.provider import CloudRunProvider , bcolors , line_buffered
+from cloudrun.provider import CloudRunProvider , bcolors , line_buffered 
 from cloudrun.core import *
 import copy , io
 from zipfile import ZipFile
@@ -77,7 +77,7 @@ class CloudRunLightProvider(CloudRunProvider,ABC):
         ftp_client.close()
         ssh_client.close()
 
-        self.debug(1,"MAESTRO is READY")
+        self.debug(1,"MAESTRO is READY",color=bcolors.OKCYAN)
 
 
     def _deploy_cloudrun_files(self,ssh_client,ftp_client):
@@ -260,12 +260,14 @@ class CloudRunLightProvider(CloudRunProvider,ABC):
 
     def start(self):
         # this will block for some time the first time...
+        self.debug_set_prefix('INSTALLING MAESTRO: ')
         self._instances_states = dict()        
         self._start_and_update_instance(self._maestro)
         self._deploy_maestro() # deploy the maestro now !
+        self.debug_set_prefix(None)
 
         # now really start 
-        self.debug(1,"\n\nSTARTING instances now ...\n")
+        self.debug(1,"\n\nSTARTING instances now ...\n",color=bcolors.OKCYAN)
         self._exec_maestro_command("start")
 
     def assign_jobs_to_instances(self):
@@ -273,14 +275,13 @@ class CloudRunLightProvider(CloudRunProvider,ABC):
         self._exec_maestro_command("allocate")
 
     def deploy(self):
-        sys.exit()
         # should trigger maestro::deploy
         #self._exec_maestro_command("deploy",self._config.get('print_deploy',False))
         self._exec_maestro_command("deploy") # use output - the deploy part will be skipped depending on option ...
 
     def run_jobs(self):
         # should trigger maestro::run_jobs
-        self._exec_maestro_command("run_jobs")
+        self._exec_maestro_command("run")
 
     def wait_for_jobs_state(self,job_state,processes=None):
         # should trigger maestro::wait_for_jobs_state

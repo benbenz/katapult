@@ -35,10 +35,15 @@ class CloudRunProvider():
         self._state = CloudRunProviderState.NEW
 
         self.DBG_LVL = conf.get('debug',1)
+        self.DBG_PREFIX = None
         global DBG_LVL
         DBG_LVL = conf.get('debug',1)
 
         self._config  = conf
+
+    def debug_set_prefix(self,value):
+        self.DBG_PREFIX = value
+        debug_set_prefix(value)
 
     def debug(self,level,*args,**kwargs):
         if level <= self.DBG_LVL:
@@ -54,7 +59,10 @@ class CloudRunProvider():
                 listargs.append(bcolors.ENDC)
                 args = tuple(listargs)
                 kwargs.pop('color')
-            print(*args,**kwargs) 
+            if self.DBG_PREFIX:
+                print(self.DBG_PREFIX,*args,**kwargs) 
+            else:
+                print(*args,**kwargs) 
             sys.stdout.flush()
             sys.stderr.flush()
 
@@ -236,6 +244,7 @@ class CloudRunProvider():
                     dbglvl = 1 if errmsg else 2
                     self.debug(dbglvl,"Errors")
                     self.debug(dbglvl,errmsg)
+
                 else:
                     transport = ssh_client.get_transport()
                     channel   = transport.open_session()
@@ -385,6 +394,10 @@ def line_buffered(f):
 
 
 DBG_LVL=1
+DBG_PREFIX=None
+
+def debug_set_prefix(value):
+    DBG_PREFIX=value
 
 def debug(level,*args,**kwargs):
     if level <= DBG_LVL:
@@ -400,4 +413,7 @@ def debug(level,*args,**kwargs):
             listargs.append(bcolors.ENDC)
             args = tuple(listargs)
             kwargs.pop('color')
-        print(*args,**kwargs)
+        if DBG_PREFIX:
+            print(DBG_PREFIX,*args,**kwargs)
+        else:
+            print(*args,**kwargs)

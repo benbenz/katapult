@@ -223,10 +223,10 @@ def aws_upload_file( region , bucket , file_path ):
 
 def aws_find_instance(instance_config):
 
-    debug(1,"Searching INSTANCE ...")
-
     instanceName = init_instance_name(instance_config)
     region = instance_config.get('region')
+
+    debug(1,"Searching INSTANCE ...",instanceName)
 
     ec2_client = boto3.client("ec2", config=aws_get_config(region))
 

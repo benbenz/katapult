@@ -24,7 +24,7 @@ def process_command(cr_client,command,conn):
 
             cr_client.start()
 
-        elif command == 'allocate':
+        elif command == 'allocate' or command == 'assign':
 
             cr_client.assign_jobs_to_instances()
 
@@ -55,9 +55,15 @@ def process_command(cr_client,command,conn):
         elif command == 'test':
 
             print("TEST")
+        
+        else:
+
+            print("UNKNOWN COMMAND")
     
     except Exception as e:
         io_pipe.flush()
+        io_pipe.close()
+        raise e
 
     io_pipe.flush()
     io_pipe.close()
@@ -84,7 +90,7 @@ def client_handler(cr_client,conn):
                 break
         conn_pipe.flush()
         conn_pipe.close()
-    sys.exit(99) #exit thread?
+    sys.exit(99) #force exit thread 
 
 async def mainloop(cr_client):
 
