@@ -526,7 +526,7 @@ class CloudRunFatProvider(CloudRunProvider,ABC):
         do_run = True
         if instance.get_name() in instances_processes:
             processes_infos = instances_processes[instance.get_name()]
-            last_processes_new = self.__get_jobs_states_internal(processes_infos,CloudRunProviderStateWaitMode.NO_WAIT|CloudRunProviderStateWaitMode.WATCH,CloudRunProcessState.ANY,True) # Programmatic >> no print, no serialize
+            last_processes_new = self.__get_jobs_states_internal(processes_infos,CloudRunProviderStateWaitMode.NO_WAIT|CloudRunProviderStateWaitMode.WATCH,CloudRunProcessState.ANY,False,True) # Programmatic >> no print, no serialize
             do_run = False
             all_done = True
             for process_old in last_processes_old:
@@ -554,7 +554,7 @@ class CloudRunFatProvider(CloudRunProvider,ABC):
             # this should likely set the states to ABORTED if this is a new instance
             instances_processes = self._organize_instances_processes(last_processes_old)
             processes_infos = instances_processes[instance.get_name()]
-            self.__get_jobs_states_internal(processes_infos,CloudRunProviderStateWaitMode.NO_WAIT|CloudRunProviderStateWaitMode.WATCH,CloudRunProcessState.ANY,True) # Programmatic >> no print, no serialize
+            self.__get_jobs_states_internal(processes_infos,CloudRunProviderStateWaitMode.NO_WAIT|CloudRunProviderStateWaitMode.WATCH,CloudRunProcessState.ANY,False,True) # Programmatic >> no print, no serialize
 
             if do_run:
                 return True , None, False
@@ -937,7 +937,7 @@ class CloudRunFatProvider(CloudRunProvider,ABC):
         
         return jobsinfo , instance
 
-    def __get_jobs_states_internal( self , processes_infos , wait_mode , job_state , programmatic = False):
+    def __get_jobs_states_internal( self , processes_infos , wait_mode , job_state , daemon = False , programmatic = False):
         
         jobsinfo , instance = self._compute_jobs_info(processes_infos)
 
@@ -1025,7 +1025,7 @@ class CloudRunFatProvider(CloudRunProvider,ABC):
                     break
 
             # print job status summary
-            if not programmatic:
+            if not programmatic and not daemon:
                 self.print_jobs_summary(instance)
 
             # all retrived attributes need to be true
@@ -1099,7 +1099,7 @@ class CloudRunFatProvider(CloudRunProvider,ABC):
         if not daemon:
             with concurrent.futures.ThreadPoolExecutor(max_workers=self._get_num_workers()) as pool:
                 future_to_instance = { pool.submit(self.__get_jobs_states_internal,
-                                                    processes_infos,wait_state,job_state) : instance_name for instance_name , processes_infos in instances_processes.items()
+                                                    processes_infos,wait_state,job_state,daemon) : instance_name for instance_name , processes_infos in instances_processes.items()
                                                     }
                 for future in concurrent.futures.as_completed(future_to_instance):
                     inst_name = future_to_instance[future]
@@ -1118,7 +1118,7 @@ class CloudRunFatProvider(CloudRunProvider,ABC):
                 self._watch_pool.shutdown()
             self._watch_pool = concurrent.futures.ThreadPoolExecutor(max_workers=self._get_num_workers())
             for instance_name , processes_infos in instances_processes.items():
-                self._watch_pool.submit(self.__get_jobs_states_internal,processes_infos,wait_state,job_state)
+                self._watch_pool.submit(self.__get_jobs_states_internal,processes_infos,wait_state,job_state,daemon)
             #pool.shutdown()
             return None
         # done

@@ -104,6 +104,7 @@
   - [ ] improve UI with Python RICH , OR https://towardsdatascience.com/a-complete-guide-to-using-progress-bars-in-python-aa7f4130cda8
   - [ ] handle when we stop an instance while its still deploying / waiting ... 
   - [ ] debug why successive runs locks
+  - [ ] debug why remote mode prints nothing with state recovery ON
 
 4) local mode:
   - [x] handle new config 

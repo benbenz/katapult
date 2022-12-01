@@ -10,6 +10,7 @@ CloudRun is a Python package that allows you to run any script on a cloud servic
 - Multithreaded instance support
 - Handles disconnections from instances, including stopped or terminated instances
 - Handles interruption of CloudRun, with state recovery
+- Runs locally or on a remote instance, with 'watcher' functionality 
 
 # Pre-requisites
 
@@ -215,7 +216,9 @@ class CloudRunFatProvider(ABC):
     def run_job(self,job,wait=False):
 
     # watch the processes (= wait + revive instances when terminated)
-    def watch(self,processes=None):
+    # with daemon (=True), the call is non blocking
+    # without daemon (=False), the call is blocking and will display the processes/states
+    def watch(self,processes=None,daemon=False):
 
     # wait for the processes to reach a state
     def wait_for_jobs_state(self,job_state,processes=None):
