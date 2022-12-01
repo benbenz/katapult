@@ -13,3 +13,4 @@ __pycache__
 state.json
 state.pickle
 commits.log
+watch.log

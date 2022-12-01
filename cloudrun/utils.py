@@ -13,6 +13,7 @@ cr_environment_keys    = [ 'command' , 'env_pypi' , 'env_conda' , 'env_aptget' ,
 def compute_instance_hash(instance_cfg):
     instance_config = { your_key: instance_cfg[your_key] for your_key in cr_instance_keys }
     instance_config_canon = jcs.canonicalize(instance_config)
+    #print("INSTANCE CONFIG CANON",instance_config_canon)
     #instance_hash = str(hash(instance_config_canon))
     hash = hashlib.md5(instance_config_canon).hexdigest()
     return hash[0:12]

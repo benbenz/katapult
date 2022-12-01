@@ -455,6 +455,13 @@ def aws_terminate_instance(instance):
 
         ec2_client.cancel_spot_instance_requests(SpotInstanceRequestIds=[instance.get_data('SpotInstanceRequestId')]) 
 
+def aws_reboot_instance(instance):
+
+    ec2_client = boto3.client("ec2", config=aws_get_config(instance.get_region()))
+
+    ec2_client.reboot_instances(InstanceIds=[instance.get_id()])
+
+
 def aws_update_instance_info(instance):
     region = instance.get_region()
     ec2_client   = boto3.client("ec2", config=aws_get_config(region))
@@ -634,6 +641,9 @@ class AWSCloudRunFatProvider(CloudRunFatProvider):
     def terminate_instance(self,instance):
         aws_terminate_instance(instance)
 
+    def reboot_instance(self,instance):
+        aws_reboot_instance(instance)
+
     def update_instance_info(self,instance):
         aws_update_instance_info(instance)
 
@@ -671,6 +681,9 @@ class AWSCloudRunLightProvider(CloudRunLightProvider):
 
     def terminate_instance(self,instance):
         aws_terminate_instance(instance)
+
+    def reboot_instance(self,instance):
+        aws_reboot_instance(instance)
 
     def grant_admin_rights(self,instance):
         aws_grant_admin_rights(instance)   

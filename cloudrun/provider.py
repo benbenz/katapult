@@ -12,10 +12,10 @@ from enum import IntFlag
 class CloudRunProviderState(IntFlag):
     NEW           = 0  # provider created
     STARTED       = 1  # provider started
-    ALLOCATED     = 2  # provider allocated jobs
+    ASSIGNED      = 2  # provider assigned jobs
     DEPLOYED      = 4  # provider deployed  
-    RUN           = 8  # provider ran jobs
-    WATCH         = 16 # provider is watching jobs
+    RUNNING       = 8  # provider ran jobs
+    WATCHING      = 16 # provider is watching jobs
     ANY           = 16 + 8 + 4 + 2 + 1     
 
 class bcolors:
@@ -29,7 +29,7 @@ class bcolors:
     BOLD = '\033[1m'
     UNDERLINE = '\033[4m'
     
-class CloudRunProvider():
+class CloudRunProvider(ABC):
 
     def __init__(self, conf):
 
@@ -61,12 +61,15 @@ class CloudRunProvider():
                 listargs.append(bcolors.ENDC)
                 args = tuple(listargs)
                 kwargs.pop('color')
-            if self.DBG_PREFIX:
-                print(self.DBG_PREFIX,*args,**kwargs) 
-            else:
-                print(*args,**kwargs) 
-            sys.stdout.flush()
-            sys.stderr.flush()
+            try:
+                if self.DBG_PREFIX:
+                    print(self.DBG_PREFIX,*args,**kwargs) 
+                else:
+                    print(*args,**kwargs) 
+                sys.stdout.flush()
+                sys.stderr.flush()
+            except:
+                pass
 
     def get_state(self):
         return self._state
@@ -199,12 +202,22 @@ class CloudRunProvider():
                 ssh_client.connect(hostname=instance.get_dns_addr(),username=instance.get_config('img_username'),pkey=k,**kwargs) #,password=’mypassword’)
                 break
             except Exception as cexc:
+                # check whats going on
+                self.update_instance_info(instance)
+                if instance.get_state() != CloudRunInstanceState.RUNNING:
+                    self._wait_for_instance(instance)
             #except paramiko.ssh_exception.NoValidConnectionsError as cexc:
                 if retrys < 5:
                     self.debug(1,cexc)
                     time.sleep(4)
                     self.debug(1,"Retrying ...")
                     retrys = retrys + 1
+                elif retrys == 5:
+                    retrys = retrys + 1
+                    self.debug(1,"Trying a reboot ...")
+                    self.reboot_instance(instance)
+                    time.sleep(4)
+                    self._wait_for_instance(instance)
                 else:
                     self.debug(1,cexc)
                     self.debug(0,"ERROR! instance is unreachable: ",instance,color=bcolors.FAIL)
@@ -319,6 +332,38 @@ class CloudRunProvider():
         return pkg_resources.resource_stream(resource_package, resource_path)    
 
     @abstractmethod
+    def get_user_region(self):
+        pass
+
+    @abstractmethod
+    def create_instance_objects(self,config):
+        pass
+
+    @abstractmethod
+    def find_instance(self,config):
+        pass
+
+    @abstractmethod
+    def start_instance(self,instance):
+        pass
+
+    @abstractmethod
+    def stop_instance(self,instance):
+        pass
+
+    @abstractmethod
+    def terminate_instance(self,instance):
+        pass
+
+    @abstractmethod
+    def reboot_instance(self,instance):
+        pass
+
+    @abstractmethod
+    def update_instance_info(self,instance):
+        pass
+
+    @abstractmethod
     def wakeup(self):
         pass
 
@@ -339,7 +384,7 @@ class CloudRunProvider():
         pass
 
     @abstractmethod
-    def watch(self,processes=None):
+    def watch(self,processes=None,daemon=False):
         pass
 
     @abstractmethod
@@ -422,7 +467,10 @@ def debug(level,*args,**kwargs):
             listargs.append(bcolors.ENDC)
             args = tuple(listargs)
             kwargs.pop('color')
-        if DBG_PREFIX:
-            print(DBG_PREFIX,*args,**kwargs)
-        else:
-            print(*args,**kwargs)
+        try:
+            if DBG_PREFIX:
+                print(DBG_PREFIX,*args,**kwargs)
+            else:
+                print(*args,**kwargs)
+        except:
+            pass

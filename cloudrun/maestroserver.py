@@ -17,7 +17,6 @@ def process_command(cr_client,command,conn):
     #io_pipe    = TextIOWrapper(conn.makefile('rw',buffering=1), write_through=True)
     sys.stdout = io_pipe
     sys.stderr = io_pipe
-    command = command.strip()
     try:
 
         if command == 'wakeup':
@@ -42,7 +41,7 @@ def process_command(cr_client,command,conn):
         
         elif command == 'watch':
 
-            cr_client.watch()
+            cr_client.watch(None,True) # daemon
 
         elif command == 'wait':
 
@@ -86,22 +85,20 @@ def client_handler(cr_client,conn):
                 cmd = conn_pipe.readline()
                 if not cmd:
                     break
+                cmd = cmd.strip()
                 if cmd == 'watch': # we want to start running the command for ever
                     kill_thread = False
                 process_command(cr_client,cmd,conn)
-                kill_thread = True
                 break # one-shot command
             except ConnectionResetError as cre:
                 sys.stdout = old_stdout
                 print(cre)
                 print("DISCONNECTION")
-                if kill_thread:
-                    break    
+                break    
             except Exception as e:
                 sys.stdout = old_stdout
                 print(e)
-                if kill_thread:
-                    break  
+                break  
         conn_pipe.flush()
         conn_pipe.close()
     if kill_thread:

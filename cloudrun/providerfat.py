@@ -47,6 +47,9 @@ class CloudRunFatProvider(CloudRunProvider,ABC):
         # option
         self._mutualize_uploads = conf.get('mutualize_uploads',True)
 
+        # watch thread pool
+        self._watch_pool = None
+
         if self._config.get('recover',False):
             # load the state (if existing) and set the recovery mode accordingly
             self._state_serializer = StateSerializer(self)
@@ -110,7 +113,7 @@ class CloudRunFatProvider(CloudRunProvider,ABC):
 
             combopt.multiple_knapsack_assignation(self._jobs,self._instances)   
 
-        self._state = CloudRunProviderState.ALLOCATED            
+        self._state = CloudRunProviderState.ASSIGNED            
 
         self.serialize_state()         
                
@@ -321,7 +324,7 @@ class CloudRunFatProvider(CloudRunProvider,ABC):
                                 
                         # check if the remote path has already been uploaded ...
                         if abs_path in file_uploaded:
-                            self.debug(1,"skipping upload of file",upfile,"for job#",job.get_rank(),"(file has already been uploaded)")
+                            self.debug(2,"skipping upload of file",upfile,"for job#",job.get_rank(),"(file has already been uploaded)")
                             continue
                         file_uploaded[abs_path] = True
                         
@@ -339,7 +342,7 @@ class CloudRunFatProvider(CloudRunProvider,ABC):
                     local_path , rel_path , abs_path , rel_remote_path , external = self._resolve_dpl_job_paths(job.get_config('input_file'),dpl_job)
 
                     if abs_path in file_uploaded:
-                        self.debug(1,"skipping upload of file",upfile,"for job#",job.get_rank(),"(file has already been uploaded)")
+                        self.debug(2,"skipping upload of file",upfile,"for job#",job.get_rank(),"(file has already been uploaded)")
                     else:
                         file_uploaded[abs_path] = True
                         #filename = os.path.basename(job.get_config('input_file'))
@@ -416,7 +419,7 @@ class CloudRunFatProvider(CloudRunProvider,ABC):
 
     def start(self):
         self._instances_states = dict() 
-        with concurrent.futures.ThreadPoolExecutor(max_workers=10) as pool:
+        with concurrent.futures.ThreadPoolExecutor(max_workers=self._get_num_workers()) as pool:
             future_to_instance = { pool.submit(self._start_and_update_instance,instance) : instance for instance in self._instances }
             for future in concurrent.futures.as_completed(future_to_instance):
                 inst = future_to_instance[future]
@@ -424,9 +427,6 @@ class CloudRunFatProvider(CloudRunProvider,ABC):
                     self.debug(1,"ERROR: Your configuration is causing an instance to not be created. Please fix.",inst.get_config_DIRTY(),color=bcolors.FAIL)
                     sys.exit()
         self._state = CloudRunProviderState.STARTED
-
-
-                
 
     # GREAT summary
     # https://www.integralist.co.uk/posts/python-asyncio/
@@ -443,7 +443,7 @@ class CloudRunFatProvider(CloudRunProvider,ABC):
             self.debug(3,"PROCESS in deploy",job.get_last_process())
 
         # https://docs.python.org/3/library/concurrent.futures.html cf. ThreadPoolExecutor Example¶
-        with concurrent.futures.ThreadPoolExecutor(max_workers=10) as pool:
+        with concurrent.futures.ThreadPoolExecutor(max_workers=self._get_num_workers()) as pool:
             future_to_instance = { pool.submit(self._deploy_all,
                                                 instance) : instance for instance in self._instances
                                                 }
@@ -722,7 +722,7 @@ class CloudRunFatProvider(CloudRunProvider,ABC):
         
         processes = []
         
-        with concurrent.futures.ThreadPoolExecutor(max_workers=10) as pool:
+        with concurrent.futures.ThreadPoolExecutor(max_workers=self._get_num_workers()) as pool:
             future_to_instance = { pool.submit(self._run_jobs_for_instance,
                                                 runinfo,batch_uid,dpl_jobs) : instance for instance_name , runinfo in instances_runs.items()
                                                 }
@@ -740,7 +740,7 @@ class CloudRunFatProvider(CloudRunProvider,ABC):
                     processes.append(process)
             #pool.shutdown()        
 
-        self._state = CloudRunProviderState.RUN
+        self._state = CloudRunProviderState.RUNNING
 
         self.serialize_state()
 
@@ -888,7 +888,7 @@ class CloudRunFatProvider(CloudRunProvider,ABC):
 
         # this is an Internet error
         if instance.get_state() == CloudRunInstanceState.RUNNING:
-            ssh_client = self._connect_to_instance(instance,timeout=10)
+            ssh_client = self._connect_to_instance(instance,timeout=60)
             if ssh_client is None:
                 self.debug(1,"FATAL ERROR(0):",msgs,instance,color=bcolors.FAIL)
                 return None , None
@@ -906,7 +906,7 @@ class CloudRunFatProvider(CloudRunProvider,ABC):
         rerun_jobs = processes is not None
         if wait_mode & CloudRunProviderStateWaitMode.WATCH:
             processes = self.revive(instance,rerun_jobs)
-        ssh_client = self._connect_to_instance(instance,timeout=10)
+        ssh_client = self._connect_to_instance(instance,timeout=60)
         if ssh_client is None:
             self.debug(1,"FATAL ERROR(1):",msgs,instance,color=bcolors.FAIL)
         return ssh_client , processes #processes_info , jobsinfo
@@ -941,7 +941,7 @@ class CloudRunFatProvider(CloudRunProvider,ABC):
         
         jobsinfo , instance = self._compute_jobs_info(processes_infos)
 
-        ssh_client = self._connect_to_instance(instance,timeout=10)
+        ssh_client = self._connect_to_instance(instance,timeout=120)
 
         if ssh_client is None:
             ssh_client , processes = self._handle_instance_disconnect(instance,wait_mode,"could not get jobs states for instance",
@@ -1052,6 +1052,12 @@ class CloudRunFatProvider(CloudRunProvider,ABC):
 
         return processes
 
+    def _get_num_workers(self):
+        num_workers = 10
+        if self._instances:
+            num_workers = len(self._instances)
+        return num_workers
+
     def get_last_processes(self):
         processes = []
         for job in self._jobs:
@@ -1078,7 +1084,7 @@ class CloudRunFatProvider(CloudRunProvider,ABC):
         return instances_processes
 
 
-    def __get_or_wait_jobs_state( self, processes , wait_state = CloudRunProviderStateWaitMode.NO_WAIT , job_state = CloudRunProcessState.ANY ):   
+    def __get_or_wait_jobs_state( self, processes , wait_state = CloudRunProviderStateWaitMode.NO_WAIT , job_state = CloudRunProcessState.ANY , daemon = False ):   
 
         if processes is None: 
             processes = self.get_last_processes()
@@ -1090,49 +1096,68 @@ class CloudRunFatProvider(CloudRunProvider,ABC):
 
         processes = [] 
 
-        with concurrent.futures.ThreadPoolExecutor(max_workers=10) as pool:
-            future_to_instance = { pool.submit(self.__get_jobs_states_internal,
-                                                processes_infos,wait_state,job_state) : instance_name for instance_name , processes_infos in instances_processes.items()
-                                                }
-            for future in concurrent.futures.as_completed(future_to_instance):
-                inst_name = future_to_instance[future]
-                #instanceid = inst.get_id()
-                #future.result()
-                fut_processes = future.result()
-                if fut_processes is not None:
-                    for p in fut_processes:
-                        processes.append(p)
-                else:
-                    self.debug(1,"There has been a problem with __get_jobs_states_internal")
+        if not daemon:
+            with concurrent.futures.ThreadPoolExecutor(max_workers=self._get_num_workers()) as pool:
+                future_to_instance = { pool.submit(self.__get_jobs_states_internal,
+                                                    processes_infos,wait_state,job_state) : instance_name for instance_name , processes_infos in instances_processes.items()
+                                                    }
+                for future in concurrent.futures.as_completed(future_to_instance):
+                    inst_name = future_to_instance[future]
+                    #instanceid = inst.get_id()
+                    #future.result()
+                    fut_processes = future.result()
+                    if fut_processes is not None:
+                        for p in fut_processes:
+                            processes.append(p)
+                    else:
+                        self.debug(1,"There has been a problem with __get_jobs_states_internal")
+            return processes
+        else:
+            # will daemon the pool ... (non blocking)
+            if self._watch_pool is not None:
+                self._watch_pool.shutdown()
+            self._watch_pool = concurrent.futures.ThreadPoolExecutor(max_workers=self._get_num_workers())
+            for instance_name , processes_infos in instances_processes.items():
+                self._watch_pool.submit(self.__get_jobs_states_internal,processes_infos,wait_state,job_state)
             #pool.shutdown()
-        
-        return processes
+            return None
         # done
 
     def wakeup(self):
-        if self._state != CloudRunProviderState.WATCH:
-            self.debug(1,"Provider was not watching: cancelling automatic wakeup")
-            return 
+        # if self._state != CloudRunProviderState.WATCHING:
+        #     self.debug(1,"Provider was not watching: cancelling automatic wakeup")
+        #     return 
+        # else:
+        if self._recovery:
+            if self._state >= CloudRunProviderState.STARTED:
+                self.start()
+            if self._state >= CloudRunProviderState.ASSIGNED:
+                self.assign()
+            if self._state >= CloudRunProviderState.DEPLOYED:
+                self.deploy()
+            # should we have those here ? Or just let watch do it's thing ? 
+            # actually, thanks to state recovery, run_jobs should be smart enough to not run DONE jobs again...
+            if self._state >= CloudRunProviderState.RUNNING:
+                self.run()
+            if self._state >= CloudRunProviderState.WATCHING:
+                self.watch(None,True) # daemon mode
         else:
             self.start()
             self.assign()
             self.deploy()
-            self.run()
-            self.watch()
 
-    def watch(self,processes=None):
 
-        if not processes or len(processes)==0:
-            self.debug(1,"No process to wait for")
+    def watch(self,processes=None,daemon=False):
+
         job_state = CloudRunProcessState.DONE|CloudRunProcessState.ABORTED
         
         # switch the state to watch mode ... 
         # this will allow to check if the Provider needs to run all methods until watch, on wakeup
         # (no matter the state recovery)
-        self._state = CloudRunProviderState.WATCH
+        self._state = CloudRunProviderState.WATCHING
         self.serialize_state()
 
-        return self.__get_or_wait_jobs_state(processes,CloudRunProviderStateWaitMode.WAIT|CloudRunProviderStateWaitMode.WATCH,job_state)
+        return self.__get_or_wait_jobs_state(processes,CloudRunProviderStateWaitMode.WAIT|CloudRunProviderStateWaitMode.WATCH,job_state,daemon)
 
 
     def wait_for_jobs_state(self,job_state,processes=None):
@@ -1162,37 +1187,9 @@ class CloudRunFatProvider(CloudRunProvider,ABC):
         return int(lines_i[-1].split('\t')[0]) + 1 if lines_i else line_num     
 
     @abstractmethod
-    def get_user_region(self):
-        pass
-
-    @abstractmethod
     def get_recommended_cpus(self,inst_cfg):
         pass
 
     @abstractmethod
     def get_cpus_cores(self,inst_cfg):
-        pass
-
-    @abstractmethod
-    def create_instance_objects(self,config):
-        pass
-
-    @abstractmethod
-    def find_instance(self,config):
-        pass
-
-    @abstractmethod
-    def start_instance(self,instance):
-        pass
-
-    @abstractmethod
-    def stop_instance(self,instance):
-        pass
-
-    @abstractmethod
-    def terminate_instance(self,instance):
-        pass
-
-    @abstractmethod
-    def update_instance_info(self,instance):
         pass

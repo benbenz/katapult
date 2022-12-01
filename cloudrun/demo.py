@@ -64,6 +64,23 @@ async def mainloop(cr_client):
 
     print("\n== DONE ==\n")
 
+async def waitloop(cr_client):
+
+    print("\n== WAIT ==\n")
+    
+    cr_client.wait()
+
+    #rint("Waiting for DONE or ABORTED ...")
+    #processes = cr_client.wait_for_jobs_state(CloudRunProcessState.DONE|CloudRunProcessState.ABORTED)
+
+    print("\n== GET STATE ==\n")
+
+    # just to show the API ...
+    cr_client.get_jobs_states()
+    cr_client.print_aborted_logs()
+
+    print("\n== DONE ==\n")        
+
 # run main loop
 def main():
 
@@ -83,9 +100,14 @@ def main():
 
     cr_client = cr.get_client(config)
 
-    asyncio.run( mainloop(cr_client) )
-
-
+    command = None
+    if len(sys.argv)>1:
+        command = sys.argv[1]
+    
+    if command == 'wait':
+        asyncio.run( waitloop(cr_client) )
+    else:
+        asyncio.run( mainloop(cr_client) )
 
 if __name__ == '__main__':
     main()    

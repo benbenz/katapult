@@ -56,6 +56,12 @@ class ConfigManager():
                         real_inst_cfg['dev']  = self._config.get('dev',False)
                         real_inst_cfg['project']  = self._config.get('project',None)
 
+                        # let's also freeze the region
+                        # this is done so that we dont change the hash when sending the config to maestro
+                        # (because the client adds the 'region' field when translating the config)
+                        if not real_inst_cfg.get('region'):
+                            real_inst_cfg['region'] = self._provider.get_user_region()
+
                         # starts calling the Service here !
                         # instance , created = self.start_instance( real_inst_cfg )
                         # let's put some dummy instances for now ...
