@@ -35,7 +35,7 @@ class CloudRunLightProvider(CloudRunProvider,ABC):
                     'maestro'      : True ,
                     'img_id'       : img_id ,
                     'img_username' : img_user ,                 
-                    'type'         : 't2.micro' , #t2.nano' ,  
+                    'type'         : 't2.micro' ,  # nano: pip gets killed :/
                     'dev'          : self._config.get('dev',False) ,
                     'project'      : self._config.get('project',None)
                 }
@@ -117,8 +117,8 @@ class CloudRunLightProvider(CloudRunProvider,ABC):
     def _run_server(self,ssh_client):
         # run the server
         commands = [
-            { 'cmd' : '$HOME/cloudrun/cloudrun/resources/remote_files/startmaestro.sh' , 'out' : False , 'output' : 'server.log' },
-            { 'cmd' : 'crontab -r && echo "* * * * * /home/ubuntu/cloudrun/cloudrun/resources/remote_files/startmaestro.sh" | crontab', 'out' : True }            
+            { 'cmd' : '$HOME/cloudrun/cloudrun/resources/remote_files/startmaestro.sh' , 'out' : False , 'output' : 'maestro.log' },
+            { 'cmd' : 'crontab -r ; echo "* * * * * /home/ubuntu/cloudrun/cloudrun/resources/remote_files/startmaestro.sh" | crontab', 'out' : True }
         ]
         self._run_ssh_commands(ssh_client,commands)
 
@@ -229,7 +229,7 @@ class CloudRunLightProvider(CloudRunProvider,ABC):
                 self.debug(2,'scanning package resource',res)
                 self._zip_package(package_name,src + "/" + res, dest, zipObj)
         else:
-            if os.path.splitext(src)[1] not in [".pyc"]:
+            if os.path.splitext(src)[1] not in [".pyc"] and not src.strip().endswith(".DS_Store"):
                 #copy_resource_file(src, dest) 
                 data_str = pkg_resources.resource_string(package_name, src)
                 self.debug(2,"Writing",src)
@@ -285,7 +285,7 @@ class CloudRunLightProvider(CloudRunProvider,ABC):
         self._exec_maestro_command("wakeup")
 
     def assign(self):
-        # should trigger maestro::assiggn
+        # should trigger maestro::assign
         self._exec_maestro_command("allocate")
 
     def deploy(self):

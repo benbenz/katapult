@@ -26,7 +26,7 @@ In order to use the python AWS client (Boto3), you need to have an existing AWS 
 aws configure
 ```
 See [https://docs.aws.amazon.com/cli/latest/userguide/cli-configure-quickstart.html](here)
-6. To run in `nano` mode, you also need to [add the following credentials to your user](https://docs.aws.amazon.com/AWSEC2/latest/UserGuide/iam-roles-for-amazon-ec2.html):
+6. To run in `nano` mode, you also need to [add the following credentials to your user](https://docs.aws.amazon.com/AWSEC2/latest/UserGuide/iam-roles-for-amazon-ec2.html) (maybe):
 - iam:PassRole
 - ec2:AssociateIamInstanceProfile
 - ec2:ReplaceIamInstanceProfileAssociation
@@ -101,7 +101,7 @@ config = {
     'project'      : 'test' ,                             # this will be concatenated with the instance hashes (if not None) 
     'dev'          : False ,                              # When True, this will ensure the same instance and dev environement are being used (while working on building up the project) 
     'debug'        : 1 ,                                  # debug level (0...3)
-    'maestro'      : 'local' ,                            # where the 'maestro' resides: local' | 'remote' (nano instance) | 'lambda'
+    'maestro'      : 'local' ,                            # where the 'maestro' resides: local' | 'remote' (micro instance)
     'provider'     : 'aws' ,                              # the provider name ('aws' | 'azure' | ...)
     'job_assign'   : None ,                               # algorithm used for job assignation / task scheduling ('random' | 'multi_knapsack')
     'recover'      : True ,                               # if True, CloudRun will always save the state and try to recover this state on the next execution
@@ -166,6 +166,7 @@ config = {
             'upload_files' : [ "uploaded.txt"] ,          # any file to upload (array or string) - will be put in the same directory
             'input_file'   : 'input.dat' ,                # the input file name (used by the script)
             'output_file'  : 'output.dat' ,               # the output file name (used by the script)
+            'repeat'       : 2 ,                          # the number of times this job is repeated
         } ,
         {
             'env_name'     : None ,                       # the environment to use (can be 'None' if solely one environment is provided above)
@@ -183,10 +184,6 @@ config = {
 # Python API
 
 ```python
-class CloudRunError(Exception):
-    pass
-
-
 class CloudRunProcessState(IntFlag):
     UNKNOWN   = 0
     WAIT      = 1  # waiting for bootstraping
@@ -197,25 +194,37 @@ class CloudRunProcessState(IntFlag):
     ABORTED   = 32 # script has been aborted
     ANY       = 32 + 16 + 8 + 4 + 2 + 1 
 
-class CloudRunProvider(ABC):
+class CLoudRunLightProvider(ABC):
+class CloudRunFatProvider(ABC):
 
     def debug(self,level,*args,**kwargs):
 
-    def wakeup(self)
-
+    # start the provider: creates the instances
     def start(self):
 
+    # assign jobs to instances
     def assign(self):
 
+    # deploy all materials (environments, files, scripts etc.)
     def deploy(self):
 
+    # run the jobs
     def run(self,wait=False):
 
+    # run one job
     def run_job(self,job,wait=False):
 
+    # watch the processes (= wait + revive instances when terminated)
+    def watch(self,processes=None):
+
+    # wait for the processes to reach a state
     def wait_for_jobs_state(self,job_state,processes=None):
 
+    # get the states of the processes
     def get_jobs_states(self,processes=None):
+
+    # wakeup = start + assign + deploy + run + watch
+    def wakeup(self)
 
     @abstractmethod
     def get_user_region(self):
@@ -284,75 +293,6 @@ class CloudRunInstance():
     def is_invalid(self):
 
     def update_from_instance(self,instance):
-
-class CloudRunEnvironment():
-
-    def get_name(self):
-
-    def get_path(self):
-
-    def deploy(self,instance):
-
-class CloudRunDeployedEnvironment(CloudRunEnvironment):
-
-    def get_path_abs(self):
-
-    def get_instance(self):
-
-    def json(self):
-
-class CloudRunJob():
-
-    def attach_env(self,env):
-
-    def get_hash(self):
-
-    def get_config(self,key,defaultVal=None):
-
-    def get_env(self):
-
-    def get_instance(self):
-
-    def deploy(self,dpl_env):
-
-    def set_instance(self,instance):
-
-class CloudRunDeployedJob(CloudRunJob):
-
-    def attach_process(self,process):
-
-    def get_path(self):
-
-    def get_command(self):
-
-    def attach_env(self,env):
-
-    def get_hash(self):
-
-    def get_config(self,key,defaultVal=None):
-
-    def get_env(self):
-
-    def get_instance(self):
-
-    def deploy(self,dpl_env):
-
-    def set_instance(self,instance):
-
-
-class CloudRunProcess():
-
-    def get_uid(self):
-
-    def get_pid(self):
-
-    def get_state(self):
-     
-    def set_state(self,value):
-
-    def set_pid(self,value):
-
-    def get_job(self):
 
 # GLOBAL methods 
 

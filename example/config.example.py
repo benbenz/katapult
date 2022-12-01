@@ -71,6 +71,7 @@ config = {
             'upload_files' : [ "uploaded.txt"] ,  # any file to upload (array or string) - will be put in the same directory
             'input_file'   : 'input.dat' ,                # the input file name (used by the script)
             'output_file'  : 'output.dat' ,               # the output file name (used by the script)
+            'repeat'       : 2                            # the number of times this job can be repeated
         } ,
         {
             'env_name'     : None ,                       # the environment to use (can be 'None' if solely one environment is provided above)

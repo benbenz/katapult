@@ -105,6 +105,12 @@ class ConfigManager():
                             real_inst_cfg['dev']  = self._config.get('dev',False)
                             real_inst_cfg['project']  = self._config.get('project',None)
 
+                            # let's also freeze the region
+                            # this is done so that we dont change the hash when sending the config to maestro
+                            # (because the client adds the 'region' field when translating the config)
+                            if not real_inst_cfg.get('region'):
+                                real_inst_cfg['region'] = self._provider.get_user_region()
+
                             # let's put some dummy instances for now ...
                             instance = CloudRunInstance( real_inst_cfg , None, None )
                             self._instances.append( instance )
@@ -123,9 +129,12 @@ class ConfigManager():
 
         #self._jobs = [ ] 
         if job_cfgs:
+            rank=0
             for i,job_cfg in enumerate(job_cfgs):
-                job = CloudRunJob(job_cfg,i)
-                self._jobs.append(job)
+                for j in range(job_cfg.get('repeat',1)):
+                    job = CloudRunJob(job_cfg,rank)
+                    self._jobs.append(job)
+                    rank = rank + 1
 
     # fill up the jobs names if not present (and we have only 1 environment defined)
     # link the jobs objects with an environment object
