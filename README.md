@@ -27,11 +27,13 @@ In order to use the python AWS client (Boto3), you need to have an existing AWS 
 aws configure
 ```
 See [https://docs.aws.amazon.com/cli/latest/userguide/cli-configure-quickstart.html](here)
-[//]: # 6. To run in `nano` mode, you also need to [add the following credentials to your user](https://docs.aws.amazon.com/AWSEC2/latest/UserGuide/iam-roles-for-amazon-ec2.html) (maybe):
-[//]: # - iam:PassRole
-[//]: # - ec2:AssociateIamInstanceProfile
-[//]: # - ec2:ReplaceIamInstanceProfileAssociation
 
+<!--
+6. To run in `nano` mode, you also need to [add the following credentials to your user](https://docs.aws.amazon.com/AWSEC2/latest/UserGuide/iam-roles-for-amazon-ec2.html) (maybe):
+- iam:PassRole
+- ec2:AssociateIamInstanceProfile
+- ec2:ReplaceIamInstanceProfileAssociation
+-->
 
 ## manually
 
@@ -65,9 +67,9 @@ aws_secret_access_key = YOUR_SECRET_ACCESS_KEY
 ### Step 1
 ![add user 1](./images/adduser1.jpg)
 ### Step 2
-![add user 2](./images/adduser1.jpg)
+![add user 2](./images/adduser2.jpg)
 ### ... Step 5
-![add user 3](./images/adduser1.jpg)
+![add user 3](./images/adduser3.jpg)
 COPY the Access Key info !
 
 3. Add your new user profile manually, [in the credentials file](https://docs.aws.amazon.com/cli/latest/userguide/cli-configure-profiles.html)
