@@ -5,6 +5,7 @@ config = {
     ################################################################################
 
     'project'      : 'test' ,                             # this will be concatenated with the instance (if not None) 
+    'profile'      : None ,                               # if you want to use a specific profile (user/region), specify its name here
     'dev'          : False ,                              # When True, this will ensure the same instance and dev environement are being used (while working on building up the project) 
     'debug'        : 1 ,                                  # debug level (0...3)
     'maestro'      : 'local' ,                            # where the 'maestro' resides: local' | 'remote' (nano instance) | 'lambda'
