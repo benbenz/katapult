@@ -34,13 +34,17 @@ class CloudRunLightProvider(CloudRunProvider,ABC):
             else:
                 img_id   = self._config.get('instances')[0].get('img_id')
                 img_user = self._config.get('instances')[0].get('img_username')
+                region   = self._config.get('instances')[0].get('region')
+                if not region:
+                    region = self.get_user_region(self._config.get('profile'))
                 maestro_cfg = { 
                     'maestro'      : True ,
                     'img_id'       : img_id ,
                     'img_username' : img_user ,                 
                     'type'         : 't2.micro' ,  # nano: pip gets killed :/
                     'dev'          : self._config.get('dev',False) ,
-                    'project'      : self._config.get('project',None)
+                    'project'      : self._config.get('project',None) ,
+                    'region'       : region
                 }
                 self._maestro = CloudRunInstance(maestro_cfg,None)
 
@@ -103,7 +107,7 @@ class CloudRunLightProvider(CloudRunProvider,ABC):
         self._run_ssh_commands(ssh_client,commands) 
         
         filesOfDirectory = os.listdir('.')
-        pattern = "cloudrun-*.pem"
+        pattern = "cloudrun*.pem"
         for file in filesOfDirectory:
             if fnmatch.fnmatch(file, pattern):
                 ftp_client.put(os.path.abspath(file),os.path.basename(file))

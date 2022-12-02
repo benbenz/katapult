@@ -1,5 +1,5 @@
 import boto3
-import os
+import os , sys
 from .utils import *
 from cloudrun.core     import CloudRunError , CloudRunInstance , CloudRunInstanceState 
 from cloudrun.core     import cr_keypairName , cr_secGroupName , cr_secGroupNameMaestro , cr_bucketName , cr_vpcName , cr_maestroRoleName , cr_maestroProfileName, cr_maestroPolicyName , init_instance_name
@@ -51,7 +51,8 @@ def aws_create_keypair(region):
                     # get the default user region so we know what were getting ... (if it changes later etc... could be a mess)
                     my_session = boto3.session.Session()
                     region = my_session.region_name                
-                fpath = "cloudrun-"+str(region)+".pem"
+                #fpath = "cloudrun-"+str(region)+".pem"
+                fpath = "cloudrun.pem"
                 pemfile = open(fpath, "w")
                 pemfile.write(keypair['KeyMaterial']) # save the private key in the directory (we will use it with paramiko)
                 pemfile.close()

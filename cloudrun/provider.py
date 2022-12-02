@@ -186,7 +186,7 @@ class CloudRunProvider(ABC):
 
         self.debug(2,instance)     
 
-    def hard_reset_instance(instance):
+    def hard_reset_instance(self,instance):
         self.terminate_instance(instance)
         try :
             self._start_and_update_instance(instance)
@@ -198,7 +198,8 @@ class CloudRunProvider(ABC):
         region = instance.get_region()
         if region is None:
             region = self.get_user_region(self._config.get('profile'))
-        k = paramiko.RSAKey.from_private_key_file('cloudrun-'+str(region)+'.pem')
+        #k = paramiko.RSAKey.from_private_key_file('cloudrun-'+str(region)+'.pem')
+        k = paramiko.RSAKey.from_private_key_file('cloudrun.pem')
         ssh_client = paramiko.SSHClient()
         ssh_client.set_missing_host_key_policy(paramiko.AutoAddPolicy())
         self.debug(1,"connecting to ",instance.get_dns_addr(),"/",instance.get_ip_addr())

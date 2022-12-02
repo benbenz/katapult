@@ -105,6 +105,8 @@
   - [ ] handle when we stop an instance while its still deploying / waiting ... 
   - [ ] debug why successive runs locks
   - [x] debug why remote mode prints nothing with state recovery ON
+  - [ ] handle KeyPair better: append the owner ID to the file name so that we can switch profile without deleting and terminating stuff 
+  - [ ] handle when the KeyPair is not found on file better ...
 
 4) local mode:
   - [x] handle new config 

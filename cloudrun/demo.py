@@ -17,7 +17,7 @@ async def mainloop(cr_client):
 
     # distribute the jobs on the instances (dummy algo for now)
     #cr_client.start(True) # True for reset (usually not necessary - usually for dev purposes)
-    cr_client.start(True) 
+    cr_client.start() 
 
     print("\n== ALLOCATE JOBS ==\n")
 
