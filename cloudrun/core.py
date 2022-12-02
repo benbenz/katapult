@@ -96,14 +96,14 @@ class CloudRunInstance():
     def get_cpus(self):
         return self._config.get('cpus')
 
+    def get_state(self):
+        return self._state
+
     def set_ip_addr(self,value):
         self._ip_addr = value
 
     def set_ip_addr_priv(self,value):
         self._ip_addr_priv = value
-
-    def get_state(self):
-        return self._state
 
     def set_dns_addr(self,value):
         self._dns_addr = value

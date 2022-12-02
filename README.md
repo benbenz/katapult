@@ -201,7 +201,8 @@ class CloudRunFatProvider(ABC):
     def debug(self,level,*args,**kwargs):
 
     # start the provider: creates the instances
-    def start(self):
+    # if reset = True, CloudRun forces a process cleanup as well as more re-uploads
+    def start(self,reset):
 
     # assign jobs to instances
     def assign(self):
@@ -267,14 +268,22 @@ class CloudRunInstance():
 
     def get_dns_addr(self):
 
-    def get_cpus(self):
+    def get_ip_addr_priv(self):
 
-    def set_ip_addr(self,value):
+    def get_dns_addr_priv(self):
+
+    def get_cpus(self):
 
     def get_state(self):
 
+    def set_ip_addr(self,value):
+
     def set_dns_addr(self,value):
      
+    def set_ip_addr_priv(self,value):
+
+    def set_dns_addr_priv(self,value):
+
     def set_state(self,value):
 
     def set_invalid(self,value):
