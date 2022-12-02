@@ -1176,6 +1176,8 @@ class CloudRunFatProvider(CloudRunProvider,ABC):
         self._state = CloudRunProviderState.WATCHING
         self.serialize_state()
 
+        self.debug(1,"Watching ...")
+
         return self.__get_or_wait_jobs_state(processes,CloudRunProviderStateWaitMode.WAIT|CloudRunProviderStateWaitMode.WATCH,job_state,daemon)
 
 

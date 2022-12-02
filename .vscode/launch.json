@@ -13,6 +13,15 @@
             "cwd": "${workspaceFolder}"
         },
         {
+            "name": "Demo Wait",
+            "type": "python",
+            "request": "launch",
+            "program": "${workspaceFolder}/cloudrun/demo.py",
+            "console": "integratedTerminal",
+            "cwd": "${workspaceFolder}",
+            "args": ["wait"]
+        },
+        {
             "name": "Maestro Server",
             "type": "python",
             "request": "launch",

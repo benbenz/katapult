@@ -16,7 +16,8 @@ async def mainloop(cr_client):
     print("\n== START ==\n")
 
     # distribute the jobs on the instances (dummy algo for now)
-    cr_client.start(True) # True for reset (usually not necessary - only for demo purposes)
+    #cr_client.start(True) # True for reset (usually not necessary - usually for dev purposes)
+    cr_client.start() 
 
     print("\n== ALLOCATE JOBS ==\n")
 
@@ -66,9 +67,13 @@ async def mainloop(cr_client):
 
 async def waitloop(cr_client):
 
+    print("\n== START ==\n")
+
+    cr_client.start()
+
     print("\n== WAIT ==\n")
     
-    cr_client.wait()
+    cr_client.wait_for_jobs_state(CloudRunProcessState.DONE|CloudRunProcessState.ABORTED)
 
     #rint("Waiting for DONE or ABORTED ...")
     #processes = cr_client.wait_for_jobs_state(CloudRunProcessState.DONE|CloudRunProcessState.ABORTED)

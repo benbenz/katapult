@@ -77,6 +77,9 @@ class CloudRunLightProvider(CloudRunProvider,ABC):
         # start the server (if not already started)
         self._run_server(ssh_client)
 
+        # wait for maestro to have started
+        self._wait_for_maestro()
+
         #time.sleep(30)
 
         ftp_client.close()
@@ -259,6 +262,20 @@ class CloudRunLightProvider(CloudRunProvider,ABC):
         # with open('C:/1.zip', 'wb') as f:
         #     f.write(zip_buffer.getvalue())            
         return zip_buffer
+
+    def _wait_for_maestro(self):
+        if self.ssh_client is None:
+            instanceid , self.ssh_client , self.ftp_client = self._wait_and_connect(self._maestro)
+        
+        cmd = "$HOME/cloudrun/cloudrun/resources/remote_files/waitmaestro.sh 1" # 1 = with tail log
+
+        stdin , stdout , stderr = self._exec_command(self.ssh_client,cmd)      
+
+        for l in line_buffered(stdout):
+            if not l:
+                break
+            self.debug(1,l,end='')
+
 
     def _exec_maestro_command(self,maestro_command):
         if self.ssh_client is None:

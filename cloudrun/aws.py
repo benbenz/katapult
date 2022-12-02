@@ -513,7 +513,7 @@ def aws_reboot_instance(instance):
 
     ec2_client = boto3.client("ec2", config=aws_get_config(instance.get_region()))
 
-    ec2_client.reboot_instances(InstanceIds=[instance.get_id()])
+    ec2_client.reboot_instances(InstanceIds=[instance.get_id()],)
 
 
 def aws_update_instance_info(instance):
