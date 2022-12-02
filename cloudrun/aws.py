@@ -703,10 +703,16 @@ class AWSCloudRunFatProvider(CloudRunFatProvider):
     def update_instance_info(self,instance):
         aws_update_instance_info(instance)
 
-    def get_user_region(self):
-        my_session = boto3.session.Session()
+    def get_user_region(self,profile_name):
+        if profile_name:
+            my_session = boto3.session.Session(profile_name=profile_name)
+        else:
+            my_session = boto3.session.Session()
         region = my_session.region_name     
         return region  
+
+    def set_profile(self,profile_name):
+        boto3.setup_default_session(profile_name=profile_name)
 
     def get_recommended_cpus(self,inst_cfg):
         return self._get_instancetypes_attribute(inst_cfg,"instancetypes-aws.csv","Instance type","Valid cores",list)
@@ -747,7 +753,13 @@ class AWSCloudRunLightProvider(CloudRunLightProvider):
     def add_maestro_security_group(self,instance):
         aws_add_maestro_security_group(instance)
 
-    def get_user_region(self):
-        my_session = boto3.session.Session()
+    def get_user_region(self,profile_name):
+        if profile_name:
+            my_session = boto3.session.Session(profile_name=profile_name)
+        else:
+            my_session = boto3.session.Session()
         region = my_session.region_name     
         return region  
+
+    def set_profile(self,profile_name):
+        boto3.setup_default_session(profile_name=profile_name)

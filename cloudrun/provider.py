@@ -42,6 +42,9 @@ class CloudRunProvider(ABC):
 
         self._config  = conf
 
+        if self._config.get('profile'):
+            self.set_profile(self._config.get('profile'))
+
     def debug_set_prefix(self,value):
         self.DBG_PREFIX = value
         global DBG_PREFIX
@@ -194,7 +197,7 @@ class CloudRunProvider(ABC):
         # ssh into instance and run the script from S3/local? (or sftp)
         region = instance.get_region()
         if region is None:
-            region = self.get_user_region()
+            region = self.get_user_region(self._config.get('profile'))
         k = paramiko.RSAKey.from_private_key_file('cloudrun-'+str(region)+'.pem')
         ssh_client = paramiko.SSHClient()
         ssh_client.set_missing_host_key_policy(paramiko.AutoAddPolicy())
@@ -341,7 +344,11 @@ class CloudRunProvider(ABC):
         return pkg_resources.resource_stream(resource_package, resource_path)    
 
     @abstractmethod
-    def get_user_region(self):
+    def get_user_region(self,profile_name):
+        pass
+
+    @abstractmethod
+    def set_profile(self,profile_name):
         pass
 
     @abstractmethod

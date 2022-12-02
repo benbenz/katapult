@@ -27,17 +27,17 @@ In order to use the python AWS client (Boto3), you need to have an existing AWS 
 aws configure
 ```
 See [https://docs.aws.amazon.com/cli/latest/userguide/cli-configure-quickstart.html](here)
-6. To run in `nano` mode, you also need to [add the following credentials to your user](https://docs.aws.amazon.com/AWSEC2/latest/UserGuide/iam-roles-for-amazon-ec2.html) (maybe):
-- iam:PassRole
-- ec2:AssociateIamInstanceProfile
-- ec2:ReplaceIamInstanceProfileAssociation
+[//]: # 6. To run in `nano` mode, you also need to [add the following credentials to your user](https://docs.aws.amazon.com/AWSEC2/latest/UserGuide/iam-roles-for-amazon-ec2.html) (maybe):
+[//]: # - iam:PassRole
+[//]: # - ec2:AssociateIamInstanceProfile
+[//]: # - ec2:ReplaceIamInstanceProfileAssociation
 
 
 ## manually
 
 1. Go to [the AWS Signup page](https://portal.aws.amazon.com/billing/signup#/start/email) and create an account
 2. In the AWS web console, [create a user with administrator privilege](https://docs.aws.amazon.com/streams/latest/dev/setting-up.html)
-3. In the AWS web console, under the AMI section, click on the new user and make sure you create an access key under the tab "Security Credentials". Make sure "Console Password" is Enabled as well
+3. In the AWS web console, under the IAM section, click on the new user and make sure you create an access key under the tab "Security Credentials". Make sure "Console Password" is Enabled as well
 4. Add your new user credentials manually, [in the credentials file](https://docs.aws.amazon.com/cli/latest/userguide/cli-configure-profiles.html)
 
 ##### '~/.aws/config' example
@@ -55,6 +55,61 @@ output = json
 aws_access_key_id = YOUR_ACCESS_KEY_ID
 aws_secret_access_key = YOUR_SECRET_ACCESS_KEY
 ```
+
+# Setting up a separate user with least permissions
+
+## manually
+
+1. In the AWS web console, in the IAM service, create a group 'cloudrun-users' with 'AmazonEC2FullAccess' permissions
+2. In the AWS web console, in the IAM service, create a user USERNAME attached to the 'cloudrun-users' group:
+### Step 1
+![add user 1](./images/adduser1.jpg)
+### Step 2
+![add user 2](./images/adduser1.jpg)
+### ... Step 5
+![add user 3](./images/adduser1.jpg)
+COPY the Access Key info !
+
+3. Add your new user profile manually, [in the credentials file](https://docs.aws.amazon.com/cli/latest/userguide/cli-configure-profiles.html)
+
+##### '~/.aws/config' example
+
+```
+[default]
+region = eu-west-3
+output = json
+
+[profile cloudrun_USERNAME]
+region = eu-west-3
+output = json
+```
+
+##### '~/.aws/credentials' example
+
+```
+[default]
+aws_access_key_id = YOUR_ACCESS_KEY_ID
+aws_secret_access_key = YOUR_SECRET_ACCESS_KEY
+
+[cloudrun_USERNAME]
+aws_access_key_id = YOU_PROFILE_ACCESS_KEY_ID
+aws_secret_access_key = YOUR_PROFILE_SECRET_ACCESS_KEY
+```
+
+4. add the 'profile' : 'cloudrun_USERNAME' to the configuration
+
+```python
+config = {
+
+    ################################################################################
+    # GLOBALS
+    ################################################################################
+
+    'project'      : 'test' ,                             # this will be concatenated with the instance hashes (if not None) 
+    'profile'      : 'cloudrun_USERNAME' ,
+    ...
+```
+
 
 # Installation
 
@@ -100,6 +155,7 @@ config = {
     ################################################################################
 
     'project'      : 'test' ,                             # this will be concatenated with the instance hashes (if not None) 
+    'profile'      : None
     'dev'          : False ,                              # When True, this will ensure the same instance and dev environement are being used (while working on building up the project) 
     'debug'        : 1 ,                                  # debug level (0...3)
     'maestro'      : 'local' ,                            # where the 'maestro' resides: local' | 'remote' (micro instance)
@@ -231,7 +287,7 @@ class CloudRunFatProvider(ABC):
     def wakeup(self)
 
     @abstractmethod
-    def get_user_region(self):
+    def get_user_region(self,profile_name):
 
     @abstractmethod
     def get_recommended_cpus(self,inst_cfg):

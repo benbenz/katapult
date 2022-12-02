@@ -152,12 +152,12 @@ class CloudRunLightProvider(CloudRunProvider,ABC):
 
         config['maestro'] = 'local' # the config is for maestro, which needs to run local
 
-        config['region'] = self.get_user_region()
+        config['region'] = self.get_user_region(self._config.get('profile'))
 
         for i , inst_cfg in enumerate(config.get('instances')):
             # we need to freeze the region within each instance config ...
             if not config['instances'][i].get('region'):
-                config['instances'][i]['region'] = self.get_user_region()
+                config['instances'][i]['region'] = self.get_user_region(self._config.get('profile'))
 
         for i , env_cfg in enumerate(config.get('environments')):
             # Note: we are using a simple CloudRunEnvironment here 
