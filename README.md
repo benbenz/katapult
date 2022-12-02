@@ -139,12 +139,6 @@ cp example/config.example.py config.py
 python3 -m cloudrun.demo 
 # OR
 poetry run demo
-
-# to retrieve state
-# python3 cli.py getstate SCRIPT_HASH UID
-
-# to wait for DONE state
-# python3 cli.py wait SCRIPT_HASH UID
 ```
 
 # Configuration example
