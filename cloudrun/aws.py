@@ -552,9 +552,11 @@ def aws_update_instance_info(instance):
 
 def aws_grant_admin_rights(instance,region=None):
 
-    iam_client = boto3.client('iam')
-    id_client  = boto3.client("sts")
-    ec2_client = boto3.client("ec2")
+    region = instance.get_region()
+    iam_client = boto3.client('iam', config=aws_get_config(region))
+    id_client  = boto3.client("sts", config=aws_get_config(region))
+    ec2_client = boto3.client("ec2", config=aws_get_config(region))
+    
     session    = boto3.session.Session()
 
     account_id = id_client.get_caller_identity()["Account"]
