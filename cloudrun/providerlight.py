@@ -60,6 +60,12 @@ class CloudRunLightProvider(CloudRunProvider,ABC):
             self._exec_command(ssh_client,'rm -f $HOME/cloudrun/ready')
             # make cloudrun dir
             self._exec_command(ssh_client,'mkdir -p $HOME/cloudrun/files') 
+            # add manually the 
+            if self._config.get('profile'):
+                profile = self._config.get('profile')
+                region  = self.get_user_region(profile)
+                aws_config_cmd = "echo \"[profile "+profile+"]\nregion = " + region + "\noutput = json\" > ~/.aws/config"
+                self._exec_command(ssh_client,aws_config_cmd)
             # grant its admin rights (we need to be (stopped or) running to be able to do that)
             self.grant_admin_rights(self._maestro)
             # deploy CloudRun on the maestro

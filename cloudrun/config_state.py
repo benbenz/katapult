@@ -1,7 +1,7 @@
 
 import copy
 import sys
-import os
+import os , signal
 import json
 import pickle
 import math
@@ -161,7 +161,9 @@ class ConfigManager():
                     job.attach_env(env)
 
     def _sanity_checks(self):
-        pass
+        if len(self._instances) > 10:
+            self._provider.debug(1,"\033[91mWATCH OUT ! You are creating more than 10 instances - not allowed for now!\033[0m")
+            raise Exception()
 
     def _get_environment(self,name):
         for env in self._environments:

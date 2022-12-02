@@ -28,12 +28,11 @@ aws configure
 ```
 See [https://docs.aws.amazon.com/cli/latest/userguide/cli-configure-quickstart.html](here)
 
-<!--
 6. To run in `nano` mode, you also need to [add the following credentials to your user](https://docs.aws.amazon.com/AWSEC2/latest/UserGuide/iam-roles-for-amazon-ec2.html) (maybe):
 - iam:PassRole
+- iam:CreateRole
 - ec2:AssociateIamInstanceProfile
 - ec2:ReplaceIamInstanceProfileAssociation
--->
 
 ## manually
 
@@ -61,7 +60,7 @@ aws_secret_access_key = YOUR_SECRET_ACCESS_KEY
 # Setting up a separate user with least permissions 
 #### (manually) 
 
-1. In the AWS web console, in the IAM service, create a group 'cloudrun-users' with 'AmazonEC2FullAccess' permissions
+1. In the AWS web console, in the IAM service, create a group 'cloudrun-users' with 'AmazonEC2FullAccess' and 'IAMFullAccess' permissions
 2. In the AWS web console, in the IAM service, create a user USERNAME attached to the 'cloudrun-users' group:
 ### Step 1
 ![add user 1](./images/adduser1.jpg)
