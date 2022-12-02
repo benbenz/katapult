@@ -140,7 +140,7 @@ class CloudRunFatProvider(CloudRunProvider,ABC):
             # change dir to global dir (should be done once)
             global_path = "/home/" + instance.get_config('img_username') + '/run/'
             ftp_client.chdir(global_path)
-            for file in ['config.py','bootstrap.sh','run.sh','microrun.sh','state.sh','tail.sh','getpid.sh']:
+            for file in ['config.py','bootstrap.sh','run.sh','microrun.sh','state.sh','tail.sh','getpid.sh','reset.sh']:
                 ftp_client.putfo(self._get_resource_file('remote_files/'+file),file)    
 
             self.debug(1,"Installing PyYAML for newly created instance ...")
@@ -417,16 +417,35 @@ class CloudRunFatProvider(CloudRunProvider,ABC):
             
             attempts = attempts + 1
 
-    def start(self):
+    def start(self,reset=False):
         self._instances_states = dict() 
         with concurrent.futures.ThreadPoolExecutor(max_workers=self._get_num_workers()) as pool:
             future_to_instance = { pool.submit(self._start_and_update_instance,instance) : instance for instance in self._instances }
             for future in concurrent.futures.as_completed(future_to_instance):
                 inst = future_to_instance[future]
+                if reset:
+                    self.reset_instance(inst)
                 if inst.is_invalid():
                     self.debug(1,"ERROR: Your configuration is causing an instance to not be created. Please fix.",inst.get_config_DIRTY(),color=bcolors.FAIL)
                     sys.exit()
         self._state = CloudRunProviderState.STARTED
+
+    def reset_instance(self,instance):
+        self.debug(1,'RESETTING instance',instance.get_name())
+        instanceid, ssh_client , ftp_client = self._wait_and_connect(instance)
+        if ssh_client is not None:
+            ftp_client.putfo(self._get_resource_file('remote_files/reset.sh'),'reset.sh') 
+            commands = [
+                { 'cmd' : 'chmod +x $HOME/reset.sh && $HOME/reset.sh' , 'out' : True }
+            ]
+            self._run_ssh_commands(ssh_client,commands)
+            ftp_client.close()
+            ssh_client.close()
+        self.debug(1,'RESETTING done')    
+
+    def hard_reset_instance(instance):        
+        super().hard_reset_instance(instance)
+        self._deploy_all(instance)
 
     # GREAT summary
     # https://www.integralist.co.uk/posts/python-asyncio/
@@ -888,7 +907,7 @@ class CloudRunFatProvider(CloudRunProvider,ABC):
 
         # this is an Internet error
         if instance.get_state() == CloudRunInstanceState.RUNNING:
-            ssh_client = self._connect_to_instance(instance,timeout=60)
+            ssh_client = self._connect_to_instance(instance)
             if ssh_client is None:
                 self.debug(1,"FATAL ERROR(0):",msgs,instance,color=bcolors.FAIL)
                 return None , None
@@ -906,7 +925,7 @@ class CloudRunFatProvider(CloudRunProvider,ABC):
         rerun_jobs = processes is not None
         if wait_mode & CloudRunProviderStateWaitMode.WATCH:
             processes = self.revive(instance,rerun_jobs)
-        ssh_client = self._connect_to_instance(instance,timeout=60)
+        ssh_client = self._connect_to_instance(instance)
         if ssh_client is None:
             self.debug(1,"FATAL ERROR(1):",msgs,instance,color=bcolors.FAIL)
         return ssh_client , processes #processes_info , jobsinfo
@@ -941,7 +960,7 @@ class CloudRunFatProvider(CloudRunProvider,ABC):
         
         jobsinfo , instance = self._compute_jobs_info(processes_infos)
 
-        ssh_client = self._connect_to_instance(instance,timeout=120)
+        ssh_client = self._connect_to_instance(instance)
 
         if ssh_client is None:
             ssh_client , processes = self._handle_instance_disconnect(instance,wait_mode,"could not get jobs states for instance",

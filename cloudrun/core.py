@@ -6,6 +6,7 @@ import copy
 
 cr_keypairName         = 'cloudrun-keypair'
 cr_secGroupName        = 'cloudrun-sec-group-allow-ssh'
+cr_secGroupNameMaestro = 'cloudrun-sec-group-allow-maestro'
 cr_bucketName          = 'cloudrun-bucket'
 cr_vpcName             = 'cloudrun-vpc'
 cr_instanceNameRoot    = 'cloudrun-instance'
@@ -53,6 +54,8 @@ class CloudRunInstance():
         # IP / DNS
         self._ip_addr  = None
         self._dns_addr = None
+        self._ip_addr_priv = None
+        self._dns_addr_priv = None
         # state
         self._state    = CloudRunProcessState.UNKNOWN
         # the config the instance has been created on
@@ -84,11 +87,20 @@ class CloudRunInstance():
     def get_dns_addr(self):
         return self._dns_addr 
 
+    def get_ip_addr_priv(self):
+        return self._ip_addr_priv
+
+    def get_dns_addr_priv(self):
+        return self._dns_addr_priv
+
     def get_cpus(self):
         return self._config.get('cpus')
 
     def set_ip_addr(self,value):
         self._ip_addr = value
+
+    def set_ip_addr_priv(self,value):
+        self._ip_addr_priv = value
 
     def get_state(self):
         return self._state
@@ -96,6 +108,9 @@ class CloudRunInstance():
     def set_dns_addr(self,value):
         self._dns_addr = value
      
+    def set_dns_addr_priv(self,value):
+        self._dns_addr_priv = value
+
     def set_state(self,value):
         self._state = value 
 
@@ -142,6 +157,8 @@ class CloudRunInstance():
         self._rank     = instance._rank
         self._ip_addr  = instance._ip_addr
         self._dns_addr = instance._dns_addr
+        self._ip_addr_priv  = instance._ip_addr_priv
+        self._dns_addr_priv = instance._dns_addr_priv
         self._state    = instance._state
         self._config   = copy.deepcopy(instance._config)
         self._data     = copy.deepcopy(instance._data)        

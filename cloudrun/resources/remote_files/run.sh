@@ -34,8 +34,8 @@ do
   if [[ $(ps aux | grep "bootstrap.sh" | grep "$env_name" | grep -v 'grep') ]]; then
     echo "Waiting on environment to be bootstraped"
     sleep 15 # sleep 15 seconds
-    waittime=waittime+15
-    if [$waittime>3600]; then
+    ((waittime=waittime+15))
+    if [ $waittime -gt 3600 ]; then
       echo "Waited too long for bootstraped environment\nexiting"
       exit 99
     fi

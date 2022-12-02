@@ -8,10 +8,10 @@ from io import StringIO , TextIOWrapper
 from multiprocessing import Process, Queue
 from threading import Thread
 
-HOST = '127.0.0.1' 
+HOST = 'localhost' #'0.0.0.0' #127.0.0.1' 
 PORT = 5000
 
-def process_command(cr_client,command,conn):
+def process_command(cr_client,command,args,conn):
 
     io_pipe    = conn.makefile('rw',buffering=1) 
     #io_pipe    = TextIOWrapper(conn.makefile('rw',buffering=1), write_through=True)
@@ -24,8 +24,10 @@ def process_command(cr_client,command,conn):
             cr_client.wakeup()
 
         elif command == 'start':
-
-            cr_client.start()
+            reset = False
+            if args:
+                reset = args[0].strip().lower() == "true"
+            cr_client.start(reset)
 
         elif command == 'allocate' or command == 'assign':
 
@@ -82,13 +84,21 @@ def client_handler(cr_client,conn):
         conn_pipe = conn.makefile(mode='rw')
         while True:
             try:
-                cmd = conn_pipe.readline()
-                if not cmd:
+                cmd_line = conn_pipe.readline()
+                if not cmd_line:
                     break
-                cmd = cmd.strip()
+                cmd_line = cmd_line.strip()
+                cmd_args = cmd_line.split(':')
+                if len(cmd_args)>=2:
+                    cmd  = cmd_args[0].strip()
+                    args = cmd_args[1].split(',')
+                else:
+                    cmd  = cmd_line
+                    args = None
+
                 if cmd == 'watch': # we want to start running the command for ever
                     kill_thread = False
-                process_command(cr_client,cmd,conn)
+                process_command(cr_client,cmd,args,conn)
                 break # one-shot command
             except ConnectionResetError as cre:
                 sys.stdout = old_stdout

@@ -2,7 +2,7 @@ import boto3
 import os
 from .utils import *
 from cloudrun.core     import CloudRunError , CloudRunInstance , CloudRunInstanceState 
-from cloudrun.core     import cr_keypairName , cr_secGroupName , cr_bucketName , cr_vpcName , cr_maestroRoleName , cr_maestroProfileName, cr_maestroPolicyName , init_instance_name
+from cloudrun.core     import cr_keypairName , cr_secGroupName , cr_secGroupNameMaestro , cr_bucketName , cr_vpcName , cr_maestroRoleName , cr_maestroProfileName, cr_maestroPolicyName , init_instance_name
 from cloudrun.provider import debug , bcolors
 from cloudrun.providerfat import CloudRunFatProvider
 from cloudrun.providerlight import CloudRunLightProvider
@@ -171,6 +171,60 @@ def aws_create_security_group(region,vpc):
     debug(2,secGroup) 
 
     return secGroup
+
+def aws_add_maestro_security_group(instance):
+    
+    region = instance.get_region()
+    vpcid  = instance.get_data('VpcId')
+
+    debug(1,"Creating MAESTRO SECURITY GROUP ...")
+    secGroup = None
+    ec2_client = boto3.client("ec2", config=aws_get_config(region))
+
+    secgroups = ec2_client.describe_security_groups(Filters=[
+        {
+            'Name': 'group-name',
+            'Values': [
+                cr_secGroupNameMaestro,
+            ]
+        },
+    ])
+    if len(secgroups['SecurityGroups']) == 0: # we have no security group, lets create one
+        debug(1,"Creating new security group")
+        secGroup = ec2_client.create_security_group(
+            VpcId = vpcid ,
+            Description = 'Allow Maestro Socket connection' ,
+            GroupName = cr_secGroupNameMaestro 
+        )
+
+        data = ec2_client.authorize_security_group_ingress(
+            GroupId=secGroup['GroupId'],
+            IpPermissions=[
+                {'IpProtocol': 'tcp',
+                'FromPort': 5000,
+                'ToPort': 5000,
+                'IpRanges': [{'CidrIp': '0.0.0.0/0'}]}
+            ])
+        debug(3,'Ingress Successfully Set %s' % data)
+
+    else:
+        secGroup = secgroups['SecurityGroups'][0]
+    
+    if secGroup is None:
+        debug(1,"An unknown error occured while creating the security group")
+        #sys.exit()
+        raise CloudRunError()
+    
+    debug(2,secGroup) 
+
+    ec2_objs = boto3.resource('ec2')
+    instance_aws = ec2_objs.Instance(instance.get_id())
+    all_sg_ids = [sg['GroupId'] for sg in instance_aws.security_groups]  # Get a list of ids of all securify groups attached to the instance
+    if secGroup['GroupId'] not in all_sg_ids:                        # Check the SG to be removed is in the list
+       all_sg_ids.append(secGroup['GroupId'])                        # Adds the SG from the list
+       instance_aws.modify_attribute(Groups=all_sg_ids)                  # Attach the remaining SGs to the instance
+
+    return secGroup    
 
 # for now just return the first subnet present in the Vpc ...
 def aws_create_subnet(region,vpc):
@@ -472,6 +526,8 @@ def aws_update_instance_info(instance):
     # proprietary values
     instance.set_dns_addr(instance_new_data.get('PublicDnsName'))
     instance.set_ip_addr(instance_new_data.get('PublicIpAddress'))
+    instance.set_dns_addr_priv(instance_new_data.get('PrivateDnsName'))
+    instance.set_ip_addr_priv(instance_new_data.get('PrivateIpAddress'))
     statestr = instance_new_data.get('State').get('Name').lower()
     #'terminated' | 'shutting-down' | 'pending' | 'running' | 'stopping' | 'stopped'
     state = CloudRunInstanceState.UNKNOWN
@@ -687,6 +743,9 @@ class AWSCloudRunLightProvider(CloudRunLightProvider):
 
     def grant_admin_rights(self,instance):
         aws_grant_admin_rights(instance)   
+
+    def add_maestro_security_group(self,instance):
+        aws_add_maestro_security_group(instance)
 
     def get_user_region(self):
         my_session = boto3.session.Session()

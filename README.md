@@ -236,7 +236,7 @@ class CloudRunFatProvider(ABC):
     def get_recommended_cpus(self,inst_cfg):
 
     @abstractmethod
-    def create_instance_objects(self,config):
+    def create_instance_objects(self,config,for_maestro):
 
     @abstractmethod
     def find_instance(self,config):

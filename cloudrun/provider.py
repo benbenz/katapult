@@ -157,12 +157,8 @@ class CloudRunProvider(ABC):
                     # restart the instance
                     self.start_instance(instance)
                 except CloudRunError:
-                    self.terminate_instance(instance)
-                    try :
-                        #self._get_or_create_instance(instance)
-                        self._start_and_update_instance(instance)
-                    except:
-                        return None
+                    self.hard_reset_instance(instance)
+
 
             elif instanceState == CloudRunInstanceState.RUNNING:
                 lookForState = False
@@ -171,7 +167,7 @@ class CloudRunProvider(ABC):
                 try:
                     self._start_and_update_instance(instance)
                 except:
-                    return None
+                    pass
 
             waitFor = lookForDNS or lookForState  
             if waitFor:
@@ -185,7 +181,14 @@ class CloudRunProvider(ABC):
                  
                 time.sleep(10)
 
-        self.debug(2,instance)            
+        self.debug(2,instance)     
+
+    def hard_reset_instance(instance):
+        self.terminate_instance(instance)
+        try :
+            self._start_and_update_instance(instance)
+        except:
+            pass
 
     def _connect_to_instance(self,instance,**kwargs):
         # ssh into instance and run the script from S3/local? (or sftp)
@@ -212,10 +215,16 @@ class CloudRunProvider(ABC):
                     time.sleep(4)
                     self.debug(1,"Retrying ...")
                     retrys = retrys + 1
-                elif retrys == 5:
+                elif retrys == 5 and instance.get_state() == CloudRunInstanceState.RUNNING:
                     retrys = retrys + 1
                     self.debug(1,"Trying a reboot ...")
                     self.reboot_instance(instance)
+                    time.sleep(4)
+                    self._wait_for_instance(instance)
+                elif retrys == 6 and instance.get_state() == CloudRunInstanceState.RUNNING:
+                    retrys = retrys + 1
+                    self.debug(1,"Trying a hard reset ...")
+                    self.hard_reset_instance(instance)
                     time.sleep(4)
                     self._wait_for_instance(instance)
                 else:
@@ -360,6 +369,10 @@ class CloudRunProvider(ABC):
         pass
 
     @abstractmethod
+    def reset_instance(self,instance):
+        pass
+
+    @abstractmethod
     def update_instance_info(self,instance):
         pass
 
@@ -368,7 +381,7 @@ class CloudRunProvider(ABC):
         pass
 
     @abstractmethod
-    def start(self):
+    def start(self,reset=False):
         pass
 
     @abstractmethod

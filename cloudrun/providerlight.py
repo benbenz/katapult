@@ -8,6 +8,7 @@ import os , fnmatch
 import re
 from os.path import basename
 import pkg_resources
+import time
 
 ####################################
 # Client handling MAESTRO instance #
@@ -22,7 +23,7 @@ class CloudRunLightProvider(CloudRunProvider,ABC):
         self.ssh_client = None
         self.ftp_client = None
 
-        self._install_maestro()
+        #self._install_maestro()
     
     def _load(self):
         self._maestro = None
@@ -43,7 +44,7 @@ class CloudRunLightProvider(CloudRunProvider,ABC):
                 }
                 self._maestro = CloudRunInstance(maestro_cfg,None)
 
-    def _deploy_maestro(self):
+    def _deploy_maestro(self,reset):
         # deploy the maestro ...
         if self._maestro is None:
             self.debug(2,"no MAESTRO object to deploy")
@@ -70,11 +71,13 @@ class CloudRunLightProvider(CloudRunProvider,ABC):
         self._deploy_config(ssh_client,ftp_client)
 
         # let's redeploy the code every time for now ... (if not already done in re_init)
-        if not re_init:
+        if not re_init and reset:
             self._deploy_cloudrun_files(ssh_client,ftp_client)
 
         # start the server (if not already started)
         self._run_server(ssh_client)
+
+        #time.sleep(30)
 
         ftp_client.close()
         ssh_client.close()
@@ -260,69 +263,125 @@ class CloudRunLightProvider(CloudRunProvider,ABC):
     def _exec_maestro_command(self,maestro_command):
         if self.ssh_client is None:
             instanceid , self.ssh_client , self.ftp_client = self._wait_and_connect(self._maestro)
+        
+        private_ip = self._maestro.get_ip_addr_priv()
 
         # -u for no buffering
-        cmd = "cd $HOME/cloudrun && python3 -u -m cloudrun.maestroclient " + maestro_command
+        #cmd = "cd $HOME/cloudrun && $HOME/cloudrun/cloudrun/resources/remote_files/waitmaestro.sh && $HOME/cloudrun/.venv/maestro/bin/python3 -u -m cloudrun.maestroclient " + private_ip + " " + maestro_command
+        cmd = "cd $HOME/cloudrun && $HOME/cloudrun/cloudrun/resources/remote_files/waitmaestro.sh && sudo $HOME/cloudrun/.venv/maestro/bin/python3 -u -m cloudrun.maestroclient " + maestro_command
 
         stdin , stdout , stderr = self._exec_command(self.ssh_client,cmd)
+
         for l in line_buffered(stdout):
             if not l:
                 break
             self.debug(1,l,end='')
+        
+        # while True:
+        #     outlines = stdout.readlines()
+        #     if not outlines:
+        #         errlines = stderr.readlines()
+        #         for eline in errlines:
+        #             self.debug(1,eline,end='')
+        #         break
+        #     for line in outlines:
+        #         self.debug(1,line,end='')
+        #     errlines = stderr.readlines()
+        #     for eline in errlines:
+        #         self.debug(1,eline,end='')
 
-    def _install_maestro(self):
+        # for l in line_buffered(stdout):
+        #     if not l:
+        #         errlines = stderr.readlines()
+        #         for eline in errlines:
+        #             self.debug(1,eline,end='')
+        #         break
+        #     self.debug(1,l,end='')
+        #     errlines = stderr.readlines()
+        #     for eline in errlines:
+        #         self.debug(1,eline,end='')
+
+
+    def _install_maestro(self,reset):
         # this will block for some time the first time...
         self.debug_set_prefix(bcolors.BOLD+'INSTALLING MAESTRO: '+bcolors.ENDC)
         self._instances_states = dict()        
         self._start_and_update_instance(self._maestro)
-        self._deploy_maestro() # deploy the maestro now !
+        if reset:
+            self.reset_instance(self._maestro)
+        self._deploy_maestro(reset) # deploy the maestro now !
         self.debug_set_prefix(None)
 
-    def start(self):
-        # should trigger maestro::start
-        self._exec_maestro_command("start")
+    def start(self,reset=False):
+        # install maestro materials
+        self._install_maestro(reset)
+        # triggers maestro::start
+        self._exec_maestro_command("start:"+str(reset))
+
+    def reset_instance(self,instance):
+        self.debug(1,'RESETTING instance',instance.get_name())
+        instanceid, ssh_client , ftp_client = self._wait_and_connect(instance)
+        if ssh_client is not None:
+            ftp_client.putfo(self._get_resource_file('remote_files/resetmaestro.sh'),'resetmaestro.sh') 
+            commands = [
+               { 'cmd' : 'chmod +x $HOME/resetmaestro.sh && $HOME/resetmaestro.sh' , 'out' : True }
+            ]
+            self._run_ssh_commands(ssh_client,commands)
+            ftp_client.close()
+            ssh_client.close()
+        self.debug(1,'RESETTING done')
 
     def assign(self):
-        # should trigger maestro::assign
+        # triggers maestro::assign
         self._exec_maestro_command("allocate")
 
     def deploy(self):
-        # should trigger maestro::deploy
+        # triggers maestro::deploy
         #self._exec_maestro_command("deploy",self._config.get('print_deploy',False))
         self._exec_maestro_command("deploy") # use output - the deploy part will be skipped depending on option ...
 
     def run(self):
-        # should trigger maestro::run
+        # triggers maestro::run
         self._exec_maestro_command("run")
 
     def watch(self,processes=None,daemon=False):
-        # should trigger maestro::wait_for_jobs_state
+        # triggers maestro::wait_for_jobs_state
         self._exec_maestro_command("watch")
 
     def wakeup(self):
-        # should trigger maestro::wakeup
+        # triggers maestro::wakeup
         self._exec_maestro_command("wakeup")
 
     def wait_for_jobs_state(self,job_state,processes=None):
-        # should trigger maestro::wait_for_jobs_state
+        # triggers maestro::wait_for_jobs_state
         self._exec_maestro_command("wait")
 
     def get_jobs_states(self,processes=None):
-        # should trigger maestro::get_jobs_states
+        # triggers maestro::get_jobs_states
         self._exec_maestro_command("get_states")
 
     def print_jobs_summary(self,instance=None):
-        # should trigger maestro::print_jobs_summary
+        # triggers maestro::print_jobs_summary
         self._exec_maestro_command("print_summary")
 
     def print_aborted_logs(self,instance=None):
-        # should trigger maestro::print_aborted_logs
+        # triggers maestro::print_aborted_logs
         self._exec_maestro_command("print_aborted")
 
+    def _get_or_create_instance(self,instance):
+        instance , created = super()._get_or_create_instance(instance)
+        # dangerous !
+        #self.add_maestro_security_group(instance)
+        return instance , created 
 
     @abstractmethod
     def grant_admin_rights(self,instance):
         pass
+
+    @abstractmethod
+    def add_maestro_security_group(self,instance):
+        pass
+
 
     # needed by CloudRunProvider::_wait_for_instance 
     def serialize_state(self):
