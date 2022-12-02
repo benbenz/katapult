@@ -6,7 +6,7 @@ CloudRun is a Python package that allows you to run any script on a cloud servic
 
 - Easily run scripts on AWS by writing a simple configuration file
 - Handles Python and Julia scripts, or any command
-- Handles PyPi , Conda/Mamba and Apt-get environments
+- Handles PyPi , Conda/Mamba, Apt-get and Julia environments
 - Multithreaded instance support
 - Handles disconnections from instances, including stopped or terminated instances
 - Handles interruption of CloudRun, with state recovery
@@ -58,9 +58,8 @@ aws_access_key_id = YOUR_ACCESS_KEY_ID
 aws_secret_access_key = YOUR_SECRET_ACCESS_KEY
 ```
 
-# Setting up a separate user with least permissions
-
-## manually
+# Setting up a separate user with least permissions 
+### (manually) 
 
 1. In the AWS web console, in the IAM service, create a group 'cloudrun-users' with 'AmazonEC2FullAccess' permissions
 2. In the AWS web console, in the IAM service, create a user USERNAME attached to the 'cloudrun-users' group:
