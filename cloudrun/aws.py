@@ -25,18 +25,16 @@ def aws_get_region(profile_name=None):
     region = my_session.region_name     
     return region  
 
-# def aws_get_user_id(profile_name=None):
-#     raise Exception()
-#     #TODO: fix: take profile_name into account
-#     client = boto3.client("sts")
-#     return client.get_caller_identity()["Account"]        
+def aws_get_account_id(profile_name=None):
+    client = boto3.client("sts")
+    return client.get_caller_identity()["Account"]        
 
-def aws_create_keypair(region,key_filename,force=False):
+def aws_create_keypair(region,keypair_name,key_filename,force=False):
     debug(1,"Creating KEYPAIR ...")
     ec2_client = boto3.client("ec2",config=aws_get_config(region))
     ec2 = boto3.resource('ec2',config=aws_get_config(region))
 
-    keypair_name = cr_keypairName + '-' + region
+    #keypair_name = cr_keypairName + '-' + region
 
     keypair = None
     try:
@@ -338,7 +336,7 @@ def aws_find_instance(instance_config):
         return None 
 
 
-def aws_create_instance(instance_config,vpc,subnet,secGroup):
+def aws_create_instance(instance_config,vpc,subnet,secGroup,keypair_name):
 
     debug(1,"Creating INSTANCE ...")
 
@@ -348,7 +346,7 @@ def aws_create_instance(instance_config,vpc,subnet,secGroup):
 
     ec2_client = boto3.client("ec2", config=aws_get_config(region))
 
-    keypair_name = cr_keypairName + '-' + region
+    #keypair_name = cr_keypairName + '-' + region
 
     existing = ec2_client.describe_instances(
         Filters = [
@@ -484,14 +482,14 @@ def aws_create_instance(instance_config,vpc,subnet,secGroup):
 
     return instance , created
 
-def aws_create_instance_objects(instance_config,key_filename):
+def aws_create_instance_objects(instance_config,keypair_name,key_filename):
     region   = instance_config.get('region')
-    keypair  = aws_create_keypair(region,key_filename)
+    keypair  = aws_create_keypair(region,keypair_name,key_filename)
     vpc      = aws_create_vpc(region,instance_config.get('cloud_id')) 
     secGroup = aws_create_security_group(region,vpc)
     subnet   = aws_create_subnet(region,vpc) 
     # this is where all the instance_config is actually used
-    instance , created = aws_create_instance(instance_config,vpc,subnet,secGroup)
+    instance , created = aws_create_instance(instance_config,vpc,subnet,secGroup,keypair_name)
 
     return instance , created 
 
@@ -585,7 +583,6 @@ def aws_grant_admin_rights(instance):
     #session    = boto3.session.Session()
     #region_flt = session.region_name if not region else region
 
-
     #Following trust relationship policy can be used to provide access to assume this role by a particular AWS service in the same account
     trust_relationship_policy_another_aws_service = {
         "Version": "2012-10-17",
@@ -621,11 +618,11 @@ def aws_grant_admin_rights(instance):
                 "ec2:*"
             ],
             "Resource": "*",
-            "Condition": {
-                # "StringEquals": {
-                #     "ec2:Region": region_flt
-                # }
-            }
+            # "Condition": {
+            #     "StringEquals": {
+            #          "ec2:Region": region_flt
+            #     }
+            # }
         }]
     }
 
@@ -697,7 +694,7 @@ def aws_grant_admin_rights(instance):
         else:
             debug(1,error)
 
-    debug(1,"MAESTRO role added to instance",instance.get_id())
+    debug(1,"MAESTRO role added to instance",instance.get_id(),instance.get_name())
 
 ##########
 # PUBLIC #
@@ -709,11 +706,14 @@ class AWSCloudRunFatProvider(CloudRunFatProvider):
         CloudRunFatProvider.__init__(self,conf)
 
     def create_keypair(self,region,force=False):
+        keypair_name = self.get_keypair_name(self._profile_name,region)
         key_filename = self.get_key_filename(self._profile_name,region)
-        aws_create_keypair(region,key_filename,force)
+        aws_create_keypair(region,keypair_name,key_filename,force)
 
     def create_instance_objects(self,config):
-        return aws_create_instance_objects(config,self.get_key_filename(self._profile_name,config.get('region')))
+        keypair_name = self.get_keypair_name(self._profile_name,config.get('region'))
+        key_filename = self.get_key_filename(self._profile_name,config.get('region'))
+        return aws_create_instance_objects(config,keypair_name,key_filename)
 
     def find_instance(self,config):
         return aws_find_instance(config)
@@ -735,9 +735,9 @@ class AWSCloudRunFatProvider(CloudRunFatProvider):
 
     def get_region(self):
         return aws_get_region(self._profile_name)
-
-    # def get_user_id(self):
-    #     return aws_get_user_id(self._config.get('profile'))
+    
+    def get_account_id(self):
+        return aws_get_account_id(self._profile_name)
 
     def set_profile(self,profile_name):
         boto3.setup_default_session(profile_name=profile_name)
@@ -761,11 +761,14 @@ class AWSCloudRunLightProvider(CloudRunLightProvider):
         aws_update_instance_info(instance)
 
     def create_keypair(self,region,force=False):
+        keypair_name = self.get_keypair_name(self._profile_name,region)
         key_filename = self.get_key_filename(self._profile_name,region)
-        aws_create_keypair(region,key_filename,force)
+        aws_create_keypair(region,keypair_name,key_filename,force)
 
     def create_instance_objects(self,config):
-        return aws_create_instance_objects(config,self.get_key_filename(self._profile_name,config.get('region')))
+        keypair_name = self.get_keypair_name(self._profile_name,config.get('region'))
+        key_filename = self.get_key_filename(self._profile_name,config.get('region'))
+        return aws_create_instance_objects(config,keypair_name,key_filename)
 
     def start_instance(self,instance):
         aws_start_instance(instance)
@@ -788,8 +791,8 @@ class AWSCloudRunLightProvider(CloudRunLightProvider):
     def get_region(self):
         return aws_get_region(self._profile_name)
     
-    # def get_user_id(self):
-    #     return aws_get_user_id(self._config.get('profile'))
+    def get_account_id(self):
+        return aws_get_account_id(self._profile_name)
 
     def set_profile(self,profile_name):
         boto3.setup_default_session(profile_name=profile_name)

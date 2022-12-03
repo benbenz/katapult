@@ -351,11 +351,25 @@ class CloudRunProvider(ABC):
         userid = profile_name
         if not userid:
             userid = 'default'
-        key_filename = 'cloudrun-'+str(userid)+'-'+str(region)+'.pem'
+        #key_filename = 'cloudrun-'+str(userid)+'-'+str(region)+'.pem'
+        #key_filename = 'cloudrun-'+str(region)+'.pem'
+        key_filename = 'cloudrun-'+self.get_account_id()+'-'+str(region)+'.pem'
+        return key_filename
+
+    def get_keypair_name(self,profile_name,region):
+        userid = profile_name
+        if not userid:
+            userid = 'default'
+        #key_filename = cr_keypairName+'-'+str(userid)+'-'+str(region)
+        key_filename = cr_keypairName+'-'+str(region)
         return key_filename
 
     @abstractmethod
     def get_region(self):
+        pass
+
+    @abstractmethod
+    def get_account_id(self):
         pass
 
     # @abstractmethod
