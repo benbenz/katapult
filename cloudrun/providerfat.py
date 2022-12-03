@@ -573,7 +573,8 @@ class CloudRunFatProvider(CloudRunProvider,ABC):
 
             # it is now time to update the old (memory connected) processes 
             # we've retrieved what we needed and we want to new state to be corrected for future prints
-            # this should likely set the states to ABORTED if this is a new instance
+            # this should likely set the states to UNKNOWN if this is a new instance
+            # (note: an ABORTED state will not switch to UNKNOWN state - in order to keep the most information)
             instances_processes = self._organize_instances_processes(last_processes_old)
             processes_infos = instances_processes[instance.get_name()]
             self.__get_jobs_states_internal(processes_infos,CloudRunProviderStateWaitMode.NO_WAIT|CloudRunProviderStateWaitMode.WATCH,CloudRunProcessState.ANY,False,True) # Programmatic >> no print, no serialize
@@ -1029,7 +1030,13 @@ class CloudRunFatProvider(CloudRunProvider,ABC):
                             process.set_pid( int(pid) )
                         try:
                             state = CloudRunProcessState[statestr.upper()]
-                            process.set_state(state)
+                            # let's keep as much history as we know 
+                            # ABORTED state has more info than UNKNOWN ...
+                            # on a new state recovery, the newly created instance is returining UNKNOWN
+                            # but if the maestro witnessed an ABORTED state
+                            # we prefer to keep this ...
+                            if not (process.get_state() == CloudRunProcessState.ABORTED and state == CloudRunProcessState.UNKNOWN):
+                                process.set_state(state)
                             self.debug(2,process)
                             processes_infos[uid]['retrieved'] = True
                             processes_infos[uid]['test']      = job_state & state 
