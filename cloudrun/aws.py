@@ -17,15 +17,31 @@ def aws_get_config(region):
     else:
         return Config(region_name=region)
 
-def aws_create_keypair(region):
+def aws_get_region(profile_name=None):
+    if profile_name:
+        my_session = boto3.session.Session(profile_name=profile_name)
+    else:
+        my_session = boto3.session.Session()
+    region = my_session.region_name     
+    return region  
+
+# def aws_get_user_id(profile_name=None):
+#     raise Exception()
+#     #TODO: fix: take profile_name into account
+#     client = boto3.client("sts")
+#     return client.get_caller_identity()["Account"]        
+
+def aws_create_keypair(region,key_filename,force=False):
     debug(1,"Creating KEYPAIR ...")
     ec2_client = boto3.client("ec2",config=aws_get_config(region))
     ec2 = boto3.resource('ec2',config=aws_get_config(region))
 
+    keypair_name = cr_keypairName + '-' + region
+
     keypair = None
     try:
         keypair = ec2_client.create_key_pair(
-            KeyName=cr_keypairName,
+            KeyName=keypair_name,
             DryRun=True,
             KeyType='rsa',
             KeyFormat='pem'
@@ -41,18 +57,24 @@ def aws_create_keypair(region):
 
         elif 'DryRunOperation' in errmsg: # we are good with credentials
             try :
+                if force:
+                    try:
+                        ec2_client.delete_key_pair(
+                            KeyName=keypair_name
+                        )
+                    except:
+                        pass
                 keypair = ec2_client.create_key_pair(
-                    KeyName=cr_keypairName,
+                    KeyName=keypair_name,
                     DryRun=False,
                     KeyType='rsa',
                     KeyFormat='pem'
                 )
-                if region is None:
+                #if region is None:
                     # get the default user region so we know what were getting ... (if it changes later etc... could be a mess)
-                    my_session = boto3.session.Session()
-                    region = my_session.region_name                
-                #fpath = "cloudrun-"+str(region)+".pem"
-                fpath = "cloudrun.pem"
+                #    my_session = boto3.session.Session()
+                #    region = my_session.region_name                
+                fpath   = key_filename
                 pemfile = open(fpath, "w")
                 pemfile.write(keypair['KeyMaterial']) # save the private key in the directory (we will use it with paramiko)
                 pemfile.close()
@@ -63,7 +85,7 @@ def aws_create_keypair(region):
                 errmsg2 = str(e2)
                 if 'InvalidKeyPair.Duplicate' in errmsg2:
                     #keypair = ec2.KeyPair(cr_keypairName)
-                    keypairs = ec2_client.describe_key_pairs( KeyNames= [cr_keypairName] )
+                    keypairs = ec2_client.describe_key_pairs( KeyNames= [keypair_name] )
                     keypair  = keypairs['KeyPairs'][0] 
                     debug(2,keypair)
                 else:
@@ -218,7 +240,7 @@ def aws_add_maestro_security_group(instance):
     
     debug(2,secGroup) 
 
-    ec2_objs = boto3.resource('ec2')
+    ec2_objs = boto3.resource('ec2',config=aws_get_config(region))
     instance_aws = ec2_objs.Instance(instance.get_id())
     all_sg_ids = [sg['GroupId'] for sg in instance_aws.security_groups]  # Get a list of ids of all securify groups attached to the instance
     if secGroup['GroupId'] not in all_sg_ids:                        # Check the SG to be removed is in the list
@@ -326,6 +348,8 @@ def aws_create_instance(instance_config,vpc,subnet,secGroup):
 
     ec2_client = boto3.client("ec2", config=aws_get_config(region))
 
+    keypair_name = cr_keypairName + '-' + region
+
     existing = ec2_client.describe_instances(
         Filters = [
             {
@@ -410,7 +434,7 @@ def aws_create_instance(instance_config,vpc,subnet,secGroup):
                 MinCount = 1,
                 MaxCount = 1,
                 InstanceType = instance_config['type'],
-                KeyName = cr_keypairName,
+                KeyName = keypair_name,
                 SecurityGroupIds=[secGroup['GroupId']],
                 SubnetId = subnet['SubnetId'],
                 TagSpecifications=[
@@ -460,9 +484,9 @@ def aws_create_instance(instance_config,vpc,subnet,secGroup):
 
     return instance , created
 
-def aws_create_instance_objects(instance_config):
+def aws_create_instance_objects(instance_config,key_filename):
     region   = instance_config.get('region')
-    keypair  = aws_create_keypair(region)
+    keypair  = aws_create_keypair(region,key_filename)
     vpc      = aws_create_vpc(region,instance_config.get('cloud_id')) 
     secGroup = aws_create_security_group(region,vpc)
     subnet   = aws_create_subnet(region,vpc) 
@@ -550,17 +574,16 @@ def aws_update_instance_info(instance):
     return instance
 
 
-def aws_grant_admin_rights(instance,region=None):
+def aws_grant_admin_rights(instance):
 
     region = instance.get_region()
     iam_client = boto3.client('iam', config=aws_get_config(region))
     id_client  = boto3.client("sts", config=aws_get_config(region))
     ec2_client = boto3.client("ec2", config=aws_get_config(region))
     
-    session    = boto3.session.Session()
-
     account_id = id_client.get_caller_identity()["Account"]
-    region_flt = session.region_name if not region else region
+    #session    = boto3.session.Session()
+    #region_flt = session.region_name if not region else region
 
 
     #Following trust relationship policy can be used to provide access to assume this role by a particular AWS service in the same account
@@ -599,9 +622,9 @@ def aws_grant_admin_rights(instance,region=None):
             ],
             "Resource": "*",
             "Condition": {
-                "StringEquals": {
-                    "ec2:Region": region_flt
-                }
+                # "StringEquals": {
+                #     "ec2:Region": region_flt
+                # }
             }
         }]
     }
@@ -685,8 +708,12 @@ class AWSCloudRunFatProvider(CloudRunFatProvider):
     def __init__(self, conf):
         CloudRunFatProvider.__init__(self,conf)
 
+    def create_keypair(self,region,force=False):
+        key_filename = self.get_key_filename(self._profile_name,region)
+        aws_create_keypair(region,key_filename,force)
+
     def create_instance_objects(self,config):
-        return aws_create_instance_objects(config)
+        return aws_create_instance_objects(config,self.get_key_filename(self._profile_name,config.get('region')))
 
     def find_instance(self,config):
         return aws_find_instance(config)
@@ -706,13 +733,11 @@ class AWSCloudRunFatProvider(CloudRunFatProvider):
     def update_instance_info(self,instance):
         aws_update_instance_info(instance)
 
-    def get_user_region(self,profile_name):
-        if profile_name:
-            my_session = boto3.session.Session(profile_name=profile_name)
-        else:
-            my_session = boto3.session.Session()
-        region = my_session.region_name     
-        return region  
+    def get_region(self):
+        return aws_get_region(self._profile_name)
+
+    # def get_user_id(self):
+    #     return aws_get_user_id(self._config.get('profile'))
 
     def set_profile(self,profile_name):
         boto3.setup_default_session(profile_name=profile_name)
@@ -735,8 +760,12 @@ class AWSCloudRunLightProvider(CloudRunLightProvider):
     def update_instance_info(self,instance):
         aws_update_instance_info(instance)
 
+    def create_keypair(self,region,force=False):
+        key_filename = self.get_key_filename(self._profile_name,region)
+        aws_create_keypair(region,key_filename,force)
+
     def create_instance_objects(self,config):
-        return aws_create_instance_objects(config)
+        return aws_create_instance_objects(config,self.get_key_filename(self._profile_name,config.get('region')))
 
     def start_instance(self,instance):
         aws_start_instance(instance)
@@ -756,13 +785,11 @@ class AWSCloudRunLightProvider(CloudRunLightProvider):
     def add_maestro_security_group(self,instance):
         aws_add_maestro_security_group(instance)
 
-    def get_user_region(self,profile_name):
-        if profile_name:
-            my_session = boto3.session.Session(profile_name=profile_name)
-        else:
-            my_session = boto3.session.Session()
-        region = my_session.region_name     
-        return region  
+    def get_region(self):
+        return aws_get_region(self._profile_name)
+    
+    # def get_user_id(self):
+    #     return aws_get_user_id(self._config.get('profile'))
 
     def set_profile(self,profile_name):
         boto3.setup_default_session(profile_name=profile_name)

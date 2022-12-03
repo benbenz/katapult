@@ -1,6 +1,6 @@
 from abc import ABC , abstractmethod
 import cloudrun.utils as cloudrunutils
-import sys , json , os , time
+import sys , json , os , time 
 import paramiko
 import re
 from io import BytesIO
@@ -42,6 +42,7 @@ class CloudRunProvider(ABC):
 
         self._config  = conf
 
+        self._profile_name = self._config.get('profile')
         if self._config.get('profile'):
             self.set_profile(self._config.get('profile'))
 
@@ -196,10 +197,12 @@ class CloudRunProvider(ABC):
     def _connect_to_instance(self,instance,**kwargs):
         # ssh into instance and run the script from S3/local? (or sftp)
         region = instance.get_region()
-        if region is None:
-            region = self.get_user_region(self._config.get('profile'))
-        #k = paramiko.RSAKey.from_private_key_file('cloudrun-'+str(region)+'.pem')
-        k = paramiko.RSAKey.from_private_key_file('cloudrun.pem')
+        #if region is None:
+        #    region = self.get_user_region(self._config.get('profile'))
+        keypair_filename = self.get_key_filename(self._config.get('profile'),region)
+        if not os.path.exists(keypair_filename):
+            self.create_keypair(region,True)
+        k = paramiko.RSAKey.from_private_key_file(keypair_filename)
         ssh_client = paramiko.SSHClient()
         ssh_client.set_missing_host_key_policy(paramiko.AutoAddPolicy())
         self.debug(1,"connecting to ",instance.get_dns_addr(),"/",instance.get_ip_addr())
@@ -342,14 +345,29 @@ class CloudRunProvider(ABC):
         #with open('instancetypes-aws.csv', newline='') as csvfile:
         #fileio = pkg_resources.resource_string(resource_package, resource_path)
         #self._csv_reader = csv.DictReader(io.StringIO(csvstr.decode()))              
-        return pkg_resources.resource_stream(resource_package, resource_path)    
+        return pkg_resources.resource_stream(resource_package, resource_path)  
+
+    def get_key_filename(self,profile_name,region):
+        userid = profile_name
+        if not userid:
+            userid = 'default'
+        key_filename = 'cloudrun-'+str(userid)+'-'+str(region)+'.pem'
+        return key_filename
 
     @abstractmethod
-    def get_user_region(self,profile_name):
+    def get_region(self):
         pass
+
+    # @abstractmethod
+    # def get_user_id(self):
+    #     pass
 
     @abstractmethod
     def set_profile(self,profile_name):
+        pass
+
+    @abstractmethod
+    def create_keypair(self,region,force=False):
         pass
 
     @abstractmethod

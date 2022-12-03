@@ -443,6 +443,7 @@ class CloudRunFatProvider(CloudRunProvider,ABC):
             ssh_client.close()
         self.debug(1,'RESETTING done')    
 
+
     def hard_reset_instance(instance):        
         super().hard_reset_instance(instance)
         self._deploy_all(instance)

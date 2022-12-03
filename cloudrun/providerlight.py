@@ -36,7 +36,7 @@ class CloudRunLightProvider(CloudRunProvider,ABC):
                 img_user = self._config.get('instances')[0].get('img_username')
                 region   = self._config.get('instances')[0].get('region')
                 if not region:
-                    region = self.get_user_region(self._config.get('profile'))
+                    region = self.get_region()
                 maestro_cfg = { 
                     'maestro'      : True ,
                     'img_id'       : img_id ,
@@ -67,7 +67,7 @@ class CloudRunLightProvider(CloudRunProvider,ABC):
             # add manually the 
             if self._config.get('profile'):
                 profile = self._config.get('profile')
-                region  = self.get_user_region(profile)
+                region  = self.get_region() # we have a profile so this returns the region for this profile
                 aws_config_cmd = "mkdir -p $HOME/.aws && echo \"[profile "+profile+"]\nregion = " + region + "\noutput = json\" > $HOME/.aws/config"
                 self._exec_command(ssh_client,aws_config_cmd)
             # grant its admin rights (we need to be (stopped or) running to be able to do that)
@@ -162,12 +162,12 @@ class CloudRunLightProvider(CloudRunProvider,ABC):
 
         config['maestro'] = 'local' # the config is for maestro, which needs to run local
 
-        config['region'] = self.get_user_region(self._config.get('profile'))
+        config['region'] = self.get_region()
 
         for i , inst_cfg in enumerate(config.get('instances')):
             # we need to freeze the region within each instance config ...
             if not config['instances'][i].get('region'):
-                config['instances'][i]['region'] = self.get_user_region(self._config.get('profile'))
+                config['instances'][i]['region'] = self.get_region()
 
         for i , env_cfg in enumerate(config.get('environments')):
             # Note: we are using a simple CloudRunEnvironment here 

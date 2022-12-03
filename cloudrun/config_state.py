@@ -60,7 +60,7 @@ class ConfigManager():
                         # this is done so that we dont change the hash when sending the config to maestro
                         # (because the client adds the 'region' field when translating the config)
                         if not real_inst_cfg.get('region'):
-                            real_inst_cfg['region'] = self._provider.get_user_region(self._config.get('profile'))
+                            real_inst_cfg['region'] = self._provider.get_region()
 
                         # starts calling the Service here !
                         # instance , created = self.start_instance( real_inst_cfg )
@@ -115,7 +115,7 @@ class ConfigManager():
                             # this is done so that we dont change the hash when sending the config to maestro
                             # (because the client adds the 'region' field when translating the config)
                             if not real_inst_cfg.get('region'):
-                                real_inst_cfg['region'] = self._provider.get_user_region(self._config.get('profile'))
+                                real_inst_cfg['region'] = self._provider.get_region()
 
                             # let's put some dummy instances for now ...
                             instance = CloudRunInstance( real_inst_cfg , None, None )

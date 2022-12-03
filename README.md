@@ -281,7 +281,7 @@ class CloudRunFatProvider(ABC):
     def wakeup(self)
 
     @abstractmethod
-    def get_user_region(self,profile_name):
+    def get_region(self):
 
     @abstractmethod
     def get_recommended_cpus(self,inst_cfg):
