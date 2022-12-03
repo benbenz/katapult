@@ -8,6 +8,7 @@ import csv , io
 import pkg_resources
 from cloudrun.core import *
 from enum import IntFlag
+import multiprocessing
 
 class CloudRunProviderState(IntFlag):
     NEW           = 0  # provider created
@@ -46,6 +47,8 @@ class CloudRunProvider(ABC):
         if self._config.get('profile'):
             self.set_profile(self._config.get('profile'))
 
+        self._instances_locks = dict()
+
     def debug_set_prefix(self,value):
         self.DBG_PREFIX = value
         global DBG_PREFIX
@@ -66,6 +69,11 @@ class CloudRunProvider(ABC):
                 args = tuple(listargs)
                 kwargs.pop('color')
             try:
+                if not sys.stdout or sys.stdout.closed==True:
+                    # sys.stdout = sys.__stdout__
+                    # print("SYS.STDOUT is DEAD")
+                    # sys.stdout = None
+                    return
                 if self.DBG_PREFIX:
                     print(self.DBG_PREFIX,*args,**kwargs) 
                 else:
@@ -95,20 +103,27 @@ class CloudRunProvider(ABC):
     def _start_and_update_instance(self,instance):
 
         try:
-            # CHECK EVERY TIME !
-            new_instance , created = self._get_or_create_instance(instance)
+            if not instance.get_name() in self._instances_locks:
+                self._instances_locks[instance.get_name()] = multiprocessing.Manager().Lock()
 
-            old_id = instance.get_id()
-            
-            # make sure we update the instance with the new instance data
-            instance.update_from_instance(new_instance)
+            # this is important because we can very well have watch() daemon and wait() method run at the same time
+            # and both those methods may call '_start_and_update_instance' 
+            with self._instances_locks[instance.get_name()]:
 
-            if instance.get_id() != old_id:
-                self.debug(2,"Instance has changed",old_id,"VS",instance.get_id())
-                #self._instances_states[instance.get_id()] = { 'changed' : True }
-                if not hasattr(self,'_instances_states'):
-                    self._instances_states = dict()
-                self._instances_states[instance.get_name()] = { 'changed' : True }
+                # CHECK EVERY TIME !
+                new_instance , created = self._get_or_create_instance(instance)
+
+                old_id = instance.get_id()
+                
+                # make sure we update the instance with the new instance data
+                instance.update_from_instance(new_instance)
+
+                if instance.get_id() != old_id:
+                    self.debug(2,"Instance has changed",old_id,"VS",instance.get_id())
+                    #self._instances_states[instance.get_id()] = { 'changed' : True }
+                    if not hasattr(self,'_instances_states'):
+                        self._instances_states = dict()
+                    self._instances_states[instance.get_name()] = { 'changed' : True }
 
         except CloudRunError as cre:
 
@@ -167,7 +182,7 @@ class CloudRunProvider(ABC):
             elif instanceState == CloudRunInstanceState.RUNNING:
                 lookForState = False
 
-            elif instanceState == CloudRunInstanceState.TERMINATED:
+            elif instanceState == CloudRunInstanceState.TERMINATING or instanceState == CloudRunInstanceState.TERMINATED:
                 try:
                     self._start_and_update_instance(instance)
                 except:
@@ -437,7 +452,7 @@ class CloudRunProvider(ABC):
         pass
 
     @abstractmethod
-    def watch(self,processes=None,daemon=False):
+    def watch(self,processes=None,daemon=True):
         pass
 
     @abstractmethod

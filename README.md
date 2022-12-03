@@ -267,9 +267,9 @@ class CloudRunFatProvider(ABC):
     def run_job(self,job,wait=False):
 
     # watch the processes (= wait + revive instances when terminated)
-    # with daemon (=True), the call is non blocking
+    # with daemon (=True), the call is non blocking and will execute in the background
     # without daemon (=False), the call is blocking and will display the processes/states
-    def watch(self,processes=None,daemon=False):
+    def watch(self,processes=None,daemon=True):
 
     # wait for the processes to reach a state
     def wait_for_jobs_state(self,job_state,processes=None):

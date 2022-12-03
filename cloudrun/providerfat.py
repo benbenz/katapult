@@ -15,6 +15,7 @@ from cloudrun.core import *
 from cloudrun.provider import CloudRunProvider , CloudRunProviderState , bcolors , debug
 from cloudrun.config_state import ConfigManager , StateSerializer
 from enum import IntFlag
+from threading import current_thread
 
 random.seed()
 
@@ -37,8 +38,9 @@ class CloudRunFatProvider(CloudRunProvider,ABC):
         self._environments = []
         self._jobs = []
 
-        self._multiproc_man  = multiprocessing.Manager()
-        self._multiproc_lock = self._multiproc_man.Lock()
+        self._multiproc_man   = multiprocessing.Manager()
+        self._multiproc_lock  = self._multiproc_man.Lock()
+        self._instances_locks = dict()
 
         # load the config
         self._config_manager = ConfigManager(self,self._config,self._instances,self._environments,self._jobs)
@@ -1140,6 +1142,9 @@ class CloudRunFatProvider(CloudRunProvider,ABC):
             for instance_name , processes_infos in instances_processes.items():
                 self._watch_pool.submit(self.__get_jobs_states_internal,processes_infos,wait_state,job_state,daemon)
             #pool.shutdown()
+            if wait_state & CloudRunProviderStateWaitMode.WATCH:
+                self.debug(1,"Watching ...")
+
             return None
         # done
 
@@ -1167,7 +1172,7 @@ class CloudRunFatProvider(CloudRunProvider,ABC):
             self.deploy()
 
 
-    def watch(self,processes=None,daemon=False):
+    def watch(self,processes=None,daemon=True):
 
         job_state = CloudRunProcessState.DONE|CloudRunProcessState.ABORTED
         

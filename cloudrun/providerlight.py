@@ -371,7 +371,7 @@ class CloudRunLightProvider(CloudRunProvider,ABC):
         # triggers maestro::run
         self._exec_maestro_command("run")
 
-    def watch(self,processes=None,daemon=False):
+    def watch(self,processes=None,daemon=True):
         # triggers maestro::wait_for_jobs_state
         self._exec_maestro_command("watch")
 
