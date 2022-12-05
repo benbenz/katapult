@@ -89,12 +89,18 @@ class CloudRunProvider(ABC):
     def _get_or_create_instance(self,instance):
 
         inst_cfg = instance.get_config_DIRTY()
-        instance = self.find_instance(inst_cfg)
 
-        if instance is None:
-            instance , created = self.create_instance_objects(inst_cfg)
-        else:
-            created = False
+        # this is important because we can very well have watch() daemon and wait() method run at the same time
+        # and both those methods may call '_start_and_update_instance' > '_get_or_create_instance'
+        self._prep_lock(instance)
+        with self._instances_locks[instance.get_name()]:
+            
+            instance = self.find_instance(inst_cfg)
+
+            if instance is None:
+                instance , created = self.create_instance_objects(inst_cfg)
+            else:
+                created = False
 
         return instance , created  
 
@@ -103,27 +109,25 @@ class CloudRunProvider(ABC):
     def _start_and_update_instance(self,instance):
 
         try:
-            if not instance.get_name() in self._instances_locks:
-                self._instances_locks[instance.get_name()] = multiprocessing.Manager().Lock()
-
+            #self._prep_lock(instance)
             # this is important because we can very well have watch() daemon and wait() method run at the same time
             # and both those methods may call '_start_and_update_instance' 
-            with self._instances_locks[instance.get_name()]:
+            #with self._instances_locks[instance.get_name()]:
+            
+            # CHECK EVERY TIME !
+            new_instance , created = self._get_or_create_instance(instance)
 
-                # CHECK EVERY TIME !
-                new_instance , created = self._get_or_create_instance(instance)
+            old_id = instance.get_id()
+            
+            # make sure we update the instance with the new instance data
+            instance.update_from_instance(new_instance)
 
-                old_id = instance.get_id()
-                
-                # make sure we update the instance with the new instance data
-                instance.update_from_instance(new_instance)
-
-                if instance.get_id() != old_id:
-                    self.debug(2,"Instance has changed",old_id,"VS",instance.get_id())
-                    #self._instances_states[instance.get_id()] = { 'changed' : True }
-                    if not hasattr(self,'_instances_states'):
-                        self._instances_states = dict()
-                    self._instances_states[instance.get_name()] = { 'changed' : True }
+            if instance.get_id() != old_id:
+                self.debug(2,"Instance has changed",old_id,"VS",instance.get_id())
+                #self._instances_states[instance.get_id()] = { 'changed' : True }
+                if not hasattr(self,'_instances_states'):
+                    self._instances_states = dict()
+                self._instances_states[instance.get_name()] = { 'changed' : True }
 
         except CloudRunError as cre:
 
@@ -141,6 +145,11 @@ class CloudRunProvider(ABC):
             return cloudrunutils.resolve_paths(upfile,dpl_job.get_config('run_script'),'$HOME/run/files',True) 
         else:
             return cloudrunutils.resolve_paths(upfile,dpl_job.get_config('run_script'),dpl_job.get_path(),False)
+
+    def _prep_lock(self,instance):
+        if not instance.get_name() in self._instances_locks:
+            self._instances_locks[instance.get_name()] = multiprocessing.Manager().Lock()
+
 
     def _wait_and_connect(self,instance):
 
@@ -161,7 +170,10 @@ class CloudRunProvider(ABC):
         # get the public DNS info when instance actually started (todo: check actual state)
         waitFor = True
         while waitFor:
-            self.update_instance_info(instance)
+            # we may be heavily updating the instace already ...
+            self._prep_lock(instance)
+            with self._instances_locks[instance.get_name()]:
+                self.update_instance_info(instance)
 
             self.serialize_state()
 

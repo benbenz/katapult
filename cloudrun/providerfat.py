@@ -43,6 +43,7 @@ class CloudRunFatProvider(CloudRunProvider,ABC):
         self._multiproc_man   = multiprocessing.Manager()
         self._multiproc_lock  = self._multiproc_man.Lock()
         self._instances_locks = dict()
+        self._instances_watching = dict()
 
         # load the config
         self._config_manager = ConfigManager(self,self._config,self._instances,self._environments,self._jobs)
@@ -421,14 +422,21 @@ class CloudRunFatProvider(CloudRunProvider,ABC):
             
             attempts = attempts + 1
 
+    # use this to make sure we're not blocking in the generator loop below ...
+    # (allow full multithreading)
+    def _start_and_update_and_reset_instance(self,instance,reset):
+        self._start_and_update_instance(instance)
+        if reset:
+           self.reset_instance(inst)
+
     def start(self,reset=False):
         self._instances_states = dict() 
         with concurrent.futures.ThreadPoolExecutor(max_workers=self._get_num_workers()) as pool:
-            future_to_instance = { pool.submit(self._start_and_update_instance,instance) : instance for instance in self._instances }
+            future_to_instance = { pool.submit(self._start_and_update_and_reset_instance,instance,reset) : instance for instance in self._instances }
             for future in concurrent.futures.as_completed(future_to_instance):
                 inst = future_to_instance[future]
-                if reset:
-                    self.reset_instance(inst)
+                #if reset:
+                #    self.reset_instance(inst)
                 if inst.is_invalid():
                     self.debug(1,"ERROR: Your configuration is causing an instance to not be created. Please fix.",inst.get_config_DIRTY(),color=bcolors.FAIL)
                     sys.exit()
@@ -901,6 +909,10 @@ class CloudRunFatProvider(CloudRunProvider,ABC):
         return lnstr
 
     def _handle_instance_disconnect(self,instance,wait_mode,msg,processes=None):
+
+        if self._instances_watching.get(instance.get_name(),False) == False:
+            self.debug(1,"We have stopped watching/waiting for the instance - We wont try to reconnect",color=bcolors.WARNING)
+            return None , None 
         try:
             # check the status on the instance with AWS
             self.update_instance_info(instance)
@@ -963,9 +975,12 @@ class CloudRunFatProvider(CloudRunProvider,ABC):
         return jobsinfo , instance
 
     def __get_jobs_states_internal( self , processes_infos , wait_mode , job_state , daemon = False , programmatic = False):
-        
+
         jobsinfo , instance = self._compute_jobs_info(processes_infos)
 
+        if not programmatic:
+            self._instances_watching[instance.get_name()] = True
+        
         ssh_client = self._connect_to_instance(instance)
 
         if ssh_client is None:
@@ -1084,10 +1099,26 @@ class CloudRunFatProvider(CloudRunProvider,ABC):
 
         ssh_client.close() 
 
-        # this should not be necessary but it sometimes seems it needs to be there
-        # TODO: debug why ...
         if not programmatic:
+            # this should not be necessary but it sometimes seems it needs to be there
+            # TODO: debug why ...
             self.serialize_state()
+
+        if wait_mode & CloudRunProviderStateWaitMode.WATCH:
+            # lets wait 1 minutes before stopping
+            # this helps with the demo which runs a wait() and a get() sequentially ...
+            time.sleep(60*1)  
+
+            if not programmatic:
+                self._instances_watching[instance.get_name()] = False            
+
+            self.debug(1,"Stopping instance",instance.get_name(),color=bcolors.WARNING)
+            self.stop_instance(instance)
+            cur_thread   = current_thread()
+            debug(2,self._instances_watching)
+            any_watching = any( self._instances_watching.values() )
+            if not any_watching:
+                self.debug(1,"Should stop the fat client / maestro because all instances have ran the jobs (NOT IMPLEMENTED)",color=bcolors.WARNING)
 
         return processes
 

@@ -11,11 +11,22 @@ from datetime import datetime , timedelta
 from botocore.config import Config
 import asyncio
 
-def aws_get_config(region):
-    if region is None:
-        return Config()
+def aws_get_session(profile_name , region ):
+    if profile_name and region:
+        return boto3.session.Session( profile_name = profile_name , region_name = region )
+    elif profile_name:
+        return boto3.session.Session( profile_name = profile_name )
+    elif region:
+        return boto3.session.Session( region_name = region )
     else:
-        return Config(region_name=region)
+        return boto3.session.Session()
+
+# def aws_get_config(region):
+#     # it's best we create a session every time wihin the threads ...
+#     if region is None:
+#         return Config()
+#     else:
+#         return Config(region_name=region)
 
 def aws_get_region(profile_name=None):
     if profile_name:
@@ -29,10 +40,12 @@ def aws_get_account_id(profile_name=None):
     client = boto3.client("sts")
     return client.get_caller_identity()["Account"]        
 
-def aws_create_keypair(region,keypair_name,key_filename,force=False):
+def aws_create_keypair(session,region,keypair_name,key_filename,force=False):
     debug(1,"Creating KEYPAIR ...")
-    ec2_client = boto3.client("ec2",config=aws_get_config(region))
-    ec2 = boto3.resource('ec2',config=aws_get_config(region))
+    ec2_client = session.client("ec2")
+    #ec2_client = boto3.client("ec2",config=aws_get_config(region))
+    ec2 = session.resource('ec2')
+    #ec2 = boto3.resource('ec2',config=aws_get_config(region))
 
     #keypair_name = cr_keypairName + '-' + region
 
@@ -101,8 +114,9 @@ def aws_create_keypair(region,keypair_name,key_filename,force=False):
     
     return keypair 
 
-def aws_find_or_create_default_vpc(region):
-    ec2_client = boto3.client("ec2", config=aws_get_config(region))
+def aws_find_or_create_default_vpc(session,region):
+    ec2_client = session.client("ec2")
+    #ec2_client = boto3.client("ec2", config=aws_get_config(region))
     vpcs = ec2_client.describe_vpcs(
         Filters=[
             {
@@ -116,10 +130,11 @@ def aws_find_or_create_default_vpc(region):
     defaultvpc = ec2_client.create_default_vpc() if len(vpcs['Vpcs'])==0 else vpcs['Vpcs'][0] 
     return defaultvpc
 
-def aws_create_vpc(region,cloudId=None):
+def aws_create_vpc(session,region,cloudId=None):
     debug(1,"Creating VPC ...")
     vpc = None
-    ec2_client = boto3.client("ec2", config=aws_get_config(region))
+    ec2_client = session.client("ec2")
+    #ec2_client = boto3.client("ec2", config=aws_get_config(region))
 
     if cloudId is not None:
         vpcID = cloudId
@@ -146,10 +161,11 @@ def aws_create_vpc(region,cloudId=None):
 
     return vpc 
 
-def aws_create_security_group(region,vpc):
+def aws_create_security_group(session,region,vpc):
     debug(1,"Creating SECURITY GROUP ...")
     secGroup = None
-    ec2_client = boto3.client("ec2", config=aws_get_config(region))
+    ec2_client = session.client("ec2")
+    #ec2_client = boto3.client("ec2", config=aws_get_config(region))
 
     secgroups = ec2_client.describe_security_groups(Filters=[
         {
@@ -193,14 +209,15 @@ def aws_create_security_group(region,vpc):
 
     return secGroup
 
-def aws_add_maestro_security_group(instance):
+def aws_add_maestro_security_group(session,instance):
     
     region = instance.get_region()
     vpcid  = instance.get_data('VpcId')
 
     debug(1,"Creating MAESTRO SECURITY GROUP ...")
     secGroup = None
-    ec2_client = boto3.client("ec2", config=aws_get_config(region))
+    ec2_client = session.client("ec2")
+    #ec2_client = boto3.client("ec2", config=aws_get_config(region))
 
     secgroups = ec2_client.describe_security_groups(Filters=[
         {
@@ -238,7 +255,8 @@ def aws_add_maestro_security_group(instance):
     
     debug(2,secGroup) 
 
-    ec2_objs = boto3.resource('ec2',config=aws_get_config(region))
+    #ec2_objs = boto3.resource('ec2',config=aws_get_config(region))
+    ec2_objs = session.resource('ec2')
     instance_aws = ec2_objs.Instance(instance.get_id())
     all_sg_ids = [sg['GroupId'] for sg in instance_aws.security_groups]  # Get a list of ids of all securify groups attached to the instance
     if secGroup['GroupId'] not in all_sg_ids:                        # Check the SG to be removed is in the list
@@ -248,10 +266,12 @@ def aws_add_maestro_security_group(instance):
     return secGroup    
 
 # for now just return the first subnet present in the Vpc ...
-def aws_create_subnet(region,vpc):
+def aws_create_subnet(session,region,vpc):
     debug(1,"Creating SUBNET ...")
-    ec2 = boto3.resource('ec2',config=aws_get_config(region))
-    ec2_client = boto3.client("ec2", config=aws_get_config(region))
+    ec2 = session.resource('ec2')
+    #ec2 = boto3.resource('ec2',config=aws_get_config(region))
+    ec2_client = session.client("ec2")
+    #ec2_client = boto3.client("ec2", config=aws_get_config(region))
     vpc_obj = ec2.Vpc(vpc['VpcId'])
     for subnet in vpc_obj.subnets.all():
         subnets = ec2_client.describe_subnets(SubnetIds=[subnet.id])
@@ -260,12 +280,13 @@ def aws_create_subnet(region,vpc):
         return subnet
     return None # todo: create a subnet
 
-def aws_create_bucket(region):
+def aws_create_bucket(session,region):
 
     debug(1,"Creating BUCKET ...")
-
-    s3_client = boto3.client('s3', config=aws_get_config(region))
-    s3 = boto3.resource('s3', config=aws_get_config(region))
+    s3_client = session.client('s3')
+    #s3_client = boto3.client('s3', config=aws_get_config(region))
+    s3 = session.resource('s3')
+    #s3 = boto3.resource('s3', config=aws_get_config(region))
 
     try :
 
@@ -290,20 +311,22 @@ def aws_create_bucket(region):
     return bucket 
 
 
-def aws_upload_file( region , bucket , file_path ):
+def aws_upload_file( session , region , bucket , file_path ):
     debug(1,"uploading FILE ...")
-    s3_client = boto3.client('s3', config=aws_get_config(region))
+    s3_client = session.client('s3')
+    #s3_client = boto3.client('s3', config=aws_get_config(region))
     response = s3_client.upload_file( file_path, bucket['BucketName'], 'cr-run-script' )
     debug(2,response)
 
-def aws_find_instance(instance_config):
+def aws_find_instance(session,instance_config):
 
     instanceName = init_instance_name(instance_config)
     region = instance_config.get('region')
 
     debug(1,"Searching INSTANCE ...",instanceName)
 
-    ec2_client = boto3.client("ec2", config=aws_get_config(region))
+    #ec2_client = boto3.client("ec2", config=aws_get_config(region))
+    ec2_client = session.client("ec2")
 
     existing = ec2_client.describe_instances(
         Filters = [
@@ -324,7 +347,7 @@ def aws_find_instance(instance_config):
 
     if len(existing['Reservations']) > 0 and len(existing['Reservations'][0]['Instances']) >0 :
         instance_data = existing['Reservations'][0]['Instances'][0]
-        debug(1,"Found exisiting instance !",instance_data['InstanceId'])
+        debug(1,"Found exisiting instance !",instance_data['InstanceId'],instanceName)
         debug(3,instance_data)
         instance = CloudRunInstance( instance_config , instance_data['InstanceId'] , instance_data )
         return instance 
@@ -336,7 +359,7 @@ def aws_find_instance(instance_config):
         return None 
 
 
-def aws_create_instance(instance_config,vpc,subnet,secGroup,keypair_name):
+def aws_create_instance(session,instance_config,vpc,subnet,secGroup,keypair_name):
 
     debug(1,"Creating INSTANCE ...")
 
@@ -344,7 +367,8 @@ def aws_create_instance(instance_config,vpc,subnet,secGroup,keypair_name):
 
     region = instance_config.get('region')
 
-    ec2_client = boto3.client("ec2", config=aws_get_config(region))
+    ec2_client = session.client("ec2")
+    #ec2_client = boto3.client("ec2", config=aws_get_config(region))
 
     #keypair_name = cr_keypairName + '-' + region
 
@@ -482,20 +506,22 @@ def aws_create_instance(instance_config,vpc,subnet,secGroup,keypair_name):
 
     return instance , created
 
-def aws_create_instance_objects(instance_config,keypair_name,key_filename):
+def aws_create_instance_objects(session,instance_config,keypair_name,key_filename):
     region   = instance_config.get('region')
-    keypair  = aws_create_keypair(region,keypair_name,key_filename)
-    vpc      = aws_create_vpc(region,instance_config.get('cloud_id')) 
-    secGroup = aws_create_security_group(region,vpc)
-    subnet   = aws_create_subnet(region,vpc) 
+    keypair  = aws_create_keypair(session,region,keypair_name,key_filename)
+    vpc      = aws_create_vpc(session,region,instance_config.get('cloud_id')) 
+    secGroup = aws_create_security_group(session,region,vpc)
+    subnet   = aws_create_subnet(session,region,vpc) 
     # this is where all the instance_config is actually used
-    instance , created = aws_create_instance(instance_config,vpc,subnet,secGroup,keypair_name)
+    instance , created = aws_create_instance(session,instance_config,vpc,subnet,secGroup,keypair_name)
 
     return instance , created 
 
 
-def aws_start_instance(instance):
-    ec2_client = boto3.client("ec2", config=aws_get_config(instance.get_region()))
+def aws_start_instance(session,instance):
+    region  = instance.get_region()
+    ec2_client = session.client("ec2")
+    #ec2_client = boto3.client("ec2", config=aws_get_config(instance.get_region()))
 
     try:
         ec2_client.start_instances(InstanceIds=[instance.get_id()])
@@ -517,14 +543,17 @@ def aws_start_instance(instance):
             debug(2,botoerr)
             raise CloudRunError()
 
-def aws_stop_instance(instance):
-    ec2_client = boto3.client("ec2", config=aws_get_config(instance.get_region()))
+def aws_stop_instance(session,instance):
+    region  = instance.get_region()
+    ec2_client = session.client("ec2")
+    #ec2_client = boto3.client("ec2", config=aws_get_config(instance.get_region()))
 
     ec2_client.stop_instances(InstanceIds=[instance.get_id()])
 
-def aws_terminate_instance(instance):
-
-    ec2_client = boto3.client("ec2", config=aws_get_config(instance.get_region()))
+def aws_terminate_instance(session,instance):
+    region  = instance.get_region()
+    ec2_client = session.client("ec2")
+    #ec2_client = boto3.client("ec2", config=aws_get_config(instance.get_region()))
 
     ec2_client.terminate_instances(InstanceIds=[instance.get_id()])
 
@@ -532,16 +561,18 @@ def aws_terminate_instance(instance):
 
         ec2_client.cancel_spot_instance_requests(SpotInstanceRequestIds=[instance.get_data('SpotInstanceRequestId')]) 
 
-def aws_reboot_instance(instance):
-
-    ec2_client = boto3.client("ec2", config=aws_get_config(instance.get_region()))
+def aws_reboot_instance(session,instance):
+    region  = instance.get_region()
+    ec2_client = session.client("ec2")
+    #ec2_client = boto3.client("ec2", config=aws_get_config(instance.get_region()))
 
     ec2_client.reboot_instances(InstanceIds=[instance.get_id()],)
 
 
-def aws_update_instance_info(instance):
+def aws_update_instance_info(session,instance):
     region = instance.get_region()
-    ec2_client   = boto3.client("ec2", config=aws_get_config(region))
+    #ec2_client   = boto3.client("ec2", config=aws_get_config(region))
+    ec2_client = session.client("ec2")
     instances    = ec2_client.describe_instances( InstanceIds=[instance.get_id()] )
     instance_new_data = instances['Reservations'][0]['Instances'][0]
 
@@ -572,12 +603,14 @@ def aws_update_instance_info(instance):
     return instance
 
 
-def aws_grant_admin_rights(instance):
-
+def aws_grant_admin_rights(session,instance):
     region = instance.get_region()
-    iam_client = boto3.client('iam', config=aws_get_config(region))
-    id_client  = boto3.client("sts", config=aws_get_config(region))
-    ec2_client = boto3.client("ec2", config=aws_get_config(region))
+    iam_client = session.client('iam')
+    #iam_client = boto3.client('iam', config=aws_get_config(region))
+    id_client = session.client('sts')
+    #id_client  = boto3.client("sts", config=aws_get_config(region))
+    ec2_client = session.client('ec2')
+    #ec2_client = boto3.client("ec2", config=aws_get_config(region))
     
     account_id = id_client.get_caller_identity()["Account"]
     #session    = boto3.session.Session()
@@ -705,33 +738,47 @@ class AWSCloudRunFatProvider(CloudRunFatProvider):
     def __init__(self, conf):
         CloudRunFatProvider.__init__(self,conf)
 
+    def find_instance(self,config):
+        region  = config.get('region')        
+        session = aws_get_session(self._profile_name,region)
+        return aws_find_instance(session,config)
+
+    def update_instance_info(self,instance):
+        region  = instance.get_region()
+        session = aws_get_session(self._profile_name,region)
+        aws_update_instance_info(session,instance)
+
     def create_keypair(self,region,force=False):
         keypair_name = self.get_keypair_name(self._profile_name,region)
         key_filename = self.get_key_filename(self._profile_name,region)
-        aws_create_keypair(region,keypair_name,key_filename,force)
+        session = aws_get_session(self._profile_name,region)
+        aws_create_keypair(session,region,keypair_name,key_filename,force)
 
     def create_instance_objects(self,config):
         keypair_name = self.get_keypair_name(self._profile_name,config.get('region'))
         key_filename = self.get_key_filename(self._profile_name,config.get('region'))
-        return aws_create_instance_objects(config,keypair_name,key_filename)
-
-    def find_instance(self,config):
-        return aws_find_instance(config)
+        session = aws_get_session(self._profile_name,config.get('region'))
+        return aws_create_instance_objects(session,config,keypair_name,key_filename)
 
     def start_instance(self,instance):
-        aws_start_instance(instance)
+        region  = instance.get_region()
+        session = aws_get_session(self._profile_name,region)
+        aws_start_instance(session,instance)
 
     def stop_instance(self,instance):
-        aws_stop_instance(instance)
+        region  = instance.get_region()
+        session = aws_get_session(self._profile_name,region)
+        aws_stop_instance(session,instance)
 
     def terminate_instance(self,instance):
-        aws_terminate_instance(instance)
+        region  = instance.get_region()
+        session = aws_get_session(self._profile_name,region)
+        aws_terminate_instance(session,instance)
 
     def reboot_instance(self,instance):
-        aws_reboot_instance(instance)
-
-    def update_instance_info(self,instance):
-        aws_update_instance_info(instance)
+        region  = instance.get_region()
+        session = aws_get_session(self._profile_name,region)
+        aws_reboot_instance(session,instance)
 
     def get_region(self):
         return aws_get_region(self._profile_name)
@@ -755,38 +802,46 @@ class AWSCloudRunLightProvider(CloudRunLightProvider):
         CloudRunLightProvider.__init__(self,conf)
 
     def find_instance(self,config):
-        return aws_find_instance(config)    
+        region  = config.get('region')        
+        session = aws_get_session(self._profile_name,region)
+        return aws_find_instance(session,config)
 
     def update_instance_info(self,instance):
-        aws_update_instance_info(instance)
+        region  = instance.get_region()
+        session = aws_get_session(self._profile_name,region)
+        aws_update_instance_info(session,instance)
 
     def create_keypair(self,region,force=False):
         keypair_name = self.get_keypair_name(self._profile_name,region)
         key_filename = self.get_key_filename(self._profile_name,region)
-        aws_create_keypair(region,keypair_name,key_filename,force)
+        session = aws_get_session(self._profile_name,region)
+        aws_create_keypair(session,region,keypair_name,key_filename,force)
 
     def create_instance_objects(self,config):
         keypair_name = self.get_keypair_name(self._profile_name,config.get('region'))
         key_filename = self.get_key_filename(self._profile_name,config.get('region'))
-        return aws_create_instance_objects(config,keypair_name,key_filename)
+        session = aws_get_session(self._profile_name,config.get('region'))
+        return aws_create_instance_objects(session,config,keypair_name,key_filename)
 
     def start_instance(self,instance):
-        aws_start_instance(instance)
+        region  = instance.get_region()
+        session = aws_get_session(self._profile_name,region)
+        aws_start_instance(session,instance)
 
     def stop_instance(self,instance):
-        aws_stop_instance(instance)
+        region  = instance.get_region()
+        session = aws_get_session(self._profile_name,region)
+        aws_stop_instance(session,instance)
 
     def terminate_instance(self,instance):
-        aws_terminate_instance(instance)
+        region  = instance.get_region()
+        session = aws_get_session(self._profile_name,region)
+        aws_terminate_instance(session,instance)
 
     def reboot_instance(self,instance):
-        aws_reboot_instance(instance)
-
-    def grant_admin_rights(self,instance):
-        aws_grant_admin_rights(instance)   
-
-    def add_maestro_security_group(self,instance):
-        aws_add_maestro_security_group(instance)
+        region  = instance.get_region()
+        session = aws_get_session(self._profile_name,region)
+        aws_reboot_instance(session,instance)
 
     def get_region(self):
         return aws_get_region(self._profile_name)
@@ -796,3 +851,9 @@ class AWSCloudRunLightProvider(CloudRunLightProvider):
 
     def set_profile(self,profile_name):
         boto3.setup_default_session(profile_name=profile_name)
+
+    def grant_admin_rights(self,instance):
+        aws_grant_admin_rights(instance)   
+
+    def add_maestro_security_group(self,instance):
+        aws_add_maestro_security_group(instance)
