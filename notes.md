@@ -108,7 +108,8 @@
   - [ ] handle KeyPair better: append the owner ID to the file name so that we can switch profile without deleting and terminating stuff 
   - [ ] handle when the KeyPair is not found on file better ...
   - [ ] debug:  An error occurred (InvalidParameterValue) when calling the AssociateIamInstanceProfile operation: Value (arn:aws:iam::870777542080:instance-profile/cloudrun-maestro-profile) for parameter iamInstanceProfile.arn is invalid. Invalid IAM Instance Profile ARN
-  - [ ] debug 'local' why when terminating an instance, the watch() AS daemon + wait() method are not stopping ... ISSUE WITH PROCESSES LIST? (maybe without even terminating an instance)
+  - [x] debug 'local' why when terminating an instance, the watch() AS daemon + wait() method are not stopping ... ISSUE WITH PROCESSES LIST?
+  - [ ] auto-stop function
 
 4) local mode:
   - [x] handle new config 

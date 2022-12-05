@@ -38,6 +38,8 @@ class CloudRunFatProvider(CloudRunProvider,ABC):
         self._environments = []
         self._jobs = []
 
+        self._current_processes = None
+
         self._multiproc_man   = multiprocessing.Manager()
         self._multiproc_lock  = self._multiproc_man.Lock()
         self._instances_locks = dict()
@@ -743,7 +745,7 @@ class CloudRunFatProvider(CloudRunProvider,ABC):
             instances_runs[instance.get_name()]['cmd_pid'] = cmd_pid
             instances_runs[instance.get_name()]['cmd_run_pre'] = cmd_run_pre
         
-        processes = []
+        self._current_processes = []
         
         with concurrent.futures.ThreadPoolExecutor(max_workers=self._get_num_workers()) as pool:
             future_to_instance = { pool.submit(self._run_jobs_for_instance,
@@ -760,14 +762,14 @@ class CloudRunFatProvider(CloudRunProvider,ABC):
                 for process in fut_processes:
                     # switch to yield when the wait_for_state method is ready ...
                     #yield process
-                    processes.append(process)
+                    self._current_processes.append(process)
             #pool.shutdown()        
 
         self._state = CloudRunProviderState.RUNNING
 
         self.serialize_state()
 
-        return processes 
+        return self._current_processes 
 
         
     def run_job(self,job):
@@ -981,6 +983,10 @@ class CloudRunFatProvider(CloudRunProvider,ABC):
 
         while True:
 
+            if self._processes_have_changed(instance,processes_infos):
+                self.debug(1,"Processes have changed. Replaced argument with new processes",color=bcolors.WARNING)
+                processes_infos , jobsinfo = self._recompute_jobs_info(instance,self._current_processes)
+
             if not ssh_client.get_transport().is_active():
                 ssh_client , processes = self._handle_instance_disconnect(instance,wait_mode,"could not get jobs states for instance. SSH connection lost with",
                                                 [processes_infos[uid]['process'] for uid in processes_infos])
@@ -1093,6 +1099,26 @@ class CloudRunFatProvider(CloudRunProvider,ABC):
             processes.append( job.get_last_process())
         return processes
 
+    def _processes_have_changed(self,instance,processes_infos):
+        # if functools.reduce(lambda x, y : x and y, map(lambda p, q: x.get_uid() == y.get_uid(),self._current_process,processes), True):
+        #     return False
+        # else:
+        #     return True
+        processes = processes_infos.values()
+        if self._current_processes is None or processes is None:
+            return False
+        processes_comp = []
+        for process in self._current_processes:
+            if process.get_job().get_instance() == instance:
+                processes_comp.append( process )
+        if len(processes_comp) != len(processes):
+            return True
+        for i,process_info in enumerate(processes):
+            cur_process = processes_comp[i]
+            if cur_process.get_uid() != process_info['process'].get_uid():
+                return True
+        return False
+
     def _organize_instances_processes( self , processes ):
         instances_processes = dict()
         #instances_list      = dict()
@@ -1174,10 +1200,10 @@ class CloudRunFatProvider(CloudRunProvider,ABC):
             if self._state >= CloudRunProviderState.WATCHING:
                 self.watch(None,True) # daemon mode
         else:
-            self.start()
-            self.assign()
-            self.deploy()
-
+            # self.start()
+            # self.assign()
+            # self.deploy()
+            pass
 
     def watch(self,processes=None,daemon=True):
 

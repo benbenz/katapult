@@ -9,6 +9,7 @@ config = {
     'dev'          : False ,                              # When True, this will ensure the same instance and dev environement are being used (while working on building up the project) 
     'debug'        : 1 ,                                  # debug level (0...3)
     'maestro'      : 'local' ,                            # where the 'maestro' resides: local' | 'remote' (nano instance) | 'lambda'
+    'auto_stop'    : True ,                               # will automatically stop the instances and the maestro, once the jobs are done
     'provider'     : 'aws' ,                              # the provider name ('aws' | 'azure' | ...)
     'job_assign'   : None ,                               # algorithm used for job assignation / task scheduling ('random' | 'multi_knapsack')
     'recover'      : True ,                               # if True, CloudRun will always save the state and try to recover this state on the next execution
