@@ -536,9 +536,13 @@ def debug(level,*args,**kwargs):
             args = tuple(listargs)
             kwargs.pop('color')
         try:
+            if not sys.stdout or sys.stdout.closed==True:
+                return
             if DBG_PREFIX:
                 print(DBG_PREFIX,*args,**kwargs)
             else:
                 print(*args,**kwargs)
+            sys.stdout.flush()
+            sys.stderr.flush()
         except:
             pass

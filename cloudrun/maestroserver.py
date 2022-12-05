@@ -101,8 +101,8 @@ def client_handler(cr_client,conn):
                 process_command(cr_client,cmd,args,conn)
                 break # one-shot command
             except ConnectionResetError as cre:
-                sys.stdout = old_stdout
                 try:
+                    sys.stdout = old_stdout
                     print(cre)
                     print("DISCONNECTION")
                 except:
@@ -117,7 +117,18 @@ def client_handler(cr_client,conn):
                 break  
         try:
             conn_pipe.flush()
+        except:
+            pass
+        try:
             conn_pipe.close()
+        except:
+            pass
+        try:
+            conn.shutdown(socket.SHUT_RDWR)
+        except:
+            pass
+        try:
+            conn.close()
         except:
             pass
     if kill_thread:

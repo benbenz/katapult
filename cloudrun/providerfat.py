@@ -1045,6 +1045,10 @@ class CloudRunFatProvider(CloudRunProvider,ABC):
                                 process.set_state(state)
                             self.debug(2,process)
                             processes_infos[uid]['retrieved'] = True
+                            # SUPER IMPORTANT TO TEST with retrieved (remote) state !
+                            # if we tested with curernt state we could test against all ABORTED jobs and the wait() function would cancel...
+                            # this could potentially happen though
+                            # instead, the retrieved state is actually UNKNOWN
                             processes_infos[uid]['test']      = job_state & state 
                         except Exception as e:
                             debug(1,"\nUnhandled state received by state.sh!!!",statestr,"\n")
