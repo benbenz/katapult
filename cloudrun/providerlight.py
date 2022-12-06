@@ -73,6 +73,8 @@ class CloudRunLightProvider(CloudRunProvider,ABC):
             self._exec_command(ssh_client,'rm -f $HOME/cloudrun/ready')
             # make cloudrun dir
             self._exec_command(ssh_client,'mkdir -p $HOME/cloudrun/files') 
+            # mark it as maestro...
+            self._exec_command(ssh_client,'echo "" > ~/maestro') 
             # add manually the 
             if self._config.get('profile'):
                 profile = self._config.get('profile')
@@ -384,7 +386,7 @@ class CloudRunLightProvider(CloudRunProvider,ABC):
 
     def watch(self,processes=None,daemon=True):
         # triggers maestro::wait_for_jobs_state
-        self._exec_maestro_command("watch")
+        self._exec_maestro_command("watch:"+str(daemon))
 
     def wakeup(self):
         # triggers maestro::wakeup

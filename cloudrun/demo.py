@@ -16,8 +16,8 @@ async def mainloop(cr_client):
     print("\n== START ==\n")
 
     # distribute the jobs on the instances (dummy algo for now)
-    cr_client.start(True) # True for reset (usually not necessary - usually for dev purposes)
-    #cr_client.start() 
+    #cr_client.start(True) # True for reset (usually not necessary - usually for dev purposes)
+    cr_client.start() 
 
     print("\n== ALLOCATE JOBS ==\n")
 
@@ -42,7 +42,7 @@ async def mainloop(cr_client):
 
     print("\n== WATCH ==\n")
 
-    processes = cr_client.watch(processes)
+    processes = cr_client.watch(processes,True) #daemon = True >> no wait
 
     print("\n== WAIT ==\n")
 

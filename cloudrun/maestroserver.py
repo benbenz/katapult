@@ -43,7 +43,10 @@ def process_command(cr_client,command,args,conn):
         
         elif command == 'watch':
 
-            cr_client.watch(None,True) # daemon
+            daemon = True
+            if args:
+                daemon = args[0].strip().lower() == "true"
+            cr_client.watch(None,daemon)
 
         elif command == 'wait':
 
