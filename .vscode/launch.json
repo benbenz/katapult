@@ -10,7 +10,8 @@
             "request": "launch",
             "program": "${workspaceFolder}/cloudrun/demo.py",
             "console": "integratedTerminal",
-            "cwd": "${workspaceFolder}"
+            "cwd": "${workspaceFolder}",
+            "args": ["reset"]
         },
         {
             "name": "Demo Wait",

@@ -177,6 +177,7 @@ class CloudRunInstance():
         self._ip_addr_priv  = instance._ip_addr_priv
         self._dns_addr_priv = instance._dns_addr_priv
         self._state    = instance._state
+        self._platform = instance._platform
         self._config   = copy.deepcopy(instance._config)
         self._data     = copy.deepcopy(instance._data)        
 

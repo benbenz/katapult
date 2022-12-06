@@ -138,7 +138,9 @@ class CloudRunProvider(ABC):
 
     def _resolve_dpl_job_paths(self,upfile,dpl_job):
         if self._mutualize_uploads:
-            return cloudrunutils.resolve_paths(upfile,dpl_job.get_config('run_script'),'$HOME/run/files',True) 
+            instance = dpl_job.get_instance()
+            remote_ref_dir = instance.join_path( instance.get_home_dir() , 'run' , 'files')
+            return cloudrunutils.resolve_paths(upfile,dpl_job.get_config('run_script'),remote_ref_dir,True) 
         else:
             return cloudrunutils.resolve_paths(upfile,dpl_job.get_config('run_script'),dpl_job.get_path(),False)
 
@@ -221,7 +223,7 @@ class CloudRunProvider(ABC):
             pass
 
     def _connect_to_instance(self,instance,**kwargs):
-        # ssh into instance and run the script from S3/local? (or sftp)
+        # ssh into instance and run the script 
         region = instance.get_region()
         #if region is None:
         #    region = self.get_user_region(self._config.get('profile'))
@@ -231,7 +233,7 @@ class CloudRunProvider(ABC):
         k = paramiko.RSAKey.from_private_key_file(keypair_filename)
         ssh_client = paramiko.SSHClient()
         ssh_client.set_missing_host_key_policy(paramiko.AutoAddPolicy())
-        self.debug(1,"connecting to ",instance.get_dns_addr(),"/",instance.get_ip_addr())
+        self.debug(1,"connecting to ",instance.get_dns_addr(),"@",instance.get_ip_addr())
         retrys = 0 
         while True:
             try:
@@ -290,7 +292,7 @@ class CloudRunProvider(ABC):
             self.debug(1,sshe)
             raise CloudRunError()  
             
-    def _run_ssh_commands(self,ssh_client,commands):
+    def _run_ssh_commands(self,instance,ssh_client,commands):
         for command in commands:
             self.debug(2,"Executing ",format( command['cmd'] ),"output",command['out'])
             try:
@@ -307,7 +309,10 @@ class CloudRunProvider(ABC):
                 else:
                     transport = ssh_client.get_transport()
                     channel   = transport.open_session()
-                    output = "$HOME/run/out.log" if not 'output' in command else command['output']
+                    if not 'output' in command:
+                        output = instance.join_path( instance.get_home_dir() , 'run' , 'out.log' )
+                    else:
+                        output = command['output']
                     channel.exec_command(command['cmd']+" 1>"+output+" 2>&1 &")
                     #stdout.read()
                     #pid = int(stdout.read().strip().decode("utf-8"))
@@ -330,7 +335,7 @@ class CloudRunProvider(ABC):
 
     def _get_instancetypes_attribute(self,inst_cfg,resource_file,type_col,attr,return_type):
 
-        # Could be any dot-separated package/module name or a "Requirement"
+        # Could be any dot-separated package or module name or a "Requirement"
         resource_package = 'cloudrun'
         resource_path = '/'.join(('resources', resource_file))  # Do not use os.path.join()
         #template = pkg_resources.resource_string(resource_package, resource_path)

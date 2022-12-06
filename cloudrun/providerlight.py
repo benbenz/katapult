@@ -121,7 +121,7 @@ class CloudRunLightProvider(CloudRunProvider,ABC):
         commands = [
             { 'cmd' : 'cd $HOME/cloudrun && unzip -o cloudrun.zip && rm cloudrun.zip' , 'out' : True } ,
         ]
-        self._run_ssh_commands(ssh_client,commands) 
+        self._run_ssh_commands(self._maestro,ssh_client,commands) 
         
         filesOfDirectory = os.listdir('.')
         pattern = "cloudrun*.pem"
@@ -132,7 +132,7 @@ class CloudRunLightProvider(CloudRunProvider,ABC):
         commands = [
             { 'cmd' : 'chmod +x $HOME/cloudrun/cloudrun/resources/remote_files/*.sh' , 'out' : True } ,
         ]
-        self._run_ssh_commands(ssh_client,commands) 
+        self._run_ssh_commands(self._maestro,ssh_client,commands) 
 
 
     def _deploy_cloudrun(self,ssh_client,ftp_client):
@@ -147,7 +147,7 @@ class CloudRunLightProvider(CloudRunProvider,ABC):
 #            { 'cmd' : 'cd $HOME/cloudrun && $HOME/.local/bin/poetry install' , 'out' : True } ,
 #            { 'cmd' : 'cd $HOME/cloudrun && $HOME/.local/bin/poetry run demo' , 'out' : True }
         ]
-        self._run_ssh_commands(ssh_client,commands)
+        self._run_ssh_commands(self._maestro,ssh_client,commands)
 
     def _run_server(self,ssh_client):
         # run the server
@@ -155,7 +155,7 @@ class CloudRunLightProvider(CloudRunProvider,ABC):
             { 'cmd' : '$HOME/cloudrun/cloudrun/resources/remote_files/startmaestro.sh' , 'out' : False , 'output' : 'maestro.log' },
             { 'cmd' : 'crontab -r ; echo "* * * * * /home/ubuntu/cloudrun/cloudrun/resources/remote_files/startmaestro.sh" | crontab', 'out' : True }
         ]
-        self._run_ssh_commands(ssh_client,commands)
+        self._run_ssh_commands(self._maestro,ssh_client,commands)
 
     def _deploy_config(self,ssh_client,ftp_client):
         config , mkdir_cmd , files_to_upload_per_dir = self._translate_config_for_maestro()
@@ -370,7 +370,7 @@ class CloudRunLightProvider(CloudRunProvider,ABC):
             commands = [
                { 'cmd' : 'chmod +x $HOME/resetmaestro.sh && $HOME/resetmaestro.sh' , 'out' : True }
             ]
-            self._run_ssh_commands(ssh_client,commands)
+            self._run_ssh_commands(instance,ssh_client,commands)
             ftp_client.close()
             ssh_client.close()
         self.debug(1,'RESETTING done')

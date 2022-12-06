@@ -84,7 +84,7 @@ def process_command(cr_client,command,args,conn):
         raise e
 
     io_pipe.flush()
-    # to let time for the buffer to be flushed before killing thread/connection
+    # to let time for the buffer to be flushed before killing thread and connection
     time.sleep(1)
     io_pipe.close()
 

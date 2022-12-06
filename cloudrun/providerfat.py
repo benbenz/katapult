@@ -125,8 +125,13 @@ class CloudRunFatProvider(CloudRunProvider,ABC):
                
     def _deploy_instance(self,instance,deploy_states,ssh_client,ftp_client):
 
+        homedir     = instance.get_home_dir()
+        global_path = instance.join_path(homedir,'run')
+        files_path  = instance.join_path(global_path,'files')
+        ready_path  = instance.join_path(global_path,'ready')
+
         # last file uploaded ...
-        re_upload  = self._test_reupload(instance,"$HOME/run/ready", ssh_client)
+        re_upload  = self._test_reupload(instance,ready_path,ssh_client)
 
         #created = deploy_states[instance.get_name()].get('created')
 
@@ -135,7 +140,7 @@ class CloudRunFatProvider(CloudRunProvider,ABC):
         if re_upload:
 
             self.debug(2,"creating instance's directories ...")
-            stdin0, stdout0, stderr0 = self._exec_command(ssh_client,"mkdir -p $HOME/run $HOME/run/files && rm -f $HOME/run/ready")
+            stdin0, stdout0, stderr0 = self._exec_command(ssh_client,"mkdir -p "+global_path+" "+files_path+" && rm -f "+ready_path)
             self.debug(2,"directories created")
 
             self.debug(1,"uploading instance's files ... ")
@@ -144,7 +149,6 @@ class CloudRunFatProvider(CloudRunProvider,ABC):
             ftp_client = ssh_client.open_sftp()
 
             # change dir to global dir (should be done once)
-            global_path = "/home/" + instance.get_config('img_username') + '/run/'
             ftp_client.chdir(global_path)
             for file in ['config.py','bootstrap.sh','run.sh','microrun.sh','state.sh','tail.sh','getpid.sh','reset.sh']:
                 ftp_client.putfo(self._get_resource_file('remote_files/'+file),file)    
@@ -157,10 +161,10 @@ class CloudRunFatProvider(CloudRunProvider,ABC):
 
             commands = [ 
                 # make bootstrap executable
-                { 'cmd': "chmod +x "+global_path+"/*.sh ", 'out' : True },              
+                { 'cmd': "chmod +x "+instance.join_path(global_path,"*.sh"), 'out' : True },              
             ]
 
-            self._run_ssh_commands(ssh_client,commands)
+            self._run_ssh_commands(instance,ssh_client,commands)
 
             ftp_client.putfo(BytesIO("".encode()), 'ready')
 
@@ -242,7 +246,7 @@ class CloudRunFatProvider(CloudRunProvider,ABC):
 
                 bootstrap_command = bootstrap_command + (" ; " if bootstrap_command else "") + global_path+"/bootstrap.sh \"" + dpl_env.get_name_with_hash() + "\" " + ("1" if self._config['dev'] else "0")
 
-                self._run_ssh_commands(ssh_client,commands)
+                self._run_ssh_commands(instance,ssh_client,commands)
                 
                 # let bootstrap.sh do it ...
                 #ftp_client.putfo(BytesIO("".encode()), 'ready')
@@ -255,7 +259,7 @@ class CloudRunFatProvider(CloudRunProvider,ABC):
                 {'cmd': '$HOME/run/generate_envs.sh' , 'out':print_deploy, 'output': '$HOME/run/bootstrap.log'}
                 #{'cmd': bootstrap_command ,'out': print_deploy , 'output': '$HOME/run/bootstrap.log'}
             ]
-            self._run_ssh_commands(ssh_client,commands)
+            self._run_ssh_commands(instance,ssh_client,commands)
         
 
     def _deploy_jobs(self,instance,deploy_states,ssh_client,ftp_client):
@@ -451,7 +455,7 @@ class CloudRunFatProvider(CloudRunProvider,ABC):
             commands = [
                 { 'cmd' : 'chmod +x $HOME/reset.sh && $HOME/reset.sh' , 'out' : True }
             ]
-            self._run_ssh_commands(ssh_client,commands)
+            self._run_ssh_commands(instance,ssh_client,commands)
             ftp_client.close()
             ssh_client.close()
         self.debug(1,'RESETTING done')    
@@ -642,7 +646,7 @@ class CloudRunFatProvider(CloudRunProvider,ABC):
             ]
             
             try:
-                self._run_ssh_commands(ssh_client,commands)
+                self._run_ssh_commands(instance,ssh_client,commands)
                 tryagain = False
             except Exception as e:
                 self.debug(1,e)
@@ -833,7 +837,7 @@ class CloudRunFatProvider(CloudRunProvider,ABC):
             { 'cmd': global_path+"/run.sh \"" + dpl_env.get_name_with_hash() + "\" \""+dpl_job.get_command()+"\" " + job.get_config('input_file') + " " + job.get_config('output_file') + " " + job.get_hash()+" "+uid+">"+run_path+"/run-"+uid+".log 2>&1", 'out' : False }
         ]
 
-        self._run_ssh_commands(ssh_client,commands)
+        self._run_ssh_commands(instance,ssh_client,commands)
 
         # retrieve PID (this will wait for PID file)
         pid_file = run_path + "/pid"
