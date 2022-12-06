@@ -242,18 +242,9 @@ config = {
 
 ```python
 config = {
-
-    ################################################################################
-    # GLOBALS
-    ################################################################################
-
     'debug'        : 1 ,                                  # debug level (0...3)
     'maestro'      : 'local' ,                            # where the 'maestro' resides: local' | 'remote' (nano instance) | 'lambda'
     'provider'     : 'aws' ,                              # the provider name ('aws' | 'azure' | ...)
-
-    ################################################################################
-    # INSTANCES / HARDWARE
-    ################################################################################
 
     'instances' : [
         { 
@@ -262,26 +253,13 @@ config = {
 
     ] ,
 
-    ################################################################################
-    # ENVIRONMENTS / SOFTWARE
-    ################################################################################
-
     'environments' : [
         {
             'name'         : None ,                       # name of the environment - should be unique if not 'None'. 'None' only when len(environments)==1
-
-            # env_conda + env_pypi  : mamba is used to setup the env (pip dependencies included)
-            # env_conda (only)      : mamba is used to setup the env
-            # env_pypi  (only)      : venv + pip is used to setup the env 
-
             'env_conda'    : "example/environment.yml",   # None, an array of libraries, a path to environment.yml  file, or a path to the root of a conda environment
             'env_julia'    : ["Wavelets"] ,                       # None, a string or an array of Julia packages to install (requires julia)
         }
     ] ,
-
-    ################################################################################
-    # JOBS / SCRIPTS
-    ################################################################################
 
     'jobs' : [
         {
