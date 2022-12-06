@@ -48,6 +48,8 @@ class CloudRunProvider(ABC):
             self.set_profile(self._config.get('profile'))
 
         self._instances_locks = dict()
+        self._provider_lock   = multiprocessing.Manager().Lock()
+        self._thread_safe_ultra = True # set to False if you want to try per instance locks
 
     def debug_set_prefix(self,value):
         self.DBG_PREFIX = value
@@ -141,9 +143,12 @@ class CloudRunProvider(ABC):
             return cloudrunutils.resolve_paths(upfile,dpl_job.get_config('run_script'),dpl_job.get_path(),False)
 
     def _lock(self,instance):
-        if not instance.get_name() in self._instances_locks:
-            self._instances_locks[instance.get_name()] = multiprocessing.Manager().Lock()
-        return self._instances_locks[instance.get_name()]
+        if not self._thread_safe_ultra:
+            if not instance.get_name() in self._instances_locks:
+                self._instances_locks[instance.get_name()] = multiprocessing.Manager().Lock()
+            return self._instances_locks[instance.get_name()]
+        else:
+            return self._provider_lock
 
 
     def _wait_and_connect(self,instance):
