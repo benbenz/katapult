@@ -329,6 +329,12 @@ class CloudRunFatProvider(ABC):
     # get the states of the processes
     def get_jobs_states(self,processes=None):
 
+    def print_jobs_summary(self,instance=None):
+
+    def print_aborted_logs(self,instance=None):
+
+    def fetch_results(self,out_directory,processes=None):
+
     # wakeup = start + assign + deploy + run + watch
     def wakeup(self)
 
