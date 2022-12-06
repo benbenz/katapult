@@ -41,7 +41,7 @@ See [https://docs.aws.amazon.com/cli/latest/userguide/cli-configure-quickstart.h
 3. In the AWS web console, under the IAM section, click on the new user and make sure you create an access key under the tab "Security Credentials". Make sure "Console Password" is Enabled as well
 4. Add your new user credentials manually, [in the credentials file](https://docs.aws.amazon.com/cli/latest/userguide/cli-configure-profiles.html)
 
-##### '~/.aws/config' example (C:\Users\USERNAME\\.aws\config on Windows)
+##### '~/.aws/config' example ('C:\Users\USERNAME\\.aws\config' on Windows)
 
 ```
 [default]
@@ -49,7 +49,7 @@ region = eu-west-3
 output = json
 ```
 
-##### '~/.aws/credentials' example (C:\Users\USERNAME\\.aws\credentials on Windows)
+##### '~/.aws/credentials' example ('C:\Users\USERNAME\\.aws\credentials' on Windows)
 
 ```
 [default]
@@ -62,7 +62,7 @@ aws_secret_access_key = YOUR_SECRET_ACCESS_KEY
 1. In the AWS web console, in the IAM service, create a group 'cloudrun-users' with `AmazonEC2FullAccess` and `IAMFullAccess` permissions
 2. In the AWS web console, in the IAM service, create a user USERNAME attached to the 'cloudrun-users' group:
 ### Step 1
-![add user 1](./images/adduser1.jpg)
+![add user 1](./images/adduser1.jpg | width=200)
 ### Step 2
 ![add user 2](./images/adduser2.jpg)
 ### ... Step 5
@@ -72,7 +72,7 @@ aws_secret_access_key = YOUR_SECRET_ACCESS_KEY
 
 3. Add your new user profile manually, [in the credentials file](https://docs.aws.amazon.com/cli/latest/userguide/cli-configure-profiles.html)
 
-##### '~/.aws/config' example (C:\Users\USERNAME\\.aws\config on Windows)
+##### '~/.aws/config' example ('C:\Users\USERNAME\\.aws\config' on Windows)
 
 ```
 [default]
@@ -84,7 +84,7 @@ region = eu-west-3
 output = json
 ```
 
-##### '~/.aws/credentials' example (C:\Users\USERNAME\\.aws\credentials on Windows)
+##### '~/.aws/credentials' example ('C:\Users\USERNAME\\.aws\credentials' on Windows)
 
 ```
 [default]
