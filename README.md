@@ -57,7 +57,7 @@ aws_access_key_id = YOUR_ACCESS_KEY_ID
 aws_secret_access_key = YOUR_SECRET_ACCESS_KEY
 ```
 
-# Setting up a separate user with least permissions 
+## Setting up a separate user with least permissions 
 #### (manually) 
 
 1. In the AWS web console, in the IAM service, create a group 'cloudrun-users' with `AmazonEC2FullAccess` and `IAMFullAccess` permissions
