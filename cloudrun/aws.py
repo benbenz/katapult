@@ -729,6 +729,16 @@ def aws_grant_admin_rights(session,instance):
 
     debug(1,"MAESTRO role added to instance",instance.get_id(),instance.get_name())
 
+
+def aws_setup_auto_stop(session,instance):
+    ec2_client = session.client("ec2")
+    ec2_client.modify_instance_attribute(
+        InstanceId=instance.get_id(),
+        InstanceInitiatedShutdownBehavior={
+            'Value': 'stop'
+        }
+    )
+
 ##########
 # PUBLIC #
 ##########
@@ -853,7 +863,16 @@ class AWSCloudRunLightProvider(CloudRunLightProvider):
         boto3.setup_default_session(profile_name=profile_name)
 
     def grant_admin_rights(self,instance):
-        aws_grant_admin_rights(instance)   
+        region  = instance.get_region()
+        session = aws_get_session(self._profile_name,region)
+        aws_grant_admin_rights(session,instance)   
 
     def add_maestro_security_group(self,instance):
-        aws_add_maestro_security_group(instance)
+        region  = instance.get_region()
+        session = aws_get_session(self._profile_name,region)
+        aws_add_maestro_security_group(session,instance)
+
+    def setup_auto_stop(self,instance):
+        region  = instance.get_region()
+        session = aws_get_session(self._profile_name,region)
+        aws_setup_auto_stop(session,instance)

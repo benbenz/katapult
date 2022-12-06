@@ -72,6 +72,8 @@ class CloudRunLightProvider(CloudRunProvider,ABC):
                 self._exec_command(ssh_client,aws_config_cmd)
             # grant its admin rights (we need to be (stopped or) running to be able to do that)
             self.grant_admin_rights(self._maestro)
+            # setup auto_stop behavior for maestro
+            self.setup_auto_stop(self._maestro)
             # deploy CloudRun on the maestro
             self._deploy_cloudrun(ssh_client,ftp_client)
             # mark as ready
@@ -409,6 +411,9 @@ class CloudRunLightProvider(CloudRunProvider,ABC):
     def add_maestro_security_group(self,instance):
         pass
 
+    @abstractmethod
+    def setup_auto_stop(self,instance):
+        pass
 
     # needed by CloudRunProvider::_wait_for_instance 
     def serialize_state(self):

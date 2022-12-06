@@ -92,8 +92,7 @@ class CloudRunProvider(ABC):
 
         # this is important because we can very well have watch() daemon and wait() method run at the same time
         # and both those methods may call '_start_and_update_instance' > '_get_or_create_instance'
-        self._prep_lock(instance)
-        with self._instances_locks[instance.get_name()]:
+        with self._lock(instance):
             
             instance = self.find_instance(inst_cfg)
 
@@ -109,11 +108,6 @@ class CloudRunProvider(ABC):
     def _start_and_update_instance(self,instance):
 
         try:
-            #self._prep_lock(instance)
-            # this is important because we can very well have watch() daemon and wait() method run at the same time
-            # and both those methods may call '_start_and_update_instance' 
-            #with self._instances_locks[instance.get_name()]:
-            
             # CHECK EVERY TIME !
             new_instance , created = self._get_or_create_instance(instance)
 
@@ -146,9 +140,10 @@ class CloudRunProvider(ABC):
         else:
             return cloudrunutils.resolve_paths(upfile,dpl_job.get_config('run_script'),dpl_job.get_path(),False)
 
-    def _prep_lock(self,instance):
+    def _lock(self,instance):
         if not instance.get_name() in self._instances_locks:
             self._instances_locks[instance.get_name()] = multiprocessing.Manager().Lock()
+        return self._instances_locks[instance.get_name()]
 
 
     def _wait_and_connect(self,instance):
@@ -171,8 +166,7 @@ class CloudRunProvider(ABC):
         waitFor = True
         while waitFor:
             # we may be heavily updating the instace already ...
-            self._prep_lock(instance)
-            with self._instances_locks[instance.get_name()]:
+            with self._lock(instance):
                 self.update_instance_info(instance)
 
             self.serialize_state()

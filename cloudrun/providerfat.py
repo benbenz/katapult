@@ -911,8 +911,9 @@ class CloudRunFatProvider(CloudRunProvider,ABC):
     def _handle_instance_disconnect(self,instance,wait_mode,msg,processes=None):
 
         if self._instances_watching.get(instance.get_name(),False) == False:
-            self.debug(1,"We have stopped watching/waiting for the instance - We wont try to reconnect",color=bcolors.WARNING)
+            self.debug(1,"We have stopped watching the instance - We won't try to reconnect",color=bcolors.WARNING)
             return None , None 
+            
         try:
             # check the status on the instance with AWS
             self.update_instance_info(instance)
@@ -950,6 +951,8 @@ class CloudRunFatProvider(CloudRunProvider,ABC):
 
     def _recompute_jobs_info(self,instance,processes):
         instances_processes = self._organize_instances_processes(processes)
+        if not instance.get_name() in instances_processes:
+            return dict() , ""
         instance_processes  = instances_processes[instance.get_name()]
         jobsinfo , instance = self._compute_jobs_info(instance_processes)
         return instance_processes , jobsinfo 
@@ -978,7 +981,7 @@ class CloudRunFatProvider(CloudRunProvider,ABC):
 
         jobsinfo , instance = self._compute_jobs_info(processes_infos)
 
-        if not programmatic:
+        if not programmatic and wait_mode & CloudRunProviderStateWaitMode.WATCH:
             self._instances_watching[instance.get_name()] = True
         
         ssh_client = self._connect_to_instance(instance)
@@ -1112,13 +1115,17 @@ class CloudRunFatProvider(CloudRunProvider,ABC):
             if not programmatic:
                 self._instances_watching[instance.get_name()] = False            
 
-            self.debug(1,"Stopping instance",instance.get_name(),color=bcolors.WARNING)
-            self.stop_instance(instance)
-            cur_thread   = current_thread()
-            debug(2,self._instances_watching)
-            any_watching = any( self._instances_watching.values() )
-            if not any_watching:
-                self.debug(1,"Should stop the fat client / maestro because all instances have ran the jobs (NOT IMPLEMENTED)",color=bcolors.WARNING)
+            if self._config.get('auto_stop'):
+                try:
+                    self.debug(1,"Stopping instance",instance.get_name(),color=bcolors.WARNING)
+                    self.stop_instance(instance)
+                except:
+                    pass
+                debug(2,self._instances_watching)
+                any_watching = any( self._instances_watching.values() )
+                if not any_watching:
+                    self.debug(1,"Stopping the fat client / maestro because all instances have ran the jobs",color=bcolors.WARNING)
+                    os.system("sudo shutdown -h now")
 
         return processes
 
