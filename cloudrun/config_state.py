@@ -52,15 +52,8 @@ class ConfigManager():
 
                         real_inst_cfg['cpus'] = None
                         real_inst_cfg['rank'] = "{0}.{1}".format(i+1,1)
-                        # [!important!] also copy global information that are used for the name generation ...
-                        real_inst_cfg['dev']  = self._config.get('dev',False)
-                        real_inst_cfg['project']  = self._config.get('project',None)
 
-                        # let's also freeze the region
-                        # this is done so that we dont change the hash when sending the config to maestro
-                        # (because the client adds the 'region' field when translating the config)
-                        if not real_inst_cfg.get('region'):
-                            real_inst_cfg['region'] = self._provider.get_region()
+                        self._load_other_instance_info(real_inst_cfg)
 
                         # starts calling the Service here !
                         # instance , created = self.start_instance( real_inst_cfg )
@@ -107,15 +100,8 @@ class ConfigManager():
                             real_inst_cfg.pop('explode',None) # provide default value to avoid KeyError
                             real_inst_cfg['cpus'] = inst_cpus
                             real_inst_cfg['rank'] = rank
-                            # [!important!] also copy global information that are used for the name generation ...
-                            real_inst_cfg['dev']  = self._config.get('dev',False)
-                            real_inst_cfg['project']  = self._config.get('project',None)
 
-                            # let's also freeze the region
-                            # this is done so that we dont change the hash when sending the config to maestro
-                            # (because the client adds the 'region' field when translating the config)
-                            if not real_inst_cfg.get('region'):
-                                real_inst_cfg['region'] = self._provider.get_region()
+                            self._load_other_instance_info(real_inst_cfg)
 
                             # let's put some dummy instances for now ...
                             instance = CloudRunInstance( real_inst_cfg , None, None )
@@ -141,6 +127,23 @@ class ConfigManager():
                     job = CloudRunJob(job_cfg,rank)
                     self._jobs.append(job)
                     rank = rank + 1
+
+    def _load_other_instance_info(self,real_inst_cfg):
+        # [!important!] also copy global information that are used for the name generation ...
+        real_inst_cfg['dev']      = self._config.get('dev',False)
+        real_inst_cfg['project']  = self._config.get('project',None)
+
+        # let's also freeze the region
+        # this is done so that we dont change the hash when sending the config to maestro
+        # (because the client adds the 'region' field when translating the config)
+        if not real_inst_cfg.get('region'):
+            real_inst_cfg['region'] = self._provider.get_region()     
+
+        # also set the img_id is None
+        if not real_inst_cfg.get('img_id'):
+            img_id , img_username , img_type = self._provider.get_suggested_image(real_inst_cfg['region'])
+            real_inst_cfg['img_id']          = img_id 
+            real_inst_cfg['img_username']    = img_username 
 
     # fill up the jobs names if not present (and we have only 1 environment defined)
     # link the jobs objects with an environment object

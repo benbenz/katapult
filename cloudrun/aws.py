@@ -826,6 +826,10 @@ class AWSCloudRunProviderImpl():
     def set_profile(self,profile_name):
         boto3.setup_default_session(profile_name=profile_name)
 
+    def get_suggested_image(self,region):
+        session = self.get_session(region)
+        return aws_get_suggested_image(session,region)
+
     def get_session(self,obj):
         if isinstance(obj,dict):
             region = obj.get('region')
@@ -872,7 +876,10 @@ class AWSCloudRunFatProvider(CloudRunFatProvider,AWSCloudRunProviderImpl):
         return AWSCloudRunProviderImpl.get_account_id(self)
 
     def set_profile(self,profile_name):
-        AWSCloudRunProviderImpl.set_profile(self,profile_name)       
+        AWSCloudRunProviderImpl.set_profile(self,profile_name)     
+
+    def get_suggested_image(self,region):
+        return AWSCloudRunProviderImpl.get_suggested_image(self,region)
 
     def get_recommended_cpus(self,inst_cfg):
         return self._get_instancetypes_attribute(inst_cfg,"instancetypes-aws.csv","Instance type","Valid cores",list)
@@ -919,6 +926,9 @@ class AWSCloudRunLightProvider(CloudRunLightProvider,AWSCloudRunProviderImpl):
     def set_profile(self,profile_name):
         AWSCloudRunProviderImpl.set_profile(self,profile_name)   
 
+    def get_suggested_image(self,region):
+        return AWSCloudRunProviderImpl.get_suggested_image(self,region)
+
     def grant_admin_rights(self,instance):
         session = self.get_session(instance)
         aws_grant_admin_rights(session,instance)   
@@ -930,7 +940,3 @@ class AWSCloudRunLightProvider(CloudRunLightProvider,AWSCloudRunProviderImpl):
     def setup_auto_stop(self,instance):
         session = self.get_session(instance)
         aws_setup_auto_stop(session,instance)
-
-    def get_suggested_image(self,region):
-        session = self.get_session(region)
-        return aws_get_suggested_image(session,region)

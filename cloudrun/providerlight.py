@@ -426,10 +426,6 @@ class CloudRunLightProvider(CloudRunProvider,ABC):
     def setup_auto_stop(self,instance):
         pass
 
-    @abstractmethod
-    def get_suggested_image(self,region):
-        pass
-
     # needed by CloudRunProvider::_wait_for_instance 
     def serialize_state(self):
         pass

@@ -24,8 +24,8 @@ config = {
         { 
             'region'       : None ,                       # can be None or has to be valid. Overrides AWS user region configuration.
             'cloud_id'     : None ,                       # can be None, or even wrong/non-existing - then the default one is used
-            'img_id'       : 'ami-077fd75cd229c811b' ,    # OS image: has to be valid and available for the profile (user/region)
-            'img_username' : 'ubuntu' ,                   # the SSH user for the image
+            'img_id'       : 'ami-077fd75cd229c811b' ,    # OS image: can be None or has to be valid and available for the profile (user/region)
+            'img_username' : 'ubuntu' ,                   # the SSH user for the image (can be None if image is None)
             'type'         : 't2.micro' ,                 # proprietary size spec (has to be valid)
             'cpus'         : None ,                       # number of CPU cores
             'gpu'          : None ,                       # the proprietary type of the GPU 

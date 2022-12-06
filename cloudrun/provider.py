@@ -482,6 +482,11 @@ class CloudRunProvider(ABC):
     def print_aborted_logs(self,instance=None):
         pass
         
+    @abstractmethod
+    def get_suggested_image(self,region):
+        pass
+
+
 def get_client(config):
 
     if config.get('provider') == 'aws':
