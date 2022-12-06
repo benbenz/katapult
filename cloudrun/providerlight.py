@@ -10,6 +10,7 @@ from os.path import basename
 import pkg_resources
 import time
 import random
+import shutil
 
 random.seed()
 
@@ -411,10 +412,47 @@ class CloudRunLightProvider(CloudRunProvider,ABC):
         # triggers maestro::print_aborted_logs
         self._exec_maestro_command("print_aborted")
 
-    def fetch_results(self,directory,processes=None):
-        maestro_dir = "/home/"+self._maestro.get_config('img_username')+"/cloudrun_tmp_fetch" +str(andom.range(1000))
-        stdin,stdout,stderr = self._exec_maestro_command("fetch_results:"+maestro_dir)
-        stdout.read() #blocks
+    def fetch_results(self,out_dir,processes=None):
+
+        try:
+            #os.rmdir(out_dir)
+            shutil.rmtree(out_dir, ignore_errors=True)
+        except:
+            pass
+        try:
+            os.makedirs(out_dir)
+        except:
+            pass
+
+        randnum          = str(random.randrange(1000))
+        homedir          = "/home/"+self._maestro.get_config('img_username')
+        maestro_dir      = homedir+"/cloudrun_tmp_fetch" + randnum
+        maestro_tar_file = "maestro"+randnum+".tar"
+        maestro_tar_path = homedir+'/'+maestro_tar_file
+
+        # fetch the results on the maestro
+        self._exec_maestro_command("fetch_results:"+maestro_dir)
+
+        # get the tar file of the results
+        instanceid , ssh_client , ftp_client = self._wait_and_connect(self._maestro)
+        stdin,stdout,stderr = self._exec_command(ssh_client,"cd " + maestro_dir + " && tar -cvf "+maestro_tar_path+" .")      
+        self.debug(1,stdout.read()) #blocks
+        self.debug(2,stderr.read()) #blocks
+        local_tar_path = os.path.join(out_dir,'./'+maestro_tar_file)
+        with open(local_tar_path,'wb') as outfile:
+            ftp_client.chdir( homedir )
+            ftp_client.getfo( maestro_tar_file , outfile )
+
+        # untar
+        os.system("tar -xvf "+local_tar_path+" -C "+out_dir)
+
+        # cleanup
+        os.remove(local_tar_path)
+        stdin,stdout,stderr = self._exec_command(ssh_client,"rm -rf "+maestro_dir+" "+maestro_tar_path)
+
+        # close
+        ftp_client.close()
+        ssh_client.close()
 
     def _get_or_create_instance(self,instance):
         instance , created = super()._get_or_create_instance(instance)
