@@ -28,7 +28,7 @@ aws configure
 ```
 See [https://docs.aws.amazon.com/cli/latest/userguide/cli-configure-quickstart.html](here)
 
-6. To run in `nano` mode, you also need to [add the following credentials to your user](https://docs.aws.amazon.com/AWSEC2/latest/UserGuide/iam-roles-for-amazon-ec2.html) (maybe):
+6. To run in `remote` mode, you also need to [add the following credentials to your user](https://docs.aws.amazon.com/AWSEC2/latest/UserGuide/iam-roles-for-amazon-ec2.html) (maybe):
 - iam:PassRole
 - iam:CreateRole
 - ec2:AssociateIamInstanceProfile
@@ -60,7 +60,7 @@ aws_secret_access_key = YOUR_SECRET_ACCESS_KEY
 # Setting up a separate user with least permissions 
 #### (manually) 
 
-1. In the AWS web console, in the IAM service, create a group 'cloudrun-users' with 'AmazonEC2FullAccess' and 'IAMFullAccess' permissions
+1. In the AWS web console, in the IAM service, create a group 'cloudrun-users' with `AmazonEC2FullAccess` and `IAMFullAccess` permissions
 2. In the AWS web console, in the IAM service, create a user USERNAME attached to the 'cloudrun-users' group:
 ### Step 1
 ![add user 1](./images/adduser1.jpg)
@@ -68,7 +68,8 @@ aws_secret_access_key = YOUR_SECRET_ACCESS_KEY
 ![add user 2](./images/adduser2.jpg)
 ### ... Step 5
 ![add user 3](./images/adduser3.jpg)
-COPY the Access Key info !
+
+  **COPY the Access Key info !**
 
 3. Add your new user profile manually, [in the credentials file](https://docs.aws.amazon.com/cli/latest/userguide/cli-configure-profiles.html)
 
@@ -113,13 +114,17 @@ config = {
 
 # Installation
 
+### with pip
+
 ```bash
 python3 -m venv .venv
 source ./.venv/bin/activate
 python -m pip install -r requirements.txt
+```
 
-# OR
+### with poetry
 
+```bash
 curl -sSL https://install.python-poetry.org | python3.8 -
 poetry install
 ```
@@ -133,9 +138,9 @@ cp example/config.example.py config.py
 # EDIT THE FILE
 #
 
-# to run
+# to run with pip
 python3 -m cloudrun.demo 
-# OR
+# to run with poetry
 poetry run demo
 ```
 
@@ -153,6 +158,7 @@ config = {
     'dev'          : False ,                              # When True, this will ensure the same instance and dev environement are being used (while working on building up the project) 
     'debug'        : 1 ,                                  # debug level (0...3)
     'maestro'      : 'local' ,                            # where the 'maestro' resides: local' | 'remote' (micro instance)
+    'auto_stop'    : True ,                               # will automatically stop the instances and the maestro, once the jobs are done
     'provider'     : 'aws' ,                              # the provider name ('aws' | 'azure' | ...)
     'job_assign'   : None ,                               # algorithm used for job assignation / task scheduling ('random' | 'multi_knapsack')
     'recover'      : True ,                               # if True, CloudRun will always save the state and try to recover this state on the next execution
@@ -263,9 +269,6 @@ class CloudRunFatProvider(ABC):
     # run the jobs
     def run(self,wait=False):
 
-    # run one job
-    def run_job(self,job,wait=False):
-
     # watch the processes (= wait + revive instances when terminated)
     # with daemon (=True), the call is non blocking and will execute in the background
     # without daemon (=False), the call is blocking and will display the processes/states
@@ -304,58 +307,6 @@ class CloudRunFatProvider(ABC):
     @abstractmethod
     def update_instance_info(self,instance):    
 
-class CloudRunInstance():
-
-    def get_region(self):
-
-    def get_id(self):
-     
-    def get_name(self):
-
-    def get_rank(self):
-
-    def get_ip_addr(self):
-
-    def get_dns_addr(self):
-
-    def get_ip_addr_priv(self):
-
-    def get_dns_addr_priv(self):
-
-    def get_cpus(self):
-
-    def get_state(self):
-
-    def set_ip_addr(self,value):
-
-    def set_dns_addr(self,value):
-     
-    def set_ip_addr_priv(self,value):
-
-    def set_dns_addr_priv(self,value):
-
-    def set_state(self,value):
-
-    def set_invalid(self,value):
-
-    def set_data(self,data):
-
-    def get_data(self,key):
-     
-    def get_config(self,key):
-
-    def append_job(self,job):
-
-    def get_environments(self):
-
-    def get_jobs(self):
-
-    def get_config_DIRTY(self):
-
-    def is_invalid(self):
-
-    def update_from_instance(self,instance):
-
 # GLOBAL methods 
 
 def get_client(config):
@@ -391,12 +342,10 @@ provider.deploy()
 # run the jobs and get active processes objects back
 processes = provider.run()
 
-# watch mode: wait + revive instances
+# watch mode: revive instances (started as daemon here)
 processes = provider.watch(processes)
-# OR wait for the activate proccesses to be done:
+# wait for the active proccesses to be done:
 processes = provider.wait_for_jobs_state(CloudRunProcessState.DONE|CloudRunProcessState.ABORTED,processes)
-# OR wait for all processes to be done 
-provider.wait_for_jobs_state(CloudRunProcessState.DONE|CloudRunProcessState.ABORTED)
 
 # you can get the state of all jobs this way:
 processes = provider.get_jobs_states()
