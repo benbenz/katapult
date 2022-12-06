@@ -371,7 +371,11 @@ def init_instance_name(instance_config):
 def debug(level,*args,**kwargs):
 ```
 
-Usually you may use the CloudRunProvider the following way:
+# CloudRun usage
+
+## Python programmatic use
+
+Note: this demo works the same way, whether the CloudRun provider is local or remote
 
 ```python
 
@@ -413,6 +417,14 @@ provider.print_jobs_summary()
 # get the results file locally
 provider.fetch_results('./tmp')
 
+```
+
+## CLI use
+
+Note: the commands below work the same way, whether the CloudRun provider is local or remote
+
+```bash
+CLI commands go here
 ```
 
 # Contributing

@@ -4,45 +4,44 @@ from cloudrun import CloudRunError , CloudRunProcessState , CloudRunJobRuntimeIn
 import sys
 
 if len(sys.argv)<2:
-    print("USAGE: python3 cli.py CMD [ARGS]")
+    print("USAGE:\npython3 -m cloudrun.cli CMD [ARGS]\nOR\npoetry run cli CMD [ARGS]")
     sys.exit()
 
-command = sys.argv[1]
+async def mainloop(cr_client):
+    pass    
 
-if command=="wait" and len(sys.argv)<3:
-    print("USAGE: python3 cli.py wait UID")
-    sys.exit()
-elif command=="getstate" and len(sys.argv)<3:
-    print("USAGE: python3 cli.py getstate UID")
-    sys.exit()
-elif command=="getstate" and len(sys.argv)<3:
-    print("USAGE: python3 cli.py tail UID")
-    sys.exit()
+def main():
 
-try:
-    configModule = __import__("config")
-    config = configModule.config
-except ModuleNotFoundError as mnfe:
-    print("\n\033[91mYou need to create a config.py file (see 'config.example.py')\033[0m\n")
-    raise mfe
+    if os.path.exists('config.json'):
+        with open('config.json','r') as config_file:
+            config = json.loads(config_file.read())
+        print("loaded config from json file")
+    else:
+        try:
+            sys.path.append(os.path.abspath(os.getcwd()))    
+            configModule = __import__("config",globals(),locals())
+            config = configModule.config
+        except ModuleNotFoundError as mfe:
+            print("\n\033[91mYou need to create a config.py file (see 'example/config.example.py')\033[0m\n")
+            print("\n\033[91m(you can also create a config.json file instead)\033[0m\n")
+            raise mfe
 
-# get client 
-cr_client = cr.get_client(config)
+    cr_client = cr.get_client(config)
+    command = None
+    if len(sys.argv)>1:
+        command = sys.argv[1]
 
-async def tail_loop(process):
+    if command=="wait" and len(sys.argv)<3:
+        print("USAGE: python3 -m cloudrun.cli wait UID")
+        sys.exit()
+    elif command=="getstate" and len(sys.argv)<3:
+        print("USAGE: python3 -m cloudrun.cli getstate UID")
+        sys.exit()
+    elif command=="getstate" and len(sys.argv)<3:
+        print("USAGE: python3 -m cloudrun.cli tail UID")
+        sys.exit()
 
-    generator = await cr_client.tail(process) 
-    for line in generator:
-        print(line)
+    asyncio.run( mainloop(cr_client) )
 
-if command=="wait":
-    # run main loop
-    process = CloudRunProcess( sys.argv[2] )
-    asyncio.run( cr_client.wait_for_script_state(CloudRunProcessState.DONE|CloudRunProcessState.ABORTED,process))
-elif command=="getstate":
-    process = CloudRunProcess( sys.argv[2] )
-    asyncio.run( cr_client.get_script_state(scriptRuntime) )
-elif command=="tail":
-    process = CloudRunProcess( sys.argv[2] )
-    asyncio.run( tail_loop(scriptRuntime) )
-
+if __name__ == '__main__':
+    main()    
