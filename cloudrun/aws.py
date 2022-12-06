@@ -773,7 +773,7 @@ def aws_get_suggested_image(session,region):
     images = sorted(images, key=lambda d: d['CreationDate']) 
 
     if images and len(images)>0:
-        return images[len(images)-1]['ImageId'] , 'ubuntu' , 't2.micro' # nano: pip gets killed :/
+        return images[len(images)-1]['ImageId'] , 'ubuntu' , 't2.micro' # nano: pip gets killed :(
 
 ##########
 # PUBLIC #

@@ -64,7 +64,7 @@ async def mainloop(cr_client,reset=False):
 
     print("\n== FETCH RESULTS ==\n")
 
-    cr_client.fetch_results('./tmp')
+    cr_client.fetch_results(os.path.join(os.getcwd(),'tmp'))
 
     print("\n== DONE ==\n")
 

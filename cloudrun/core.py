@@ -112,9 +112,9 @@ class CloudRunInstance():
 
     def join_path(self,*args):
         if self._platform == CloudRunPlatform.LINUX:
-            '/'.join(*args)
+            return '/'.join(args)
         elif self._platform == CloudRunPlatform.WINDOWS:
-            '\\'.join(*args)
+            return '\\'.join(args)
 
     def set_ip_addr(self,value):
         self._ip_addr = value
@@ -356,7 +356,8 @@ class CloudRunDeployedJob(CloudRunJob):
         #self._env       = dpl_env
         #self._instance  = job._instance
         self._processes = []
-        self._path      = dpl_env.get_path() + '/' + self.get_hash()
+        instance        = dpl_env.get_instance()
+        self._path      = instance.join_path( dpl_env.get_path() , self.get_hash() )
         self._command   = cloudrunutils.compute_job_command(self._path,self._job._config)
 
     def attach_process(self,process):
@@ -418,7 +419,8 @@ class CloudRunProcess():
         return self._pid
 
     def get_path(self):
-        return self._job.get_path() + '/' + self._uid
+        instance = self._job.get_instance()
+        return instance.join_path( self._job.get_path() , self._uid )
 
     def get_state(self):
         return self._state
