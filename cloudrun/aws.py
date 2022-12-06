@@ -9,6 +9,8 @@ from cloudrun.providerlight import CloudRunLightProvider
 from botocore.exceptions import ClientError
 from datetime import datetime , timedelta
 from botocore.config import Config
+from datetime import datetime
+from dateutil.relativedelta import relativedelta
 import asyncio
 
 def aws_get_session(profile_name , region ):
@@ -149,14 +151,14 @@ def aws_create_vpc(session,region,cloudId=None):
             ceMsg = str(ce)
             if 'InvalidVpcID.NotFound' in ceMsg:
                 debug(1,"WARNING: using default VPC. "+vpcID+" is unavailable")
-                vpc = aws_find_or_create_default_vpc(region) 
+                vpc = aws_find_or_create_default_vpc(session,region) 
             else:
                 debug(1,"WARNING: using default VPC. Unknown error")
-                vpc = aws_find_or_create_default_vpc(region) 
+                vpc = aws_find_or_create_default_vpc(session,region) 
 
     else:
         debug(1,"using default VPC (no VPC ID specified in config)")
-        vpc = aws_find_or_create_default_vpc(region)
+        vpc = aws_find_or_create_default_vpc(session,region)
     debug(2,vpc)
 
     return vpc 
@@ -739,55 +741,80 @@ def aws_setup_auto_stop(session,instance):
         }
     )
 
+def aws_get_suggested_image(session,region):
+    ec2_client = session.client("ec2")
+
+    debug(1,'Getting suggested image ID')
+
+    flt_creation = []
+    for month in range(1):
+        date_x_months_ago = datetime.now() - relativedelta(months=month)
+        flt = str(date_x_months_ago.year) + '-' + str(date_x_months_ago.month) + '*'
+        flt_creation.append(flt)
+    
+
+    results = ec2_client.describe_images(
+        Filters=
+        [
+            {'Name':'name','Values':['AWS Deep Learning*Ubuntu*']} ,
+#            {'Name':'is-public','Values':['true']} ,
+#            {'Name':'architecture','Values':['x86_64']},
+            {'Name':'creation-date','Values':flt_creation}
+        ],
+        Owners=['self','amazon']
+    )
+    images = results['Images']
+
+    images = sorted(images, key=lambda d: d['Name']) 
+
+    for image in images:
+        debug(2,image['Name'],image['Description'])
+    
+    images = sorted(images, key=lambda d: d['CreationDate']) 
+
+    if images and len(images)>0:
+        return images[len(images)-1]['ImageId'] , 'ubuntu' , 't2.micro' # nano: pip gets killed :/
+
 ##########
 # PUBLIC #
 ##########
 
-class AWSCloudRunFatProvider(CloudRunFatProvider):
-
-    def __init__(self, conf):
-        CloudRunFatProvider.__init__(self,conf)
+class AWSCloudRunProviderImpl():
 
     def find_instance(self,config):
-        region  = config.get('region')        
-        session = aws_get_session(self._profile_name,region)
+        session = self.get_session(config)
         return aws_find_instance(session,config)
 
     def update_instance_info(self,instance):
-        region  = instance.get_region()
-        session = aws_get_session(self._profile_name,region)
+        session = self.get_session(instance)
         aws_update_instance_info(session,instance)
 
     def create_keypair(self,region,force=False):
         keypair_name = self.get_keypair_name(self._profile_name,region)
         key_filename = self.get_key_filename(self._profile_name,region)
-        session = aws_get_session(self._profile_name,region)
+        session = self.get_session(config)
         aws_create_keypair(session,region,keypair_name,key_filename,force)
 
     def create_instance_objects(self,config):
         keypair_name = self.get_keypair_name(self._profile_name,config.get('region'))
         key_filename = self.get_key_filename(self._profile_name,config.get('region'))
-        session = aws_get_session(self._profile_name,config.get('region'))
+        session = self.get_session(config)
         return aws_create_instance_objects(session,config,keypair_name,key_filename)
 
     def start_instance(self,instance):
-        region  = instance.get_region()
-        session = aws_get_session(self._profile_name,region)
+        session = self.get_session(instance)
         aws_start_instance(session,instance)
 
     def stop_instance(self,instance):
-        region  = instance.get_region()
-        session = aws_get_session(self._profile_name,region)
+        session = self.get_session(instance)
         aws_stop_instance(session,instance)
 
     def terminate_instance(self,instance):
-        region  = instance.get_region()
-        session = aws_get_session(self._profile_name,region)
+        session = self.get_session(instance)
         aws_terminate_instance(session,instance)
 
     def reboot_instance(self,instance):
-        region  = instance.get_region()
-        session = aws_get_session(self._profile_name,region)
+        session = self.get_session(instance)
         aws_reboot_instance(session,instance)
 
     def get_region(self):
@@ -798,6 +825,54 @@ class AWSCloudRunFatProvider(CloudRunFatProvider):
 
     def set_profile(self,profile_name):
         boto3.setup_default_session(profile_name=profile_name)
+
+    def get_session(self,obj):
+        if isinstance(obj,dict):
+            region = obj.get('region')
+        elif isinstance(obj,str):
+            region = obj
+        else:
+            region = obj.get_region()
+        return aws_get_session(self._profile_name,region)        
+
+
+class AWSCloudRunFatProvider(CloudRunFatProvider,AWSCloudRunProviderImpl):
+
+    def __init__(self, conf):
+        CloudRunFatProvider.__init__(self,conf)
+
+    def find_instance(self,config):
+        return AWSCloudRunProviderImpl.find_instance(self,config)
+
+    def update_instance_info(self,instance):
+        AWSCloudRunProviderImpl.update_instance_info(self,instance)
+
+    def create_keypair(self,region,force=False):
+        AWSCloudRunProviderImpl.create_keypair(self,region,force=False)
+
+    def create_instance_objects(self,config):
+        return AWSCloudRunProviderImpl.create_instance_objects(self,config)
+
+    def start_instance(self,instance):
+        AWSCloudRunProviderImpl.start_instance(self,instance)
+
+    def stop_instance(self,instance):
+        AWSCloudRunProviderImpl.stop_instance(self,instance)
+
+    def terminate_instance(self,instance):
+        AWSCloudRunProviderImpl.terminate_instance(self,instance)
+
+    def reboot_instance(self,instance):
+        AWSCloudRunProviderImpl.reboot_instance(self,instance)
+
+    def get_region(self):
+        return AWSCloudRunProviderImpl.get_region(self)
+    
+    def get_account_id(self):
+        return AWSCloudRunProviderImpl.get_account_id(self)
+
+    def set_profile(self,profile_name):
+        AWSCloudRunProviderImpl.set_profile(self,profile_name)       
 
     def get_recommended_cpus(self,inst_cfg):
         return self._get_instancetypes_attribute(inst_cfg,"instancetypes-aws.csv","Instance type","Valid cores",list)
@@ -806,73 +881,56 @@ class AWSCloudRunFatProvider(CloudRunFatProvider):
         return self._get_instancetypes_attribute(inst_cfg,"instancetypes-aws.csv","Instance type","Cores",int)
 
 
-class AWSCloudRunLightProvider(CloudRunLightProvider):        
+class AWSCloudRunLightProvider(CloudRunLightProvider,AWSCloudRunProviderImpl):        
 
     def __init__(self, conf):
         CloudRunLightProvider.__init__(self,conf)
 
     def find_instance(self,config):
-        region  = config.get('region')        
-        session = aws_get_session(self._profile_name,region)
-        return aws_find_instance(session,config)
+        return AWSCloudRunProviderImpl.find_instance(self,config)
 
     def update_instance_info(self,instance):
-        region  = instance.get_region()
-        session = aws_get_session(self._profile_name,region)
-        aws_update_instance_info(session,instance)
+        AWSCloudRunProviderImpl.update_instance_info(self,instance)
 
     def create_keypair(self,region,force=False):
-        keypair_name = self.get_keypair_name(self._profile_name,region)
-        key_filename = self.get_key_filename(self._profile_name,region)
-        session = aws_get_session(self._profile_name,region)
-        aws_create_keypair(session,region,keypair_name,key_filename,force)
+        AWSCloudRunProviderImpl.create_keypair(self,region,force=False)
 
     def create_instance_objects(self,config):
-        keypair_name = self.get_keypair_name(self._profile_name,config.get('region'))
-        key_filename = self.get_key_filename(self._profile_name,config.get('region'))
-        session = aws_get_session(self._profile_name,config.get('region'))
-        return aws_create_instance_objects(session,config,keypair_name,key_filename)
+        return AWSCloudRunProviderImpl.create_instance_objects(self,config)
 
     def start_instance(self,instance):
-        region  = instance.get_region()
-        session = aws_get_session(self._profile_name,region)
-        aws_start_instance(session,instance)
+        AWSCloudRunProviderImpl.start_instance(self,instance)
 
     def stop_instance(self,instance):
-        region  = instance.get_region()
-        session = aws_get_session(self._profile_name,region)
-        aws_stop_instance(session,instance)
+        AWSCloudRunProviderImpl.stop_instance(self,instance)
 
     def terminate_instance(self,instance):
-        region  = instance.get_region()
-        session = aws_get_session(self._profile_name,region)
-        aws_terminate_instance(session,instance)
+        AWSCloudRunProviderImpl.terminate_instance(self,instance)
 
     def reboot_instance(self,instance):
-        region  = instance.get_region()
-        session = aws_get_session(self._profile_name,region)
-        aws_reboot_instance(session,instance)
+        AWSCloudRunProviderImpl.reboot_instance(self,instance)
 
     def get_region(self):
-        return aws_get_region(self._profile_name)
+        return AWSCloudRunProviderImpl.get_region(self)
     
     def get_account_id(self):
-        return aws_get_account_id(self._profile_name)
+        return AWSCloudRunProviderImpl.get_account_id(self)
 
     def set_profile(self,profile_name):
-        boto3.setup_default_session(profile_name=profile_name)
+        AWSCloudRunProviderImpl.set_profile(self,profile_name)   
 
     def grant_admin_rights(self,instance):
-        region  = instance.get_region()
-        session = aws_get_session(self._profile_name,region)
+        session = self.get_session(instance)
         aws_grant_admin_rights(session,instance)   
 
     def add_maestro_security_group(self,instance):
-        region  = instance.get_region()
-        session = aws_get_session(self._profile_name,region)
+        session = self.get_session(instance)
         aws_add_maestro_security_group(session,instance)
 
     def setup_auto_stop(self,instance):
-        region  = instance.get_region()
-        session = aws_get_session(self._profile_name,region)
+        session = self.get_session(instance)
         aws_setup_auto_stop(session,instance)
+
+    def get_suggested_image(self,region):
+        session = self.get_session(region)
+        return aws_get_suggested_image(session,region)

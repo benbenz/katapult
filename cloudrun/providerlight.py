@@ -32,16 +32,25 @@ class CloudRunLightProvider(CloudRunProvider,ABC):
                 self.debug(2,"There are no instances to watch - skipping maestro creation")
                 return
             else:
-                img_id   = self._config.get('instances')[0].get('img_id')
-                img_user = self._config.get('instances')[0].get('img_username')
-                region   = self._config.get('instances')[0].get('region')
+                # let's try to match the region of the first instance ...
+                region = None
+                if len(self._config.get('instances')) > 0:
+                    region = self._config.get('instances')[0].get('region')
                 if not region:
                     region = self.get_region()
+
+                img_id , img_user , img_type = self.get_suggested_image(region)
+                if not img_id:
+                    self.debug(1,"Using first instance information to create MAESTRO")
+                    img_id   = self._config.get('instances')[0].get('img_id')
+                    img_user = self._config.get('instances')[0].get('img_username')
+                    img_type = self._config.get('instances')[0].get('img_type')
+                
                 maestro_cfg = { 
                     'maestro'      : True ,
                     'img_id'       : img_id ,
                     'img_username' : img_user ,                 
-                    'type'         : 't2.micro' ,  # nano: pip gets killed :/
+                    'type'         : img_type , 
                     'dev'          : self._config.get('dev',False) ,
                     'project'      : self._config.get('project',None) ,
                     'region'       : region
@@ -413,6 +422,10 @@ class CloudRunLightProvider(CloudRunProvider,ABC):
 
     @abstractmethod
     def setup_auto_stop(self,instance):
+        pass
+
+    @abstractmethod
+    def get_suggested_image(self,region):
         pass
 
     # needed by CloudRunProvider::_wait_for_instance 

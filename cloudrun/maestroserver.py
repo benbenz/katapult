@@ -1,5 +1,5 @@
 from cloudrun import provider as cr
-import asyncio , os , sys
+import asyncio , os , sys , time
 from cloudrun.core import CloudRunProcessState
 import traceback
 import json
@@ -75,6 +75,8 @@ def process_command(cr_client,command,args,conn):
         raise e
 
     io_pipe.flush()
+    # to let time for the buffer to be flushed before killing thread/connection
+    time.sleep(1)
     io_pipe.close()
 
 def client_handler(cr_client,conn):
