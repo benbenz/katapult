@@ -59,7 +59,7 @@ def update_requirements_path(env_dict,path):
     
     elif isinstance(env_dict,str):
         if '__REQUIREMENTS_TXT_LINK__' in env_dict:
-            env_dict = env_dict.replace('__REQUIREMENTS_TXT_LINK__',path+'/requirements.txt')
+            env_dict = env_dict.replace('__REQUIREMENTS_TXT_LINK__',path)
         
     return env_dict
 
@@ -260,7 +260,7 @@ def compute_job_command(script_dir,job_config):
         else:
             script_command = "echo 'SCRIPT NOT HANDLED'"
     elif 'run_command' in job_config and job_config['run_command']:
-        script_command = job_config['run_command'] #script_dir + '/' + job_config['run_command']
+        script_command = job_config['run_command']
     else:
         script_command = "echo 'NO SCRIPT DEFINED'" 
 

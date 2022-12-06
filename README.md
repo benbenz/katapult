@@ -113,7 +113,7 @@ config = {
 
 # Installation
 
-## On Posix / Linux
+## On MacOS / Linux
 
 ### with pip
 

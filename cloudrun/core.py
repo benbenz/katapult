@@ -42,6 +42,10 @@ class CloudRunProcessState(IntFlag):
     ABORTED   = 32 # script has been aborted
     ANY       = 32 + 16 + 8 + 4 + 2 + 1 
 
+class CloudRunPlatform(IntFlag):
+    LINUX   = 1
+    WINDOWS = 2
+
 class CloudRunInstance():
 
     def __init__(self,config,id,proprietaryData=None):
@@ -68,6 +72,7 @@ class CloudRunInstance():
         self._envs     = dict()
         # invalid
         self._invalid  = False
+        self._platform = CloudRunPlatform.LINUX
 
     def get_region(self):
         return self._region
@@ -98,6 +103,18 @@ class CloudRunInstance():
 
     def get_state(self):
         return self._state
+
+    def get_home_dir(self,absolute=True):
+        if self._platform == CloudRunPlatform.LINUX:
+            return '/home/' + self.get_config('img_username') if absolute else '%HOME'
+        elif self._platform == CloudRunPlatform.WINDOWS:
+            return 'C:\>' + self.get_config('img_username') if absolute else '%HOME%'
+
+    def join_path(self,*args):
+        if self._platform == CloudRunPlatform.LINUX:
+            '/'.join(*args)
+        elif self._platform == CloudRunPlatform.WINDOWS:
+            '\\'.join(*args)
 
     def set_ip_addr(self,value):
         self._ip_addr = value
@@ -181,7 +198,6 @@ class CloudRunEnvironment():
         self._project  = projectName
         _env_obj       = cloudrunutils.compute_environment_object(env_config)
         self._hash     = cloudrunutils.compute_environment_hash(_env_obj)
-
         if not self._config.get('name'):
             self._name = cr_environmentNameRoot
 
@@ -195,16 +211,11 @@ class CloudRunEnvironment():
         else:
             self._name = self._config.get('name')
 
-        self._path     = "$HOME/run/" + self.get_name_with_hash() #self._name
-
     def get_name(self):
         return self._name
 
     def get_name_with_hash(self):
         return self._name + '-' + self._hash
-
-    def get_path(self):
-        return self._path
 
     def get_config(self,key):
         return self._config.get(key)
@@ -229,13 +240,12 @@ class CloudRunDeployedEnvironment(CloudRunEnvironment):
         self._config   = env._config #copy.deepcopy(env._config)
         self._project  = env._project
         self._hash     = env._hash
-        self._path     = env._path
         self._name     = env._name
         self._instance = instance
-        self._path_abs = "/home/" + instance.get_config('img_username') + '/run/' + self.get_name_with_hash() #self._name
+        self._path     = instance.join_path( instance.get_home_dir() , 'run' , self.get_name_with_hash())
 
-    def get_path_abs(self):
-        return self._path_abs
+    def get_path(self):
+        return self._path
 
     def get_instance(self):
         return self._instance
@@ -248,7 +258,8 @@ class CloudRunDeployedEnvironment(CloudRunEnvironment):
         _env_obj['name'] = self.get_name_with_hash()
         # replace __REQUIREMENTS_TXT_LINK__ with the actual requirements.txt path (dependent of config and env hash)
         # the file needs to be absolute
-        _env_obj = cloudrunutils.update_requirements_path(_env_obj,self._path_abs)
+        requirements_txt_path = self._instance.join_path(self._path,'requirements.txt')
+        _env_obj = cloudrunutils.update_requirements_path(_env_obj,requirements_txt_path)
         return json.dumps(_env_obj)  
 
 
@@ -345,7 +356,7 @@ class CloudRunDeployedJob(CloudRunJob):
         #self._env       = dpl_env
         #self._instance  = job._instance
         self._processes = []
-        self._path      = dpl_env.get_path_abs() + '/' + self.get_hash()
+        self._path      = dpl_env.get_path() + '/' + self.get_hash()
         self._command   = cloudrunutils.compute_job_command(self._path,self._job._config)
 
     def attach_process(self,process):

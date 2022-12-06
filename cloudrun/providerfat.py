@@ -186,7 +186,7 @@ class CloudRunFatProvider(CloudRunProvider,ABC):
 
             self.debug(3,dpl_env.json())
 
-            re_upload_env = self._test_reupload(instance,dpl_env.get_path_abs()+'/ready', ssh_client)
+            re_upload_env = self._test_reupload(instance,dpl_env.get_path()+'/ready', ssh_client)
 
             re_upload_env_mamba  = False
             re_upload_env_pip    = False
@@ -215,7 +215,7 @@ class CloudRunFatProvider(CloudRunProvider,ABC):
                 global_path = "$HOME/run" # more robust
 
                 self.debug(2,"creating environment directories ...")
-                stdin0, stdout0, stderr0 = self._exec_command(ssh_client,"mkdir -p "+files_path+" && rm -f "+dpl_env.get_path_abs()+'/ready')
+                stdin0, stdout0, stderr0 = self._exec_command(ssh_client,"mkdir -p "+files_path+" && rm -f "+dpl_env.get_path()+'/ready')
                 self.debug(2,"STDOUT for mkdir -p ",files_path,"...",stdout0.read())
                 self.debug(2,"STDERR for mkdir -p ",files_path,"...",stderr0.read())
                 self.debug(2,"directories created")
@@ -224,7 +224,7 @@ class CloudRunFatProvider(CloudRunProvider,ABC):
 
                 # upload the install file, the env file and the script file
                 # change to env dir
-                ftp_client.chdir(dpl_env.get_path_abs())
+                ftp_client.chdir(dpl_env.get_path())
                 ftp_client.putfo(io.StringIO(dpl_env.json()),'config.json')
 
                 self.debug(1,"uploaded.")        
@@ -1192,7 +1192,7 @@ class CloudRunFatProvider(CloudRunProvider,ABC):
             if not programmatic:
                 if self._config.get('auto_stop'):
                     time.sleep(60*1)  
-                    
+
                 self._instances_watching[instance.get_name()] = False            
                 
                 if self._config.get('auto_stop'):
