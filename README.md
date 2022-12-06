@@ -41,7 +41,7 @@ See [https://docs.aws.amazon.com/cli/latest/userguide/cli-configure-quickstart.h
 3. In the AWS web console, under the IAM section, click on the new user and make sure you create an access key under the tab "Security Credentials". Make sure "Console Password" is Enabled as well
 4. Add your new user credentials manually, [in the credentials file](https://docs.aws.amazon.com/cli/latest/userguide/cli-configure-profiles.html)
 
-##### '~/.aws/config' example
+##### '~/.aws/config' example (C:\Users\USERNAME\.aws\config on Windows)
 
 ```
 [default]
@@ -49,7 +49,7 @@ region = eu-west-3
 output = json
 ```
 
-##### '~/.aws/credentials' example
+##### '~/.aws/credentials' example (C:\Users\USERNAME\.aws\credentials on Windows)
 
 ```
 [default]
@@ -57,8 +57,7 @@ aws_access_key_id = YOUR_ACCESS_KEY_ID
 aws_secret_access_key = YOUR_SECRET_ACCESS_KEY
 ```
 
-## Setting up a separate user with least permissions 
-#### (manually) 
+## Setting up a separate user with least permissions (manually) 
 
 1. In the AWS web console, in the IAM service, create a group 'cloudrun-users' with `AmazonEC2FullAccess` and `IAMFullAccess` permissions
 2. In the AWS web console, in the IAM service, create a user USERNAME attached to the 'cloudrun-users' group:
@@ -73,7 +72,7 @@ aws_secret_access_key = YOUR_SECRET_ACCESS_KEY
 
 3. Add your new user profile manually, [in the credentials file](https://docs.aws.amazon.com/cli/latest/userguide/cli-configure-profiles.html)
 
-##### '~/.aws/config' example
+##### '~/.aws/config' example (C:\Users\USERNAME\.aws\config on Windows)
 
 ```
 [default]
@@ -85,7 +84,7 @@ region = eu-west-3
 output = json
 ```
 
-##### '~/.aws/credentials' example
+##### '~/.aws/credentials' example (C:\Users\USERNAME\.aws\credentials on Windows)
 
 ```
 [default]
@@ -114,6 +113,8 @@ config = {
 
 # Installation
 
+## On Posix / Linux
+
 ### with pip
 
 ```bash
@@ -127,6 +128,23 @@ python -m pip install -r requirements.txt
 ```bash
 curl -sSL https://install.python-poetry.org | python3.8 -
 poetry install
+```
+
+## On Windows (powershell)
+
+### with pip
+
+```bash
+C:\> python3 -m venv .venv
+C:\> .venv\\Scripts\\activate.bat
+C:\> python -m pip install -r requirements.txt
+```
+
+### with poetry
+
+```bash
+C:\> (Invoke-WebRequest -Uri https://install.python-poetry.org -UseBasicParsing).Content | py -
+C:\> poetry install
 ```
 
 # Usage / Test runs
@@ -375,7 +393,7 @@ def debug(level,*args,**kwargs):
 
 ## Python programmatic use
 
-Note: this demo works the same way, whether the CloudRun provider is local or remote
+Note: this demo works the same way, whether CloudRun runs locally or remotely
 
 ```python
 
@@ -421,7 +439,7 @@ provider.fetch_results('./tmp')
 
 ## CLI use
 
-Note: the commands below work the same way, whether the CloudRun provider is local or remote
+Note: the commands below work the same way, whether CloudRun runs locally or remotely
 
 ```bash
 CLI commands go here
