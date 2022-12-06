@@ -62,7 +62,7 @@ aws_secret_access_key = YOUR_SECRET_ACCESS_KEY
 1. In the AWS web console, in the IAM service, create a group 'cloudrun-users' with `AmazonEC2FullAccess` and `IAMFullAccess` permissions
 2. In the AWS web console, in the IAM service, create a user USERNAME attached to the 'cloudrun-users' group:
 ### Step 1
-![add user 1](./images/adduser1.jpg | width=200)
+![add user 1](./images/adduser1.jpg)
 ### Step 2
 ![add user 2](./images/adduser2.jpg)
 ### ... Step 5
