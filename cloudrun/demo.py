@@ -63,6 +63,10 @@ async def mainloop(cr_client):
     # await asyncio.gather(task1,task2)
     cr_client.print_aborted_logs()
 
+    print("\n== FETCH RESULTS ==\n")
+
+    cr_client.fetch_results('./tmp')
+
     print("\n== DONE ==\n")
 
 async def waitloop(cr_client):

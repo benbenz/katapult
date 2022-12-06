@@ -16,6 +16,7 @@ from cloudrun.provider import CloudRunProvider , CloudRunProviderState , bcolors
 from cloudrun.config_state import ConfigManager , StateSerializer
 from enum import IntFlag
 from threading import current_thread
+import shutil
 
 random.seed()
 
@@ -879,7 +880,85 @@ class CloudRunFatProvider(CloudRunProvider,ABC):
                     self.debug(1,"Job #",job.get_rank(),"has ABORTED with errors:",color=bcolors.WARNING)
                     self.debug(1,self.get_log(process,ssh_client),color=bcolors.WARNING)
                     self.debug(1,process,color=bcolors.WARNING)
-            ssh_client.close()          
+            ssh_client.close()   
+
+    def fetch_results(self,out_dir,processes=None):
+
+        if processes is None: 
+            processes = self.get_last_processes()
+
+        if processes and not isinstance(processes,list):
+            processes = [ processes ]
+        
+        clients   = dict()
+
+        try:
+            #os.rmdir(out_dir)
+            shutil.rmtree(out_dir, ignore_errors=True)
+        except:
+            pass
+        try:
+            os.makedirs(out_dir)
+        except:
+            pass
+
+        for process in processes:
+
+            if process.get_state() != CloudRunProcessState.RUNNING:
+                self.debug(2,"Skipping process import",process.get_uid(),process.get_state())
+            
+            dpl_job  = process.get_job()
+            rank     = dpl_job.get_rank()
+            instance = dpl_job.get_instance()
+
+            if not instance.get_name() in clients:
+                clients[instance.get_name()] = dict()
+                ssh_client = self._connect_to_instance(instance)
+                if ssh_client is not None:
+                    ftp_client = ssh_client.open_sftp()
+                    clients[instance.get_name()] = { 'ssh': ssh_client , 'ftp' : ftp_client}
+                else:
+                    self.debug(1,"Skipping instance",instance.get_name(),"(unreachable)",color=bcolors.WARNING)
+            else:
+                ssh_client = clients[instance.get_name()]['ssh']
+                ftp_client = clients[instance.get_name()]['ftp']
+            
+            out_file = dpl_job.get_config('output_file')
+            #local_path , rel_path , abs_path , rel_remote_path , external = self._resolve_dpl_job_paths(out_file,dpl_job)
+            #abs_path = abs_path.replace('$HOME','/home/'+instance.get_config('img_username'))
+            remote_file_path = os.path.join( process.get_path() , out_file )
+            directory = os.path.dirname( remote_file_path )
+            filename  = os.path.basename( remote_file_path )
+            
+            file_name , file_extension = os.path.splitext(out_file)
+            file_name = file_name.replace('/','_')
+            #ftp_client.chdir(directory)
+            with open(os.path.join(out_dir,'./job_'+str(rank).zfill(3)+'_'+file_name+file_extension),'wb') as outfile:
+                ftp_client.chdir( directory )
+                ftp_client.getfo( filename , outfile )   
+        
+        for client in clients.values():
+            client['ftp'].close()
+            client['ssh'].close()
+
+    def get_results_files_list(self,processes=None):
+
+        if processes is None: 
+            processes = self.get_last_processes()
+
+        if processes and not isinstance(processes,list):
+            processes = [ processes ]
+        
+        files_list = "" 
+
+        for process in processes:
+
+            if process.get_state() != CloudRunProcessState.RUNNING:
+                self.debug(2,"Skipping process import",process.get_uid(),process.get_state())
+            
+            dpl_job  = process.get_job()
+            rank     = dpl_job.get_rank()
+            instance = dpl_job.get_instance()
 
     def _get_ln_command(self,dpl_job,uid):
         files_to_ln = []
@@ -1002,7 +1081,7 @@ class CloudRunFatProvider(CloudRunProvider,ABC):
         while True:
 
             if self._processes_have_changed(instance,processes_infos):
-                self.debug(1,"Processes have changed. Replaced argument with new processes",color=bcolors.WARNING)
+                self.debug(1,"Processes have changed for instance",instance.get_name(),". Replacing 'processes' argument with new processes",color=bcolors.WARNING)
                 processes_infos , jobsinfo = self._recompute_jobs_info(instance,self._current_processes)
 
             if not ssh_client.get_transport().is_active():
@@ -1110,22 +1189,23 @@ class CloudRunFatProvider(CloudRunProvider,ABC):
         if wait_mode & CloudRunProviderStateWaitMode.WATCH:
             # lets wait 1 minutes before stopping
             # this helps with the demo which runs a wait() and a get() sequentially ...
-            time.sleep(60*1)  
-
             if not programmatic:
+                if self._config.get('auto_stop'):
+                    time.sleep(60*1)  
+                    
                 self._instances_watching[instance.get_name()] = False            
-
-            if self._config.get('auto_stop'):
-                try:
-                    self.debug(1,"Stopping instance",instance.get_name(),color=bcolors.WARNING)
-                    self.stop_instance(instance)
-                except:
-                    pass
-                debug(2,self._instances_watching)
-                any_watching = any( self._instances_watching.values() )
-                if not any_watching:
-                    self.debug(1,"Stopping the fat client / maestro because all instances have ran the jobs",color=bcolors.WARNING)
-                    os.system("sudo shutdown -h now")
+                
+                if self._config.get('auto_stop'):
+                    try:
+                        self.debug(1,"Stopping instance",instance.get_name(),color=bcolors.WARNING)
+                        self.stop_instance(instance)
+                    except:
+                        pass
+                    debug(2,self._instances_watching)
+                    any_watching = any( self._instances_watching.values() )
+                    if not any_watching:
+                        self.debug(1,"Stopping the fat client / maestro because all instances have ran the jobs",color=bcolors.WARNING)
+                        os.system("sudo shutdown -h now")
 
         return processes
 
@@ -1263,16 +1343,16 @@ class CloudRunFatProvider(CloudRunProvider,ABC):
     def wait_for_jobs_state(self,job_state,processes=None):
 
         if not processes or len(processes)==0:
-            self.debug(1,"No process to wait for")
+            self.debug(2,"No process to wait for")
 
         return self.__get_or_wait_jobs_state(processes,CloudRunProviderStateWaitMode.WAIT,job_state)
 
     def get_jobs_states(self,processes=None):
 
         if not processes or len(processes)==0:
-            self.debug(1,"No process requested >> getting all jobs' processes")
+            self.debug(2,"No process requested >> getting all jobs' processes")
 
-        return self.__get_or_wait_jobs_state(processes)
+        return self.__get_or_wait_jobs_state(processes)   
 
     def _tail_execute_command(self,ssh,files_path,uid,line_num):
         run_log = files_path + '/' + uid + '-run.log'

@@ -9,6 +9,9 @@ import re
 from os.path import basename
 import pkg_resources
 import time
+import random
+
+random.seed()
 
 ####################################
 # Client handling MAESTRO instance #
@@ -408,10 +411,17 @@ class CloudRunLightProvider(CloudRunProvider,ABC):
         # triggers maestro::print_aborted_logs
         self._exec_maestro_command("print_aborted")
 
+    def fetch_results(self,directory,processes=None):
+        maestro_dir = "/home/"+self._maestro.get_config('img_username')+"/cloudrun_tmp_fetch" +str(andom.range(1000))
+        stdin,stdout,stderr = self._exec_maestro_command("fetch_results:"+maestro_dir)
+        stdout.read() #blocks
+
     def _get_or_create_instance(self,instance):
         instance , created = super()._get_or_create_instance(instance)
         # dangerous !
         #self.add_maestro_security_group(instance)
+        # open web server
+
         return instance , created 
 
     @abstractmethod

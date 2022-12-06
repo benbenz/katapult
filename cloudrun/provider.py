@@ -481,7 +481,11 @@ class CloudRunProvider(ABC):
     @abstractmethod
     def print_aborted_logs(self,instance=None):
         pass
-        
+
+    @abstractmethod
+    def fetch_results(self,directory,processes=None):
+        pass
+          
     @abstractmethod
     def get_suggested_image(self,region):
         pass

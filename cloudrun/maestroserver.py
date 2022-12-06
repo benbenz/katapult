@@ -64,6 +64,12 @@ def process_command(cr_client,command,args,conn):
 
             cr_client.print_aborted_logs()
 
+        elif command == 'fetch_results':
+
+            if args:
+                directory = args[0].strip()
+                cr_client.fetch_results(directory)
+
         elif command == 'test':
 
             print("TEST")

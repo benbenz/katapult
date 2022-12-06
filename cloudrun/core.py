@@ -406,6 +406,9 @@ class CloudRunProcess():
     def get_pid(self):
         return self._pid
 
+    def get_path(self):
+        return self._job.get_path() + '/' + self._uid
+
     def get_state(self):
         return self._state
      

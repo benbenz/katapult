@@ -400,6 +400,9 @@ processes = provider.get_jobs_states(processes)
 # you can print processes summary with:
 provider.print_jobs_summary()
 
+# get the results file locally
+provider.fetch_results('./tmp')
+
 ```
 
 # Contributing
