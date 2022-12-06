@@ -134,7 +134,7 @@ poetry install
 
 ### with pip
 
-```bash
+```bat
 C:\> python3 -m venv .venv
 C:\> .venv\\Scripts\\activate.bat
 C:\> python -m pip install -r requirements.txt
@@ -142,7 +142,7 @@ C:\> python -m pip install -r requirements.txt
 
 ### with poetry
 
-```bash
+```bat
 C:\> (Invoke-WebRequest -Uri https://install.python-poetry.org -UseBasicParsing).Content | py -
 C:\> poetry install
 ```
