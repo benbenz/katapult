@@ -7,6 +7,7 @@ cloudsend*.pem
 remote_files/config.json
 /config.py
 /config*.py
+/config*.zip
 /example/config.py
 /config-cloudsend*.json
 poetry.lock

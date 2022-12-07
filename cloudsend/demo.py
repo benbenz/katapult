@@ -1,4 +1,4 @@
-from cloudsend import provider as cr
+from cloudsend import provider as cs
 import asyncio , os , sys
 from cloudsend.core import CloudSendProcessState
 import traceback
@@ -120,7 +120,7 @@ def main():
             print("\n\033[91m(you can also create a config.json file instead)\033[0m\n")
             raise mfe
 
-    cs_client = cr.get_client(config)
+    cs_client = cs.get_client(config)
     command = None
     if len(sys.argv)>2:
         command = sys.argv[2]

@@ -11,7 +11,10 @@
             "program": "${workspaceFolder}/cloudsend/demo.py",
             "console": "integratedTerminal",
             "cwd": "${workspaceFolder}",
-            "args": ["config.py","reset"]
+            "args": ["config.py","reset"],
+            "env": {
+                "PYTHONPATH":"${workspaceRoot}:/home/maxepstein/myproject/"
+            }
         },
         {
             "name": "Demo Wait",
@@ -20,7 +23,10 @@
             "program": "${workspaceFolder}/cloudsend/demo.py",
             "console": "integratedTerminal",
             "cwd": "${workspaceFolder}",
-            "args": ["config.py","wait"]
+            "args": ["config.py","wait"],
+            "env": {
+                "PYTHONPATH":"${workspaceRoot}:/home/maxepstein/myproject/"
+            }
         },
         {
             "name": "Demo Montecarlo",
@@ -29,7 +35,10 @@
             "program": "${workspaceFolder}/cloudsend/demo.py",
             "console": "integratedTerminal",
             "cwd": "${workspaceFolder}",
-            "args": ["config-montecarlo10.py","reset"]
+            "args": ["config-montecarlo10.py","reset"],
+            "env": {
+                "PYTHONPATH":"${workspaceRoot}:/home/maxepstein/myproject/"
+            }
         },        
         {
             "name": "Maestro Server",
@@ -38,7 +47,10 @@
             "program": "${workspaceFolder}/cloudsend/maestroserver.py",
             "console": "integratedTerminal",
             "cwd": "${workspaceFolder}",
-            "args": ["-u"]
+            "args": ["-u"],
+            "env": {
+                "PYTHONPATH":"${workspaceRoot}:/home/maxepstein/myproject/"
+            }
         }      
     ]
 }
