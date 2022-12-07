@@ -3,6 +3,7 @@ from abc import ABC , abstractmethod
 import cloudrun.utils as cloudrunutils
 import json
 import copy
+import os
 
 cr_keypairName         = 'cloudrun-keypair'
 cr_secGroupName        = 'cloudrun-sec-group-allow-ssh'
@@ -110,11 +111,39 @@ class CloudRunInstance():
         elif self._platform == CloudRunPlatform.WINDOWS:
             return 'C:\>' + self.get_config('img_username') if absolute else '%HOME%'
 
-    def join_path(self,*args):
+    def get_global_dir(self):
+        return self.path_join( self.get_home_dir() , 'run' )
+
+    def path_join(self,*args):
         if self._platform == CloudRunPlatform.LINUX:
             return '/'.join(args)
         elif self._platform == CloudRunPlatform.WINDOWS:
             return '\\'.join(args)
+
+    def path_dirname(self,path):
+        #return os.path.dirname(path)
+        sep = self.path_sep()
+        path_expl = path.split(sep)
+        if len(path_expl)>2:
+            return sep.join( path_expl[:-1] )
+        else:
+            return ''
+    
+    def path_basename(self,path):
+        #return os.path.basename(path)
+        sep = self.path_sep()
+        path_expl = path.split(sep)
+        if len(path_expl)>1:
+            return path_expl[-1]
+        else:
+            return ''
+
+
+    def path_sep(self):
+        if self._platform == CloudRunPlatform.LINUX:
+            return '/'
+        elif self._platform == CloudRunPlatform.WINDWS:
+            return '\\'
 
     def set_ip_addr(self,value):
         self._ip_addr = value
@@ -243,7 +272,7 @@ class CloudRunDeployedEnvironment(CloudRunEnvironment):
         self._hash     = env._hash
         self._name     = env._name
         self._instance = instance
-        self._path     = instance.join_path( instance.get_home_dir() , 'run' , self.get_name_with_hash())
+        self._path     = instance.path_join( instance.get_home_dir() , 'run' , self.get_name_with_hash())
 
     def get_path(self):
         return self._path
@@ -259,7 +288,7 @@ class CloudRunDeployedEnvironment(CloudRunEnvironment):
         _env_obj['name'] = self.get_name_with_hash()
         # replace __REQUIREMENTS_TXT_LINK__ with the actual requirements.txt path (dependent of config and env hash)
         # the file needs to be absolute
-        requirements_txt_path = self._instance.join_path(self._path,'requirements.txt')
+        requirements_txt_path = self._instance.path_join(self._path,'requirements.txt')
         _env_obj = cloudrunutils.update_requirements_path(_env_obj,requirements_txt_path)
         return json.dumps(_env_obj)  
 
@@ -354,11 +383,11 @@ class CloudRunDeployedJob(CloudRunJob):
         self._job       = job
         #self._config    = copy.deepcopy(job._config)
         #self._hash      = job._hash
-        #self._env       = dpl_env
         #self._instance  = job._instance
         self._processes = []
-        instance        = dpl_env.get_instance()
-        self._path      = instance.join_path( dpl_env.get_path() , self.get_hash() )
+        self._env       = dpl_env
+        self._instance  = dpl_env.get_instance()
+        self._path      = self._instance.path_join( dpl_env.get_path() , self.get_hash() )
         self._command   = cloudrunutils.compute_job_command(self._path,self._job._config)
 
     def attach_process(self,process):
@@ -385,13 +414,11 @@ class CloudRunDeployedJob(CloudRunJob):
     def get_config(self,key,defaultVal=None):
         return self._job._config.get(key,defaultVal)
 
-    # proxied
     def get_env(self):
-        return self._job._env
+        return self._env
 
-    # proxied
     def get_instance(self):
-        return self._job._instance   
+        return self._instance   
 
     def get_processes(self):
         return self._processes
@@ -421,7 +448,7 @@ class CloudRunProcess():
 
     def get_path(self):
         instance = self._job.get_instance()
-        return instance.join_path( self._job.get_path() , self._uid )
+        return instance.path_join( self._job.get_path() , self._uid )
 
     def get_state(self):
         return self._state

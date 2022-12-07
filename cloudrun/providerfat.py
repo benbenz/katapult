@@ -126,9 +126,9 @@ class CloudRunFatProvider(CloudRunProvider,ABC):
     def _deploy_instance(self,instance,deploy_states,ssh_client,ftp_client):
 
         homedir     = instance.get_home_dir()
-        global_path = instance.join_path(homedir,'run')
-        files_path  = instance.join_path(global_path,'files')
-        ready_path  = instance.join_path(global_path,'ready')
+        global_path = instance.get_global_dir()
+        files_path  = instance.path_join(global_path,'files')
+        ready_path  = instance.path_join(global_path,'ready')
 
         # last file uploaded ...
         re_upload  = self._test_reupload(instance,ready_path,ssh_client)
@@ -161,7 +161,7 @@ class CloudRunFatProvider(CloudRunProvider,ABC):
 
             commands = [ 
                 # make bootstrap executable
-                { 'cmd': "chmod +x "+instance.join_path(global_path,"*.sh"), 'out' : True },              
+                { 'cmd': "chmod +x "+instance.path_join(global_path,"*.sh"), 'out' : True },              
             ]
 
             self._run_ssh_commands(instance,ssh_client,commands)
@@ -190,7 +190,8 @@ class CloudRunFatProvider(CloudRunProvider,ABC):
 
             self.debug(3,dpl_env.json())
 
-            re_upload_env = self._test_reupload(instance,dpl_env.get_path()+'/ready', ssh_client)
+            ready_file = instance.path_join( dpl_env.get_path() , 'ready' )
+            re_upload_env = self._test_reupload(instance,ready_file, ssh_client)
 
             re_upload_env_mamba  = False
             re_upload_env_pip    = False
@@ -198,10 +199,12 @@ class CloudRunFatProvider(CloudRunProvider,ABC):
 
             if not re_upload_env:
                 if dpl_env.get_config('env_conda') is not None:
-                    re_upload_env_mamba = self._test_reupload(instance,'$HOME/micromamba/envs/'+dpl_env.get_name_with_hash(), ssh_client,False)
+                    mamba_test = instance.path_join( instance.get_home_dir() , 'micromamba' , 'envs' , dpl_env.get_name_with_hash() )
+                    re_upload_env_mamba = self._test_reupload(instance,mamba_test, ssh_client,False)
                     re_upload_env = re_upload_env or re_upload_env_mamba
                 if dpl_env.get_config('env_pypi') is not None and dpl_env.get_config('env_conda') is None:
-                    re_upload_env_pip = self._test_reupload(instance,'$HOME/.'+dpl_env.get_name_with_hash(), ssh_client, False)
+                    venv_test = instance.path_join( instance.get_home_dir() , '.' + dpl_env.get_name_with_hash() )
+                    re_upload_env_pip = self._test_reupload(instance,venv_test, ssh_client, False)
                     re_upload_env = re_upload_env or re_upload_env_pip
                 # TODO: have an aptget install TEST
                 #if dpl_env.get_config('env_aptget') is not None:
@@ -216,10 +219,11 @@ class CloudRunFatProvider(CloudRunProvider,ABC):
 
             if re_upload:
                 files_path = dpl_env.get_path()
-                global_path = "$HOME/run" # more robust
+                global_path = instance.get_global_dir() 
+                ready_file = instance.path_join( dpl_env.get_path() , 'ready' )
 
                 self.debug(2,"creating environment directories ...")
-                stdin0, stdout0, stderr0 = self._exec_command(ssh_client,"mkdir -p "+files_path+" && rm -f "+dpl_env.get_path()+'/ready')
+                stdin0, stdout0, stderr0 = self._exec_command(ssh_client,"mkdir -p "+files_path+" && rm -f "+ready_file)
                 self.debug(2,"STDOUT for mkdir -p ",files_path,"...",stdout0.read())
                 self.debug(2,"STDERR for mkdir -p ",files_path,"...",stderr0.read())
                 self.debug(2,"directories created")
@@ -235,16 +239,18 @@ class CloudRunFatProvider(CloudRunProvider,ABC):
 
                 print_deploy = self._config.get('print_deploy') == True
 
+                config_py = instance.path_join( global_path , 'config.py' )
+
                 commands = [
                     # recreate pip+conda files according to config
-                    { 'cmd': "cd " + files_path + " && python3 "+global_path+"/config.py" , 'out' : True },
+                    { 'cmd': "cd " + files_path + " && python3 "+config_py , 'out' : True },
                     # setup envs according to current config files state
                     # FIX: mamba is not handling well concurrency
                     # we run the mamba installs sequentially below
-                    #{ 'cmd': global_path+"/bootstrap.sh \"" + dpl_env.get_name_with_hash() + "\" " + ("1" if self._config['dev'] else "0") , 'out': print_deploy , 'output': dpl_env.get_path()+'/bootstrap.log'},  
+                    #{ 'cmd': instance.path_join( global_path , 'bootstrap.sh' ) + " \"" + dpl_env.get_name_with_hash() + "\" " + ("1" if self._config['dev'] else "0") , 'out': print_deploy , 'output': instance.path_join( dpl_env.get_path() , 'bootstrap.log') },  
                 ]
 
-                bootstrap_command = bootstrap_command + (" ; " if bootstrap_command else "") + global_path+"/bootstrap.sh \"" + dpl_env.get_name_with_hash() + "\" " + ("1" if self._config['dev'] else "0")
+                bootstrap_command = bootstrap_command + (" ; " if bootstrap_command else "") + instance.path_join( global_path , 'bootstrap.sh' ) + " \"" + dpl_env.get_name_with_hash() + "\" " + ("1" if self._config['dev'] else "0")
 
                 self._run_ssh_commands(instance,ssh_client,commands)
                 
@@ -252,12 +258,14 @@ class CloudRunFatProvider(CloudRunProvider,ABC):
                 #ftp_client.putfo(BytesIO("".encode()), 'ready')
 
         if bootstrap_command:
-            ftp_client.chdir('/home/'+instance.get_config('img_username')+'/run')
+            gbl_dir = instance.get_global_dir()
+            ftp_client.chdir(gbl_dir)
             ftp_client.putfo(io.StringIO(bootstrap_command),'generate_envs.sh')
+            generate_sh = instance.path_join( gbl_dir , 'generate_envs.sh' ) 
+            bootstrap_log = instance.path_join( gbl_dir , 'bootstrap.log' )
             commands = [
-                {'cmd': 'chmod +x $HOME/run/generate_envs.sh' , 'out':True}, # import to wait for this to be done !
-                {'cmd': '$HOME/run/generate_envs.sh' , 'out':print_deploy, 'output': '$HOME/run/bootstrap.log'}
-                #{'cmd': bootstrap_command ,'out': print_deploy , 'output': '$HOME/run/bootstrap.log'}
+                {'cmd': 'chmod +x ' + generate_sh , 'out':True}, # import to wait for this to be done !
+                {'cmd': generate_sh , 'out':print_deploy, 'output': bootstrap_log }
             ]
             self._run_ssh_commands(instance,ssh_client,commands)
         
@@ -286,7 +294,7 @@ class CloudRunFatProvider(CloudRunProvider,ABC):
             mkdir_cmd = ""
             for in_file in input_files:
                 local_path , rel_path , abs_path , rel_remote_path , external = self._resolve_dpl_job_paths(in_file,dpl_job)
-                dirname = os.path.dirname(abs_path)
+                dirname = instance.path_dirname(abs_path)
                 if dirname:
                     mkdir_cmd = mkdir_cmd + (" && " if mkdir_cmd else "") + "mkdir -p " + dirname #dpl_job.get_path()+'/'+dirname
 
@@ -432,7 +440,7 @@ class CloudRunFatProvider(CloudRunProvider,ABC):
     def _start_and_update_and_reset_instance(self,instance,reset):
         self._start_and_update_instance(instance)
         if reset:
-           self.reset_instance(inst)
+           self.reset_instance(instance)
 
     def start(self,reset=False):
         self._instances_states = dict() 
@@ -452,8 +460,9 @@ class CloudRunFatProvider(CloudRunProvider,ABC):
         instanceid, ssh_client , ftp_client = self._wait_and_connect(instance)
         if ssh_client is not None:
             ftp_client.putfo(self._get_resource_file('remote_files/reset.sh'),'reset.sh') 
+            reset_file = instance.path_join( instance.get_home_dir() , 'reset.sh' )
             commands = [
-                { 'cmd' : 'chmod +x $HOME/reset.sh && $HOME/reset.sh' , 'out' : True }
+                { 'cmd' : 'chmod +x '+reset_file+' && ' + reset_file , 'out' : True }
             ]
             self._run_ssh_commands(instance,ssh_client,commands)
             ftp_client.close()
@@ -471,7 +480,7 @@ class CloudRunFatProvider(CloudRunProvider,ABC):
     # deploys:
     # - instances files
     # - environments files
-    # - shared script files / upload / inputs ...
+    # - shared script files, uploads, inputs ...
     def deploy(self):
 
         clients = {} 
@@ -496,7 +505,7 @@ class CloudRunFatProvider(CloudRunProvider,ABC):
 
         jobs_can_be_saved = False
         if instance.get_state()==CloudRunInstanceState.STOPPED or instance.get_state()==CloudRunInstanceState.STOPPING:
-            self.debug(1,"Instance is stopping/stopped, we just have to re-start the instance",instance,color=bcolors.OKCYAN)
+            self.debug(1,"Instance is stopping|stopped, we just have to re-start the instance",instance,color=bcolors.OKCYAN)
             jobs_can_be_saved = True
             #self.start_instance(instance)
             self._wait_for_instance(instance)
@@ -522,13 +531,16 @@ class CloudRunFatProvider(CloudRunProvider,ABC):
 
     def get_log(self,process,ssh_client):
         uid   = process.get_uid()
-        job   = process.get_job()
-        env   = job.get_env()
+        job   = process.get_job() # dpl job
+        env   = job.get_env() # dpl env
         jhash = job.get_hash()
         path  = env.get_path()
+        instance = job.get_instance()
         try:
-            run_path = path+'/'+jhash+'/'+uid
-            stdin , stdout , stderr = self._exec_command(ssh_client,"cat "+run_path+'/run-'+uid+'.log '+run_path+'/run.log')
+            run_path = instance.path_join( path , jhash , uid )
+            run_log1 = instance.path_join( run_path , 'run-'+uid+'.log' )
+            run_log2 = instance.path_join( run_path , 'run.log' )
+            stdin , stdout , stderr = self._exec_command(ssh_client,"cat "+run_log1+' '+run_log2)
             return stdout.read()
         except:
             return None
@@ -603,7 +615,7 @@ class CloudRunFatProvider(CloudRunProvider,ABC):
         else:
             return True , None , False
 
-    def _run_jobs_for_instance(self,runinfo,batch_uid,dpl_jobs) :
+    def _run_jobs_for_instance(self,instance,runinfo,batch_uid,dpl_jobs) :
         if self._recovery:
             do_run , processes , all_done = self._check_run_state(runinfo)
             if not do_run:
@@ -614,7 +626,7 @@ class CloudRunFatProvider(CloudRunProvider,ABC):
                     self.debug(1,"Skipping run_jobs because the jobs have advanced as we left them :)",instance,color=bcolors.WARNING)
                 return processes
 
-        global_path = "$HOME/run" # more robust
+        global_path = instance.get_global_dir()
 
         tryagain = True
 
@@ -626,8 +638,8 @@ class CloudRunFatProvider(CloudRunProvider,ABC):
             cmd_run  = runinfo.get('cmd_run')
             cmd_run_pre = runinfo.get('cmd_run_pre')
             cmd_pid  = runinfo.get('cmd_pid')
-            batch_run_file = 'batch_run-'+batch_uid+'.sh'
-            batch_pid_file = 'batch_pid-'+batch_uid+'.sh'
+            batch_run_file = instance.path_join( global_path , 'batch_run-'+batch_uid+'.sh')
+            batch_pid_file = instance.path_join( global_path , 'batch_pid-'+batch_uid+'.sh')
             ssh_client = self._connect_to_instance(instance)
             if ssh_client is None:
                 ssh_client , processes = self._handle_instance_disconnect(instance,CloudRunProviderStateWaitMode.WATCH,"could not run jobs for instance")
@@ -635,14 +647,14 @@ class CloudRunFatProvider(CloudRunProvider,ABC):
                     return []
 
             ftp_client = ssh_client.open_sftp()
-            ftp_client.chdir('/home/'+instance.get_config('img_username')+'/run')
+            ftp_client.chdir(global_path)
             ftp_client.putfo(BytesIO(cmd_run_pre.encode()+cmd_run.encode()), batch_run_file)
             ftp_client.putfo(BytesIO(cmd_pid.encode()), batch_pid_file)
             # run
             commands = [ 
-                { 'cmd': "chmod +x "+global_path+"/"+batch_run_file+" "+global_path+"/"+batch_pid_file, 'out' : True } ,  # important to wait for it >> True !!!
+                { 'cmd': "chmod +x "+batch_run_file+" "+batch_pid_file, 'out' : True } ,  # important to wait for it >> True !!!
                 # execute main script (spawn) (this will wait for bootstraping)
-                { 'cmd': global_path+"/"+batch_run_file , 'out' : False } 
+                { 'cmd': batch_run_file , 'out' : False } 
             ]
             
             try:
@@ -678,8 +690,6 @@ class CloudRunFatProvider(CloudRunProvider,ABC):
             except_done = True
 
         instances_runs = dict()
-
-        global_path = "$HOME/run" # more robust
 
         dpl_jobs = dict()
 
@@ -721,6 +731,7 @@ class CloudRunFatProvider(CloudRunProvider,ABC):
             #       but this makes it less robust to states changes (especially remote....)
             dpl_env  = env.deploy(instance)
             dpl_job  = job.deploy(dpl_env)
+            global_path = instance.get_global_dir()
 
             files_path  = dpl_env.get_path()
 
@@ -730,10 +741,10 @@ class CloudRunFatProvider(CloudRunProvider,ABC):
             dpl_jobs[uid] = dpl_job
             instances_runs[instance.get_name()]['jobs'].append(uid)
             
-            run_path    = dpl_job.get_path() + '/' + uid
+            run_path    = instance.path_join( dpl_job.get_path() , uid )
             # retrieve PID (this will wait for PID file)
-            pid_file   = run_path + "/pid"
-            state_file = run_path + "/state"
+            pid_file   = instance.path_join( run_path , 'pid' )
+            state_file = instance.path_join( run_path , 'state' )
 
             is_first = (cmd_run_pre=="")
 
@@ -750,9 +761,12 @@ class CloudRunFatProvider(CloudRunProvider,ABC):
                 cmd_run_pre = cmd_run_pre + ln_command + "\n"
 
             #cmd_run = cmd_run + "mkdir -p "+run_path + " && "
-            cmd_run = cmd_run + global_path+"/run.sh \"" + dpl_env.get_name_with_hash() + "\" \""+dpl_job.get_command()+"\" " + job.get_config('input_file') + " " + job.get_config('output_file') + " " + job.get_hash()+" "+uid+">"+run_path+"/run-"+uid+".log 2>&1"
+            run_sh  = instance.path_join( global_path , 'run.sh' )
+            run_log = instance.path_join( run_path , 'run-'+uid+'.log' )
+            pid_sh  = instance.path_join( global_path , 'getpid.sh' )
+            cmd_run = cmd_run + run_sh+" \"" + dpl_env.get_name_with_hash() + "\" \""+dpl_job.get_command()+"\" " + job.get_config('input_file') + " " + job.get_config('output_file') + " " + job.get_hash()+" "+uid+">"+run_log+" 2>&1"
             cmd_run = cmd_run + "\n"
-            cmd_pid = cmd_pid + global_path+"/getpid.sh \"" + pid_file + "\"\n"
+            cmd_pid = cmd_pid + pid_sh + " \"" + pid_file + "\"\n"
 
             instances_runs[instance.get_name()]['cmd_run'] = cmd_run
             instances_runs[instance.get_name()]['cmd_pid'] = cmd_pid
@@ -762,7 +776,7 @@ class CloudRunFatProvider(CloudRunProvider,ABC):
         
         with concurrent.futures.ThreadPoolExecutor(max_workers=self._get_num_workers()) as pool:
             future_to_instance = { pool.submit(self._run_jobs_for_instance,
-                                                runinfo,batch_uid,dpl_jobs) : instance for instance_name , runinfo in instances_runs.items()
+                                                instance,runinfo,batch_uid,dpl_jobs) : instance for instance_name , runinfo in instances_runs.items()
                                                 }
             for future in concurrent.futures.as_completed(future_to_instance):
                 inst = future_to_instance[future]
@@ -783,79 +797,6 @@ class CloudRunFatProvider(CloudRunProvider,ABC):
         self.serialize_state()
 
         return self._current_processes 
-
-        
-    def run_job(self,job):
-
-        if not job.get_instance():
-            debug(1,"The job",job,"has not been assigned to an instance!")
-            return None
-
-        instance = job.get_instance()
-
-        # CHECK EVERY TIME !
-        # if wait:
-        #     await self._wait_for_instance(instance)
-
-        # FOR NOW
-        env      = job.get_env()        # get its environment
-        # "deploy" the environment to the instance and get a DeployedEnvironment 
-        # note: this has already been done in deploy but it doesnt matter ... 
-        #       we dont store the deployed environments, and we base everything on remote state ...
-        # NOTE: this could change and we store every thing in memory
-        #       but this makes it less robust to states changes (especially remote....)
-        dpl_env  = env.deploy(instance)
-        dpl_job  = job.deploy(dpl_env)
-
-        ssh_client = self._connect_to_instance(instance)
-
-        if ssh_client is None:
-            self.debug(1,"ERROR: could not run job for instance",instance,color=bcolors.FAIL)
-            return None
-
-        files_path = dpl_env.get_path()
-        global_path = "$HOME/run" # more robust
-
-        # generate unique PID file
-        uid = cloudrunutils.generate_unique_filename() 
-         
-        run_path    = dpl_job.get_path() + '/' + uid
-
-        self.debug(1,"creating directories ...")
-        stdin0, stdout0, stderr0 = self._exec_command(ssh_client,"mkdir -p "+run_path)
-        self.debug(1,"directories created")
-
-        ln_command = self._get_ln_command(dpl_job,uid)
-        self.debug(2,ln_command)
-        if ln_command != "":
-            stdin0, stdout0, stderr0 = self._exec_command(ssh_client,ln_command)
-            self.debug(2,stdout0.read())
-
-        # run
-        commands = [ 
-            # execute main script (spawn) (this will wait for bootstraping)
-            { 'cmd': global_path+"/run.sh \"" + dpl_env.get_name_with_hash() + "\" \""+dpl_job.get_command()+"\" " + job.get_config('input_file') + " " + job.get_config('output_file') + " " + job.get_hash()+" "+uid+">"+run_path+"/run-"+uid+".log 2>&1", 'out' : False }
-        ]
-
-        self._run_ssh_commands(instance,ssh_client,commands)
-
-        # retrieve PID (this will wait for PID file)
-        pid_file = run_path + "/pid"
-        getpid_cmd = global_path+"/getpid.sh \"" + pid_file + "\""
-         
-        self.debug(1,"Executing ",format( getpid_cmd ) )
-        stdin , stdout, stderr = self._exec_command(ssh_client,getpid_cmd)
-        info = stdout.readline().strip().split(',')
-        pid = int(info[1])
-        #uid = info[0]
-
-        ssh_client.close()
-
-        process = CloudRunProcess( dpl_job , uid , pid )
-
-        self.debug(1,process) 
-
-        return process
 
 
     def print_jobs_summary(self,instance=None):
@@ -928,11 +869,9 @@ class CloudRunFatProvider(CloudRunProvider,ABC):
                 ftp_client = clients[instance.get_name()]['ftp']
             
             out_file = dpl_job.get_config('output_file')
-            #local_path , rel_path , abs_path , rel_remote_path , external = self._resolve_dpl_job_paths(out_file,dpl_job)
-            #abs_path = abs_path.replace('$HOME','/home/'+instance.get_config('img_username'))
-            remote_file_path = os.path.join( process.get_path() , out_file )
-            directory = os.path.dirname( remote_file_path )
-            filename  = os.path.basename( remote_file_path )
+            remote_file_path = instance.path_join( process.get_path() , out_file )
+            directory = instance.path_dirname( remote_file_path )
+            filename  = instance.path_basename( remote_file_path )
             
             file_name , file_extension = os.path.splitext(out_file)
             file_name = file_name.replace('/','_')
@@ -968,6 +907,7 @@ class CloudRunFatProvider(CloudRunProvider,ABC):
         files_to_ln = []
         upload_files = dpl_job.get_config('upload_files')
         lnstr = ""
+        instance = dpl_job.get_instance()
         if upload_files:
             for up_file in upload_files:
                 files_to_ln.append(up_file)
@@ -975,18 +915,16 @@ class CloudRunFatProvider(CloudRunProvider,ABC):
             files_to_ln.append(dpl_job.get_config('input_file'))
         for upfile in files_to_ln:
             local_path , rel_path , abs_path , rel_remote_path , external = self._resolve_dpl_job_paths(upfile,dpl_job)
-            filename    = os.path.basename(abs_path)
-            filedir_abs = os.path.dirname(abs_path)
-            filedir_rel = os.path.dirname(rel_path)
-            if filedir_rel and filedir_rel != '/':
+            filename    = instance.path_basename(abs_path)
+            filedir_abs = instance.path_dirname(abs_path)
+            filedir_rel = instance.path_dirname(rel_path)
+            if filedir_rel and filedir_rel != instance.path_sep() :
                 fulldir   = os.path.join(dpl_job.get_path() , uid , filedir_rel)
                 uploaddir = os.path.join(dpl_job.get_path() , filedir_rel )
-                #lnstr = lnstr + (" && " if lnstr else "") + "mkdir -p " + fulldir + " && ln -sf " + uploaddir + '/' + filename + " " + fulldir + '/' + filename
                 lnstr = lnstr + (" && " if lnstr else "") + "mkdir -p " + fulldir + " && ln -sf " + abs_path + " " + fulldir + '/' + filename
             else:
                 fulldir   = os.path.join( dpl_job.get_path() , uid )
                 uploaddir = dpl_job.get_path()
-                #lnstr = lnstr + (" && " if lnstr else "") + "ln -sf " + uploaddir + '/' + filename + " " + fulldir + '/' + filename
                 lnstr = lnstr + (" && " if lnstr else "") + "ln -sf " + abs_path + " " + fulldir + '/' + filename
 
         return lnstr

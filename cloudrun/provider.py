@@ -139,7 +139,7 @@ class CloudRunProvider(ABC):
     def _resolve_dpl_job_paths(self,upfile,dpl_job):
         if self._mutualize_uploads:
             instance = dpl_job.get_instance()
-            remote_ref_dir = instance.join_path( instance.get_home_dir() , 'run' , 'files')
+            remote_ref_dir = instance.path_join( instance.get_home_dir() , 'run' , 'files')
             return cloudrunutils.resolve_paths(upfile,dpl_job.get_config('run_script'),remote_ref_dir,True) 
         else:
             return cloudrunutils.resolve_paths(upfile,dpl_job.get_config('run_script'),dpl_job.get_path(),False)
@@ -310,7 +310,7 @@ class CloudRunProvider(ABC):
                     transport = ssh_client.get_transport()
                     channel   = transport.open_session()
                     if not 'output' in command:
-                        output = instance.join_path( instance.get_home_dir() , 'run' , 'out.log' )
+                        output = instance.path_join( instance.get_home_dir() , 'run' , 'out.log' )
                     else:
                         output = command['output']
                     channel.exec_command(command['cmd']+" 1>"+output+" 2>&1 &")
