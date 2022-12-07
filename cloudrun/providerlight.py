@@ -70,20 +70,31 @@ class CloudRunLightProvider(CloudRunProvider,ABC):
         # wait for maestro to be ready
         instanceid , ssh_client , ftp_client = self._wait_and_connect(self._maestro)
 
-        re_init  = self._test_reupload(self._maestro,"$HOME/cloudrun/ready", ssh_client)
+        home_dir = self._maestro.get_home_dir()
+        cloudrun_dir = self._maestro.path_join( home_dir , 'cloudrun' )
+        files_dir = self._maestro.path_join( cloudrun_dir , 'files' )
+        ready_file = self._maestro.path_join( cloudrun_dir , 'ready' )
+        maestro_file = self._maestro.path_join( home_dir , 'maestro' )
+        aws_dir = self._maestro.path_join( home_dir , '.aws' )
+        aws_config = self._maestro.path_join( aws_dir , 'config' )
+        if self._maestro.get_platform() == CloudRunPlatform.LINUX:
+            activate_file = self._maestro.path_join( cloudrun_dir , '.venv' , 'maestro' , 'bin' , 'activate' )
+        elif self._maestro.get_platform() == CloudRunPlatform.WINDOWS:
+            activate_file = self._maestro.path_join( cloudrun_dir , '.venv' , 'maestro' , 'Scripts' , 'activate.bat' )
+        re_init  = self._test_reupload(self._maestro,ready_file, ssh_client)
 
         if re_init:
             # remove the file
-            self._exec_command(ssh_client,'rm -f $HOME/cloudrun/ready')
+            self._exec_command(ssh_client,'rm -f ' + ready_file )
             # make cloudrun dir
-            self._exec_command(ssh_client,'mkdir -p $HOME/cloudrun/files') 
+            self._exec_command(ssh_client,'mkdir -p ' + files_dir ) 
             # mark it as maestro...
-            self._exec_command(ssh_client,'echo "" > ~/maestro') 
+            self._exec_command(ssh_client,'echo "" > ' + maestro_file ) 
             # add manually the 
             if self._config.get('profile'):
                 profile = self._config.get('profile')
                 region  = self.get_region() # we have a profile so this returns the region for this profile
-                aws_config_cmd = "mkdir -p $HOME/.aws && echo \"[profile "+profile+"]\nregion = " + region + "\noutput = json\" > $HOME/.aws/config"
+                aws_config_cmd = "mkdir -p "+aws_dir+" && echo \"[profile "+profile+"]\nregion = " + region + "\noutput = json\" > " + aws_config
                 self._exec_command(ssh_client,aws_config_cmd)
             # grant its admin rights (we need to be (stopped or) running to be able to do that)
             self.grant_admin_rights(self._maestro)
@@ -92,7 +103,7 @@ class CloudRunLightProvider(CloudRunProvider,ABC):
             # deploy CloudRun on the maestro
             self._deploy_cloudrun(ssh_client,ftp_client)
             # mark as ready
-            self._exec_command(ssh_client,'if [ -f $HOME/cloudrun/.venv/maestro/bin/activate ]; then echo "" > $HOME/cloudrun/ready ; fi')
+            self._exec_command(ssh_client,'if [ -f '+activate_file+' ]; then echo "" > '+ready_file+' ; fi')
 
         # deploy the config to the maestro (every time)
         self._deploy_config(ssh_client,ftp_client)
@@ -425,10 +436,10 @@ class CloudRunLightProvider(CloudRunProvider,ABC):
             pass
 
         randnum          = str(random.randrange(1000))
-        homedir          = "/home/"+self._maestro.get_config('img_username')
-        maestro_dir      = homedir+"/cloudrun_tmp_fetch" + randnum
+        homedir          = self._maestro.get_home_dir()
+        maestro_dir      = self._maestro.path_join( homedir , "cloudrun_tmp_fetch" + randnum )
         maestro_tar_file = "maestro"+randnum+".tar"
-        maestro_tar_path = homedir+'/'+maestro_tar_file
+        maestro_tar_path = self._maestro.path_join( homedir , maestro_tar_file )
 
         # fetch the results on the maestro
         self._exec_maestro_command("fetch_results:"+maestro_dir)
@@ -438,7 +449,7 @@ class CloudRunLightProvider(CloudRunProvider,ABC):
         stdin,stdout,stderr = self._exec_command(ssh_client,"cd " + maestro_dir + " && tar -cvf "+maestro_tar_path+" .")      
         self.debug(1,stdout.read()) #blocks
         self.debug(2,stderr.read()) #blocks
-        local_tar_path = os.path.join(out_dir,'./'+maestro_tar_file)
+        local_tar_path = os.path.join(out_dir,maestro_tar_file)
         with open(local_tar_path,'wb') as outfile:
             ftp_client.chdir( homedir )
             ftp_client.getfo( maestro_tar_file , outfile )

@@ -2,7 +2,6 @@ import hashlib , os , subprocess , json
 import jcs , yaml
 import uuid
 import os
-from os import path
 
 # keys used for hash computation
 # Note: we include market options (SPOT ON/OFF e.g.) for the instance because it defines how the 'hardware' will run 
@@ -86,7 +85,7 @@ def compute_environment_object(env_config):
 
         env_command = env_config['command']
 
-        if isinstance(env_command,str) and path.isfile(env_command):
+        if isinstance(env_command,str) and os.path.isfile(env_command):
 
             with open(env_command, "r") as bash_file:
                 try:
@@ -117,7 +116,7 @@ def compute_environment_object(env_config):
             env_conda = list(map(str.strip,env_conda)) # strip the strings
             environment_obj['env_conda']['dependencies'] = env_conda
         
-        elif isinstance(env_conda,str) and path.isfile(env_conda):
+        elif isinstance(env_conda,str) and os.path.isfile(env_conda):
 
             with open(env_conda, "r") as ymlData:
                 try:
@@ -126,7 +125,7 @@ def compute_environment_object(env_config):
                 except yaml.YAMLError as exc:
                     print(exc)
         
-        elif isinstance(env_conda,str) and path.isdir(env_conda):
+        elif isinstance(env_conda,str) and os.path.isdir(env_conda):
 
             cmd    = ['source activate "'+env_conda+'" && conda env export']
             try:
@@ -157,17 +156,17 @@ def compute_environment_object(env_config):
             env_pypi = list(map(str.strip,env_pypi)) # strip the strings
             environment_obj['env_pypi'] = env_pypi
 
-        elif isinstance(env_pypi,str) and path.isfile(env_pypi):
+        elif isinstance(env_pypi,str) and os.path.isfile(env_pypi):
 
             with open(env_pypi, "r") as txtFile:
                 pipDeps = txtFile.read().split('\n')
                 environment_obj['env_pypi'] = pipDeps
             
-        elif isinstance(env_pypi,str) and path.isdir(env_pypi):
+        elif isinstance(env_pypi,str) and os.path.isdir(env_pypi):
 
-            #cmd    = "source " + path.realpath(env_pypi) + path.sep + 'bin' + path.sep + 'activate && pip freeze'
+            #cmd    = "source " + os.path.realpath(env_pypi) + os.path.sep + 'bin' + os.path.sep + 'activate && pip freeze'
             cmd = [
-                path.realpath(env_pypi) + path.sep + 'bin' + path.sep + 'pip' ,
+                os.path.realpath(env_pypi) + os.path.sep + 'bin' + os.path.sep + 'pip' ,
                 'freeze'
             ]
             try:
@@ -205,7 +204,7 @@ def compute_job_hash(job_config):
     string_to_hash = ''
     if job_config.get('run_script'):
         script_args    = job_config['run_script'].split()
-        scriptfile     = path.realpath(script_args[0])
+        scriptfile     = os.path.realpath(script_args[0])
         string_to_hash = 'script:' + scriptfile
     elif job_config.get('run_command'):
         # lets not do anything to commands ... its less known what can be in there ...
@@ -221,11 +220,11 @@ def compute_job_hash(job_config):
             files = [ files ]
         realfiles = []
         for f in sorted(files):
-            realfiles.append( path.realpath(f) )
+            realfiles.append( os.path.realpath(f) )
         string_to_hash = string_to_hash + ":" + ",".join(realfiles)
 
     if job_config.get('input_file'):
-        inputpath = path.realpath(job_config.get('input_file'))
+        inputpath = os.path.realpath(job_config.get('input_file'))
         string_to_hash = string_to_hash + ":" + inputpath
 
     # also add the input file which should be pointing to a specific file 
@@ -272,21 +271,21 @@ def resolve_paths(the_file,ref_file,remote_ref_dir,mutualize=True):
     # let's make sure we upload the right directory structure so we dont have to change the script
     if ref_file:
         ref_args        = ref_file.split()
-        ref_abs_path    = path.abspath(ref_args[0])
-        ref_abs_dir     = path.dirname(ref_abs_path)
-        if path.isabs(the_file):
+        ref_abs_path    = os.path.abspath(ref_args[0])
+        ref_abs_dir     = os.path.dirname(ref_abs_path)
+        if os.path.isabs(the_file):
             local_abs_path   = the_file
         else:
-            local_abs_path   = path.join(ref_abs_dir,the_file)
-        file_abs_dir    = path.dirname(local_abs_path)
+            local_abs_path   = os.path.join(ref_abs_dir,the_file)
+        file_abs_dir    = os.path.dirname(local_abs_path)
     else:
-        ref_abs_path    = path.abspath(os.getcwd())
-        ref_abs_dir     = ref_abs_path #path.dirname(ref_abs_path)
-        if path.isabs(the_file):
+        ref_abs_path    = os.path.abspath(os.getcwd())
+        ref_abs_dir     = ref_abs_path #os.path.dirname(ref_abs_path)
+        if os.path.isabs(the_file):
             local_abs_path   = the_file
         else:
-            local_abs_path   = path.join(ref_abs_dir,the_file)
-        file_abs_dir    = path.dirname(local_abs_path)
+            local_abs_path   = os.path.join(ref_abs_dir,the_file)
+        file_abs_dir    = os.path.dirname(local_abs_path)
     
     # this is a subdir: we have to respect the structure
     if file_abs_dir.startswith(ref_abs_dir):
@@ -305,7 +304,7 @@ def resolve_paths(the_file,ref_file,remote_ref_dir,mutualize=True):
 
     # use the first case if you want to leave stuff in the job's directory
     if not mutualize:
-        remote_abs_path = path.join(remote_ref_dir,rel_path)
+        remote_abs_path = os.path.join(remote_ref_dir,rel_path)
         remote_rel_path = rel_path
     # use the second case if you want to mutualize uploads
     else:
@@ -313,7 +312,7 @@ def resolve_paths(the_file,ref_file,remote_ref_dir,mutualize=True):
         if remote_abs_path.startswith(os.sep):
             remote_abs_path = remote_abs_path[1:] # make relative
         remote_rel_path = remote_abs_path
-        remote_abs_path = path.join(remote_ref_dir,remote_abs_path)
+        remote_abs_path = os.path.join(remote_ref_dir,remote_abs_path)
 
     # local_abs_path   = the local file path
     # remote_abs_path = the absolute remote file path

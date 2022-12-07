@@ -105,6 +105,9 @@ class CloudRunInstance():
     def get_state(self):
         return self._state
 
+    def get_platform(self):
+        return self._platform
+
     def get_home_dir(self,absolute=True):
         if self._platform == CloudRunPlatform.LINUX:
             return '/home/' + self.get_config('img_username') if absolute else '%HOME'

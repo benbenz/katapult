@@ -114,7 +114,7 @@ class CloudRunFatProvider(CloudRunProvider,ABC):
                 job.set_instance(instance)
                 self.debug(1,"Assigned job " + str(job) )
 
-        # knapsack / 2d packing / bin packing ...
+        # knapsack , 2d packing , bin packing ...
         else: #if assignation is None or assignation=='multi_knapsack':
 
             combopt.multiple_knapsack_assignation(self._jobs,self._instances)   
@@ -296,7 +296,7 @@ class CloudRunFatProvider(CloudRunProvider,ABC):
                 local_path , rel_path , abs_path , rel_remote_path , external = self._resolve_dpl_job_paths(in_file,dpl_job)
                 dirname = instance.path_dirname(abs_path)
                 if dirname:
-                    mkdir_cmd = mkdir_cmd + (" && " if mkdir_cmd else "") + "mkdir -p " + dirname #dpl_job.get_path()+'/'+dirname
+                    mkdir_cmd = mkdir_cmd + (" && " if mkdir_cmd else "") + "mkdir -p " + dirname 
 
             self.debug(2,"creating job directories ...")
             stdin0, stdout0, stderr0 = self._exec_command(ssh_client,"mkdir -p "+dpl_job.get_path())
@@ -305,17 +305,20 @@ class CloudRunFatProvider(CloudRunProvider,ABC):
             self.debug(2,"directories created")
 
             re_upload_env = deploy_states[instance.get_name()][env.get_name_with_hash()]['upload']
-            re_upload = self._test_reupload(instance,dpl_job.get_path()+'/ready', ssh_client)
+
+            ready_file = instance.path_join( dpl_job.get_path() , 'ready' )
+            re_upload = self._test_reupload(instance,ready_file, ssh_client)
 
             self.debug(2,"re_upload_env",re_upload_env,"re_upload",re_upload)
 
             if re_upload: #or re_upload_env:
 
-                stdin0, stdout0, stderr0 = self._exec_command(ssh_client,"rm -f "+dpl_job.get_path()+'/ready')
+                stdin0, stdout0, stderr0 = self._exec_command(ssh_client,"rm -f "+ready_file)
 
                 self.debug(1,"uploading job files ... ",dpl_job.get_hash())
 
-                global_path = "$HOME/run" # more robust
+                global_path = instance.get_global_dir()
+                files_dir = instance.path_join( global_path , 'files' )
 
                 # change to job hash dir
                 ftp_client.chdir(dpl_job.get_path())
@@ -331,7 +334,7 @@ class CloudRunFatProvider(CloudRunProvider,ABC):
                 # NEW ! WE now go to 
                 # COMMENT THIS IF YOU WANT TO PUT FILES in relation to the jobs' dir
                 if self._mutualize_uploads:
-                    ftp_client.chdir('/home/'+str(instance.get_config('img_username'))+'/run/files')
+                    ftp_client.chdir(files_dir)
 
                 if job.get_config('upload_files'):
                     files = job.get_config('upload_files')
@@ -876,7 +879,7 @@ class CloudRunFatProvider(CloudRunProvider,ABC):
             file_name , file_extension = os.path.splitext(out_file)
             file_name = file_name.replace('/','_')
             #ftp_client.chdir(directory)
-            with open(os.path.join(out_dir,'./job_'+str(rank).zfill(3)+'_'+file_name+file_extension),'wb') as outfile:
+            with open(os.path.join(out_dir,'job_'+str(rank).zfill(3)+'_'+file_name+file_extension),'wb') as outfile:
                 ftp_client.chdir( directory )
                 ftp_client.getfo( filename , outfile )   
         
@@ -919,13 +922,15 @@ class CloudRunFatProvider(CloudRunProvider,ABC):
             filedir_abs = instance.path_dirname(abs_path)
             filedir_rel = instance.path_dirname(rel_path)
             if filedir_rel and filedir_rel != instance.path_sep() :
-                fulldir   = os.path.join(dpl_job.get_path() , uid , filedir_rel)
-                uploaddir = os.path.join(dpl_job.get_path() , filedir_rel )
-                lnstr = lnstr + (" && " if lnstr else "") + "mkdir -p " + fulldir + " && ln -sf " + abs_path + " " + fulldir + '/' + filename
+                fulldir   = instance.path_join(dpl_job.get_path() , uid , filedir_rel)
+                uploaddir = instance.path_join(dpl_job.get_path() , filedir_rel )
+                full_file_path = instance.path_join( fulldir , filename )
+                lnstr = lnstr + (" && " if lnstr else "") + "mkdir -p " + fulldir + " && ln -sf " + abs_path + " " +  full_file_path
             else:
-                fulldir   = os.path.join( dpl_job.get_path() , uid )
+                fulldir   = instance.path_join( dpl_job.get_path() , uid )
                 uploaddir = dpl_job.get_path()
-                lnstr = lnstr + (" && " if lnstr else "") + "ln -sf " + abs_path + " " + fulldir + '/' + filename
+                full_file_path = instance.path_join( fulldir , filename )
+                lnstr = lnstr + (" && " if lnstr else "") + "ln -sf " + abs_path + " " + full_file_path
 
         return lnstr
 
@@ -1016,7 +1021,7 @@ class CloudRunFatProvider(CloudRunProvider,ABC):
             if processes is not None:
                 processes_infos , jobsinfo = self._recompute_jobs_info(instance,processes)
 
-        global_path = "$HOME/run"
+        global_path = instance.get_global_dir() 
 
         processes = []
 
@@ -1037,7 +1042,8 @@ class CloudRunFatProvider(CloudRunProvider,ABC):
 
                 processes = []
 
-            cmd = global_path + "/state.sh " + jobsinfo
+            state_sh = instance.path_join( global_path , 'state.sh' )
+            cmd =  state_sh + " " + jobsinfo
             self.debug(2,"Executing command",cmd)
             try:
                 stdin, stdout, stderr = self._exec_command(ssh_client,cmd)
@@ -1049,7 +1055,7 @@ class CloudRunFatProvider(CloudRunProvider,ABC):
                     return None
                 if processes is not None: # if processes have changed due to restart
                     processes_infos , jobsinfo = self._recompute_jobs_info(instance,processes)
-                    cmd = global_path + "/state.sh " + jobsinfo
+                    cmd = state_sh + " " + jobsinfo
                 
                 # try one more time to re-run the command ...
                 stdin, stdout, stderr = self._exec_command(ssh_client,cmd)
@@ -1146,7 +1152,7 @@ class CloudRunFatProvider(CloudRunProvider,ABC):
                     debug(2,self._instances_watching)
                     any_watching = any( self._instances_watching.values() )
                     if not any_watching:
-                        self.debug(1,"Stopping the fat client / maestro because all instances have ran the jobs",color=bcolors.WARNING)
+                        self.debug(1,"Stopping the fat client (maestro) because all instances have ran the jobs",color=bcolors.WARNING)
                         os.system("sudo shutdown -h now")
 
         return processes
@@ -1294,19 +1300,7 @@ class CloudRunFatProvider(CloudRunProvider,ABC):
         if not processes or len(processes)==0:
             self.debug(2,"No process requested >> getting all jobs' processes")
 
-        return self.__get_or_wait_jobs_state(processes)   
-
-    def _tail_execute_command(self,ssh,files_path,uid,line_num):
-        run_log = files_path + '/' + uid + '-run.log'
-        command = "cat -n %s | tail --lines=+%d" % (run_log, line_num)
-        stdin, stdout_i, stderr = ssh.exec_command(command)
-        #stderr = stderr.read()
-        #if stderr:
-        #    print(stderr)
-        return stdout_i.readlines()    
-
-    def _tail_get_last_line_number(self,lines_i, line_num):
-        return int(lines_i[-1].split('\t')[0]) + 1 if lines_i else line_num     
+        return self.__get_or_wait_jobs_state(processes)     
 
     @abstractmethod
     def get_recommended_cpus(self,inst_cfg):
