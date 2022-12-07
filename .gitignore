@@ -16,3 +16,4 @@ state.pickle
 commits.log
 watch.log
 /tmp
+/dist
