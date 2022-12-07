@@ -164,6 +164,9 @@ class CloudRunInstance():
     def set_state(self,value):
         self._state = value 
 
+    def set_platform(self,value):
+        self._platform = value 
+
     def set_invalid(self,val):
         self._invalid = val
 

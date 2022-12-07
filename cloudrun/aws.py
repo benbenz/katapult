@@ -1,7 +1,7 @@
 import boto3
 import os , sys
 from .utils import *
-from cloudrun.core     import CloudRunError , CloudRunInstance , CloudRunInstanceState 
+from cloudrun.core     import CloudRunError , CloudRunInstance , CloudRunInstanceState , CloudRunPlatform
 from cloudrun.core     import cr_keypairName , cr_secGroupName , cr_secGroupNameMaestro , cr_bucketName , cr_vpcName , cr_maestroRoleName , cr_maestroProfileName, cr_maestroPolicyName , init_instance_name
 from cloudrun.provider import debug , bcolors
 from cloudrun.providerfat import CloudRunFatProvider
@@ -452,7 +452,6 @@ def aws_create_instance(session,instance_config,vpc,subnet,secGroup,keypair_name
         block_device_mapping = [ ]
 
     try:
-
         instances = ec2_client.run_instances(
                 ImageId = instance_config['img_id'],
                 MinCount = 1,
@@ -578,6 +577,8 @@ def aws_update_instance_info(session,instance):
     instances    = ec2_client.describe_instances( InstanceIds=[instance.get_id()] )
     instance_new_data = instances['Reservations'][0]['Instances'][0]
 
+    debug(3,instance_new_data)
+
     #instance = CloudRunInstance( region , instance.get_name() , instance.get_id() , instance_config, instance_new )
     # proprietary values
     instance.set_dns_addr(instance_new_data.get('PublicDnsName'))
@@ -601,6 +602,12 @@ def aws_update_instance_info(session,instance):
         state = CloudRunInstanceState.TERMINATED
     instance.set_state(state)
     instance.set_data(instance_new_data)
+
+    platform_details = instance_new_data.get('PlatformDetails').lower()
+    if 'linux' in platform_details:
+        instance.set_platform(CloudRunPlatform.LINUX)
+    elif 'windows' in platform_details:
+        instance.set_platform(CloudRunPlatform.WINDOWS_WSL)
 
     return instance
 
