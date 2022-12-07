@@ -188,7 +188,7 @@ class ConfigManager():
 #     elif isinstance(obj,CloudSendProcess):
 #         return "__cloudsend_process:" + obj.get_uid()
 #     else:
-#         return str(cr_obj)
+#         return str(cs_obj)
 
 # class CloudSendJSONEncoder(json.JSONEncoder):
 

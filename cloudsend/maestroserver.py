@@ -11,7 +11,7 @@ from threading import Thread
 HOST = 'localhost' #'0.0.0.0' #127.0.0.1' 
 PORT = 5000
 
-def process_command(cr_client,command,args,conn):
+def process_command(cs_client,command,args,conn):
 
     io_pipe    = conn.makefile('rw',buffering=1) 
     #io_pipe    = TextIOWrapper(conn.makefile('rw',buffering=1), write_through=True)
@@ -21,54 +21,54 @@ def process_command(cr_client,command,args,conn):
 
         if command == 'wakeup':
 
-            cr_client.wakeup()
+            cs_client.wakeup()
 
         elif command == 'start':
             reset = False
             if args:
                 reset = args[0].strip().lower() == "true"
-            cr_client.start(reset)
+            cs_client.start(reset)
 
         elif command == 'allocate' or command == 'assign':
 
-            cr_client.assign()
+            cs_client.assign()
 
         elif command == 'deploy':
 
-            cr_client.deploy()
+            cs_client.deploy()
 
         elif command == 'run':
 
-            cr_client.run()
+            cs_client.run()
         
         elif command == 'watch':
 
             daemon = True
             if args:
                 daemon = args[0].strip().lower() == "true"
-            cr_client.watch(None,daemon)
+            cs_client.watch(None,daemon)
 
         elif command == 'wait':
 
-            cr_client.wait_for_jobs_state(CloudSendProcessState.DONE|CloudSendProcessState.ABORTED)
+            cs_client.wait_for_jobs_state(CloudSendProcessState.DONE|CloudSendProcessState.ABORTED)
 
         elif command == 'get_states':
 
-            cr_client.get_jobs_states()
+            cs_client.get_jobs_states()
 
         elif command == 'print_summary' or command == 'print':
 
-            cr_client.print_jobs_summary()
+            cs_client.print_jobs_summary()
 
         elif command == 'print_aborted':
 
-            cr_client.print_aborted_logs()
+            cs_client.print_aborted_logs()
 
         elif command == 'fetch_results':
 
             if args:
                 directory = args[0].strip()
-                cr_client.fetch_results(directory)
+                cs_client.fetch_results(directory)
 
         elif command == 'test':
 
@@ -88,7 +88,7 @@ def process_command(cr_client,command,args,conn):
     time.sleep(1)
     io_pipe.close()
 
-def client_handler(cr_client,conn):
+def client_handler(cs_client,conn):
     kill_thread = True
     with conn:
         old_stdout = sys.stdout
@@ -109,7 +109,7 @@ def client_handler(cr_client,conn):
 
                 if cmd == 'watch': # we want to start running the command for ever
                     kill_thread = False
-                process_command(cr_client,cmd,args,conn)
+                process_command(cs_client,cmd,args,conn)
                 break # one-shot command
             except ConnectionResetError as cre:
                 try:
@@ -146,7 +146,7 @@ def client_handler(cr_client,conn):
         pass
         #sys.exit(99) #force exit thread 
 
-async def mainloop(cr_client):
+async def mainloop(cs_client):
 
     with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
         s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
@@ -155,11 +155,11 @@ async def mainloop(cr_client):
         print("listening to port",PORT)
         while True:
             conn, addr = s.accept()
-            t = Thread(target=client_handler, args=(cr_client,conn,))
+            t = Thread(target=client_handler, args=(cs_client,conn,))
             t.start()  
             #t.join()      
 
-            # p = Process(target=client_handler, args=(cr_client,conn,))
+            # p = Process(target=client_handler, args=(cs_client,conn,))
             # p.start()
             # p.join()
             # p.terminate()
@@ -181,13 +181,13 @@ def main():
             print("\n\033[91m(you can also create a config.json file instead)\033[0m\n")
             raise mfe
 
-    cr_client = cr.get_client(config)
+    cs_client = cr.get_client(config)
 
     # may be we've just restarted a crashed maestro server process
     # let's test for WATCH state and reach it back again if thats needed
-    cr_client.wakeup()
+    cs_client.wakeup()
 
-    asyncio.run( mainloop(cr_client) )
+    asyncio.run( mainloop(cs_client) )
 
 if __name__ == '__main__':
     main()    

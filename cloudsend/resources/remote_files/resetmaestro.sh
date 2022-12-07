@@ -4,4 +4,4 @@ if [[ $(ps -ef | awk '/[m]aestroserver/{print $2}') ]] ; then
     ps -ef | awk '/[m]aestroserver/{print $2}' | xargs kill 
 fi
 
-rm -rf $HOME/cloudrun
+rm -rf $HOME/cloudsend

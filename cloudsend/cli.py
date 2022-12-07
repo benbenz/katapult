@@ -13,7 +13,7 @@ with pkg_resources.resource_stream(resource_package, resource_path) as server_sh
     server_proc  = subprocess.call(script,shell=True)
     print(server_proc)
 
-async def mainloop(cr_client):
+async def mainloop(cs_client):
     while True:
         await asyncio.sleep(30)    
 
@@ -30,7 +30,7 @@ def main():
         print("USAGE: python3 -m cloudsend.cli getstate UID")
         sys.exit()
 
-    asyncio.run( mainloop(cr_client) )
+    asyncio.run( mainloop(cs_client) )
 
 if __name__ == '__main__':
     main()    

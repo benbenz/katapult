@@ -6,11 +6,11 @@ import os
 # keys used for hash computation
 # Note: we include market options (SPOT ON|OFF e.g.) for the instance because it defines how the 'hardware' will run 
 #       so it's considered part of the intrinsic characteristics of the machine
-cr_instance_keys       = [ 'region'  , 'cloud_id' , 'img_id' , 'type' , 'cpus' , 'gpu' , 'disk_size' , 'disk_type' , 'eco' , 'max_bid' ] 
-cr_environment_keys    = [ 'command' , 'env_pypi' , 'env_conda' , 'env_aptget' , 'env_julia' ]
+cs_instance_keys       = [ 'region'  , 'cloud_id' , 'img_id' , 'type' , 'cpus' , 'gpu' , 'disk_size' , 'disk_type' , 'eco' , 'max_bid' ] 
+cs_environment_keys    = [ 'command' , 'env_pypi' , 'env_conda' , 'env_aptget' , 'env_julia' ]
 
 def compute_instance_hash(instance_cfg):
-    instance_config = { your_key: instance_cfg.get(your_key) for your_key in cr_instance_keys }
+    instance_config = { your_key: instance_cfg.get(your_key) for your_key in cs_instance_keys }
     instance_config_canon = jcs.canonicalize(instance_config)
     #print("INSTANCE CONFIG CANON",instance_config_canon)
     #instance_hash = str(hash(instance_config_canon))

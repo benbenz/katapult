@@ -37,17 +37,17 @@
   - [x] preprocess environnement links: adds env_name to single environment and scripts if not there
   - [x] sanity checks:
     - [x] check that env_name links are correct in scripts 
-  - [x] get_environment(name) in CloudRunProvider 
+  - [x] get_environment(name) in CloudSendProvider 
   - [x] don't forget to sort the upload_files by value !!! When computing the script hash !
   - [x] use input file name for script_hash too
-  - [x] use absolute file names to be more robust (if cloudrun runs somewhere else with same relative oath .  This should give a different hash). This applies to uploaded files, script file path, NOT command path and input file
-  - [x] move ALL env_obj logic to CloudRunEnvironment class. Basically only the create object in AWSProvider
+  - [x] use absolute file names to be more robust (if cloudsend runs somewhere else with same relative oath .  This should give a different hash). This applies to uploaded files, script file path, NOT command path and input file
+  - [x] move ALL env_obj logic to CloudSendEnvironment class. Basically only the create object in AWSProvider
   - [x] we should be able to also initialize env hash n the init method of the class _init_(self,env_config)
   - [x] rename C like AWS method to aws_create_instance() etc.
   - [x] remove script hash from ScriptRuntimeInfo
   - [x] create ClourRunJob with script hash
   - [x] change Script to Job ?
-  - [x] put a lot more methods in CloudRun base class. Basically on create_objects and maybe wait_for ? But we could use class even for that ... 
+  - [x] put a lot more methods in CloudSend base class. Basically on create_objects and maybe wait_for ? But we could use class even for that ... 
   - [x] save command in process directory
   - [x] make state.sh handle multiple uid/pid
   - [ ] create a getByName state (using the command line)
@@ -56,9 +56,9 @@
   - [x] explode uploads between instance setup, env setup and run setup ...
   - [x] maybe we should not put the script arguments in the hash ? This is more a runtime thing 
   - [x] allocate job to instance before doing anything
-  - [x] CloudRunInstance class stores the client once for all (for a region) >> it will store just the region
+  - [x] CloudSendInstance class stores the client once for all (for a region) >> it will store just the region
   - [x] use instance class
-  - [x] rewrite CloudRun to handle plurality / new config
+  - [x] rewrite CloudSend to handle plurality / new config
   - [x] run-dry to check CPUs settings compatibilty BEFORE job assignation >> we separated start() and deploy()
   - [ ] online vs offline bin packing >> online bin packing used by the nano instance (use yield?)
   - [x] improve handling of uploaded files: 
@@ -107,7 +107,7 @@
   - [x] debug why remote mode prints nothing with state recovery ON
   - [x] handle KeyPair better: append the owner ID to the file name so that we can switch profile without deleting and terminating stuff 
   - [x] handle when the KeyPair is not found on file better ...
-  - [x] debug:  An error occurred (InvalidParameterValue) when calling the AssociateIamInstanceProfile operation: Value (arn:aws:iam::870777542080:instance-profile/cloudrun-maestro-profile) for parameter iamInstanceProfile.arn is invalid. Invalid IAM Instance Profile ARN
+  - [x] debug:  An error occurred (InvalidParameterValue) when calling the AssociateIamInstanceProfile operation: Value (arn:aws:iam::870777542080:instance-profile/cloudsend-maestro-profile) for parameter iamInstanceProfile.arn is invalid. Invalid IAM Instance Profile ARN
   - [x] debug 'local' why when terminating an instance, the watch() AS daemon + wait() method are not stopping ... ISSUE WITH PROCESSES LIST?
   - [x] auto-stop function
   - [ ] maestro multiple projects handling
@@ -125,7 +125,7 @@
 
 6) lambda mode:
   - [ ] fat client setup lambda with requirements.txt
-  - [ ] fat client uploads cloudrun files >> this becomes the Lambda Maestro
+  - [ ] fat client uploads cloudsend files >> this becomes the Lambda Maestro
   - [ ] fat client uploads .sh script files to S3
   - [ ] switch to light client
   - [ ] light client will only upload config to S3

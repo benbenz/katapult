@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 
-if [[ $(ps aux | grep "cloudrun.maestroserver" | grep -v 'grep') ]] ; then
+if [[ $(ps aux | grep "cloudsend.maestroserver" | grep -v 'grep') ]] ; then
     echo "Maestro server already running"
 else
     # make sure we kill all maestroserver processes
@@ -11,7 +11,7 @@ else
         ps -ef | awk '/[m]aestroserver/{print $2}' | xargs kill 
     fi
     echo "Starting maestro server ..."
-    cd $HOME/cloudrun
-    source $HOME/cloudrun/.venv/maestro/bin/activate
-    $HOME/cloudrun/.venv/maestro/bin/python3 -u -m cloudrun.maestroserver
+    cd $HOME/cloudsend
+    source $HOME/cloudsend/.venv/maestro/bin/activate
+    $HOME/cloudsend/.venv/maestro/bin/python3 -u -m cloudsend.maestroserver
 fi

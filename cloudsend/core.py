@@ -5,17 +5,17 @@ import json
 import copy
 import os
 
-cr_keypairName         = 'cloudsend-keypair'
-cr_secGroupName        = 'cloudsend-sec-group-allow-ssh'
-cr_secGroupNameMaestro = 'cloudsend-sec-group-allow-maestro'
-cr_bucketName          = 'cloudsend-bucket'
-cr_vpcName             = 'cloudsend-vpc'
-cr_instanceNameRoot    = 'cloudsend-instance'
-cr_instanceMaestro     = 'cloudsend-maestro'
-cr_environmentNameRoot = 'cloudsend-env'
-cr_maestroProfileName  = 'cloudsend-maestro-profile'
-cr_maestroRoleName     = 'cloudsend-maestro-role'
-cr_maestroPolicyName   = 'cloudsend-maestro-policy'
+cs_keypairName         = 'cloudsend-keypair'
+cs_secGroupName        = 'cloudsend-sec-group-allow-ssh'
+cs_secGroupNameMaestro = 'cloudsend-sec-group-allow-maestro'
+cs_bucketName          = 'cloudsend-bucket'
+cs_vpcName             = 'cloudsend-vpc'
+cs_instanceNameRoot    = 'cloudsend-instance'
+cs_instanceMaestro     = 'cloudsend-maestro'
+cs_environmentNameRoot = 'cloudsend-env'
+cs_maestroProfileName  = 'cloudsend-maestro-profile'
+cs_maestroRoleName     = 'cloudsend-maestro-role'
+cs_maestroPolicyName   = 'cloudsend-maestro-policy'
 
 
 class CloudSendError(Exception):
@@ -236,15 +236,15 @@ class CloudSendEnvironment():
         _env_obj       = cloudsendutils.compute_environment_object(env_config)
         self._hash     = cloudsendutils.compute_environment_hash(_env_obj)
         if not self._config.get('name'):
-            self._name = cr_environmentNameRoot
+            self._name = cs_environmentNameRoot
 
             append_str = '-' + self._hash
             if env_config.get('dev') == True:
                 append_str = ''
             if projectName:
-                self._name = cr_environmentNameRoot + '-' + projectName + append_str
+                self._name = cs_environmentNameRoot + '-' + projectName + append_str
             else:
-                self._name = cr_environmentNameRoot + append_str
+                self._name = cs_environmentNameRoot + append_str
         else:
             self._name = self._config.get('name')
 
@@ -500,16 +500,16 @@ def init_instance_name(instance_config):
             sys.exit(300) # this is a developer error, this should never happen so we can use exit here
             
         if 'project' in instance_config:
-            return cr_instanceNameRoot + '-' + instance_config['project'] + '-' + instance_config['rank'] + append_str
+            return cs_instanceNameRoot + '-' + instance_config['project'] + '-' + instance_config['rank'] + append_str
         else:
-            return cr_instanceNameRoot + '-' + instance_config['rank'] + append_str
+            return cs_instanceNameRoot + '-' + instance_config['rank'] + append_str
     
     else:
 
         # if 'project' in instance_config:
-        #     return cr_instanceMaestro + '-' + instance_config['project'] 
+        #     return cs_instanceMaestro + '-' + instance_config['project'] 
         # else:
-        #     return cr_instanceMaestro
+        #     return cs_instanceMaestro
 
         # ultimately, the maestro will be shared across projects... (to save $)
-        return cr_instanceMaestro
+        return cs_instanceMaestro

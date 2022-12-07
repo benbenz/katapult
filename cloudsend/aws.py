@@ -2,7 +2,7 @@ import boto3
 import os , sys
 from .utils import *
 from cloudsend.core     import CloudSendError , CloudSendInstance , CloudSendInstanceState , CloudSendPlatform
-from cloudsend.core     import cr_keypairName , cr_secGroupName , cr_secGroupNameMaestro , cr_bucketName , cr_vpcName , cr_maestroRoleName , cr_maestroProfileName, cr_maestroPolicyName , init_instance_name
+from cloudsend.core     import cs_keypairName , cs_secGroupName , cs_secGroupNameMaestro , cs_bucketName , cs_vpcName , cs_maestroRoleName , cs_maestroProfileName, cs_maestroPolicyName , init_instance_name
 from cloudsend.provider import debug , bcolors
 from cloudsend.providerfat import CloudSendFatProvider
 from cloudsend.providerlight import CloudSendLightProvider
@@ -49,7 +49,7 @@ def aws_create_keypair(session,region,keypair_name,key_filename,force=False):
     ec2 = session.resource('ec2')
     #ec2 = boto3.resource('ec2',config=aws_get_config(region))
 
-    #keypair_name = cr_keypairName + '-' + region
+    #keypair_name = cs_keypairName + '-' + region
 
     keypair = None
     try:
@@ -97,7 +97,7 @@ def aws_create_keypair(session,region,keypair_name,key_filename,force=False):
             except ClientError as e2: # the keypair probably exists already
                 errmsg2 = str(e2)
                 if 'InvalidKeyPair.Duplicate' in errmsg2:
-                    #keypair = ec2.KeyPair(cr_keypairName)
+                    #keypair = ec2.KeyPair(cs_keypairName)
                     keypairs = ec2_client.describe_key_pairs( KeyNames= [keypair_name] )
                     keypair  = keypairs['KeyPairs'][0] 
                     debug(2,keypair)
@@ -173,7 +173,7 @@ def aws_create_security_group(session,region,vpc):
         {
             'Name': 'group-name',
             'Values': [
-                cr_secGroupName,
+                cs_secGroupName,
             ]
         },
     ])
@@ -182,7 +182,7 @@ def aws_create_security_group(session,region,vpc):
         secGroup = ec2_client.create_security_group(
             VpcId = vpc['VpcId'] ,
             Description = 'Allow SSH connection' ,
-            GroupName = cr_secGroupName 
+            GroupName = cs_secGroupName 
         )
 
         data = ec2_client.authorize_security_group_ingress(
@@ -225,7 +225,7 @@ def aws_add_maestro_security_group(session,instance):
         {
             'Name': 'group-name',
             'Values': [
-                cr_secGroupNameMaestro,
+                cs_secGroupNameMaestro,
             ]
         },
     ])
@@ -234,7 +234,7 @@ def aws_add_maestro_security_group(session,instance):
         secGroup = ec2_client.create_security_group(
             VpcId = vpcid ,
             Description = 'Allow Maestro Socket connection' ,
-            GroupName = cr_secGroupNameMaestro 
+            GroupName = cs_secGroupNameMaestro 
         )
 
         data = ec2_client.authorize_security_group_ingress(
@@ -294,7 +294,7 @@ def aws_create_bucket(session,region):
 
         bucket = s3_client.create_bucket(
             ACL='private',
-            Bucket=cr_bucketName,
+            Bucket=cs_bucketName,
             CreateBucketConfiguration={
                 'LocationConstraint': region
             },
@@ -304,9 +304,9 @@ def aws_create_bucket(session,region):
     except ClientError as e:
         errMsg = str(e)
         if 'BucketAlreadyExists' in errMsg:
-            bucket = s3.Bucket(cr_bucketName)
+            bucket = s3.Bucket(cs_bucketName)
         elif 'BucketAlreadyOwnedByYou' in errMsg:
-            bucket = s3.Bucket(cr_bucketName)
+            bucket = s3.Bucket(cs_bucketName)
 
     debug(2,bucket)
 
@@ -372,7 +372,7 @@ def aws_create_instance(session,instance_config,vpc,subnet,secGroup,keypair_name
     ec2_client = session.client("ec2")
     #ec2_client = boto3.client("ec2", config=aws_get_config(region))
 
-    #keypair_name = cr_keypairName + '-' + region
+    #keypair_name = cs_keypairName + '-' + region
 
     existing = ec2_client.describe_instances(
         Filters = [
@@ -641,7 +641,7 @@ def aws_grant_admin_rights(session,instance):
 
     try:
         create_role_res = iam_client.create_role(
-            RoleName=cr_maestroRoleName,
+            RoleName=cs_maestroRoleName,
             AssumeRolePolicyDocument=json.dumps(trust_relationship_policy_another_aws_service),
             Description='CloudSend Admin Role'
         )
@@ -672,49 +672,49 @@ def aws_grant_admin_rights(session,instance):
 
     try:
         policy_res = iam_client.create_policy(
-            PolicyName=cr_maestroPolicyName,
+            PolicyName=cs_maestroPolicyName,
             PolicyDocument=json.dumps(policy_json)
         )
         policy_arn = policy_res['Policy']['Arn']
     except ClientError as error:
         if error.response['Error']['Code'] == 'EntityAlreadyExists':
             debug(2,'Policy already exists... hence using the same policy')
-            policy_arn = 'arn:aws:iam::' + account_id + ':policy/' + cr_maestroPolicyName
+            policy_arn = 'arn:aws:iam::' + account_id + ':policy/' + cs_maestroPolicyName
         else:
             debug(1,'Unexpected error occurred... hence cleaning up', error)
             iam_client.delete_role(
-                RoleName= cr_maestroRoleName
+                RoleName= cs_maestroRoleName
             )
             debug(1,'Role could not be created...', error)
             return
 
     try:
         policy_attach_res = iam_client.attach_role_policy(
-            RoleName=cr_maestroRoleName,
+            RoleName=cs_maestroRoleName,
             PolicyArn=policy_arn
         )
     except ClientError as error:
         debug(1,'Unexpected error occurred... hence cleaning up')
         iam_client.delete_role(
-            RoleName= cr_maestroRoleName
+            RoleName= cs_maestroRoleName
         )
         debug(1,'Role could not be created...', error)
         return
 
-    debug(2,'Role {0} successfully got created'.format(cr_maestroRoleName))
+    debug(2,'Role {0} successfully got created'.format(cs_maestroRoleName))
 
 
     profile_arn = ''
     try:
-        profile_response = iam_client.create_instance_profile(InstanceProfileName=cr_maestroProfileName)
+        profile_response = iam_client.create_instance_profile(InstanceProfileName=cs_maestroProfileName)
         profile_arn = profile_response['InstanceProfile']['Arn']
     except ClientError as error:
         if error.response['Error']['Code'] == 'EntityAlreadyExists':
             debug(2,'Instance profile already exists ...')
-            profile_response = iam_client.get_instance_profile(InstanceProfileName=cr_maestroProfileName)
+            profile_response = iam_client.get_instance_profile(InstanceProfileName=cs_maestroProfileName)
             profile_arn = profile_response['InstanceProfile']['Arn']
     try:
-        iam_client.add_role_to_instance_profile(InstanceProfileName=cr_maestroProfileName,RoleName=cr_maestroRoleName)
+        iam_client.add_role_to_instance_profile(InstanceProfileName=cs_maestroProfileName,RoleName=cs_maestroRoleName)
     except ClientError as error:
         if error.response['Error']['Code'] == 'LimitExceeded':
             debug(2,'Role has already been added ...')
@@ -726,7 +726,7 @@ def aws_grant_admin_rights(session,instance):
         response = ec2_client.associate_iam_instance_profile(
             IamInstanceProfile={
                 'Arn': profile_arn,
-                'Name': cr_maestroProfileName
+                'Name': cs_maestroProfileName
             },
             InstanceId=instance.get_id()
         )

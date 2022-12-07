@@ -398,8 +398,8 @@ class CloudSendProvider(ABC):
         userid = profile_name
         if not userid:
             userid = 'default'
-        #key_filename = cr_keypairName+'-'+str(userid)+'-'+str(region)
-        key_filename = cr_keypairName+'-'+str(region)
+        #key_filename = cs_keypairName+'-'+str(userid)+'-'+str(region)
+        key_filename = cs_keypairName+'-'+str(region)
         return key_filename
 
     @abstractmethod
