@@ -92,14 +92,24 @@ async def waitloop(cr_client):
 # run main loop
 def main():
 
-    if os.path.exists('config.json'):
-        with open('config.json','r') as config_file:
+    if len(sys.argv)<=1:
+        print("You need to specify a config file path: config.json or config.py")
+        sys.exit(1)
+    
+    config_file = sys.argv[1]
+    configdir  = os.path.dirname(config_file)
+    configbase = os.path.basename(config_file)
+    config_name , config_extension = os.path.splitext(configbase)
+
+    if config_extension=='.json' and os.path.exists(config_file):
+        with open(config_file,'r') as config_file:
             config = json.loads(config_file.read())
         print("loaded config from json file")
     else:
         try:
-            sys.path.append(os.path.abspath(os.getcwd()))    
-            configModule = __import__("config",globals(),locals())
+            sys.path.append(os.path.abspath(configdir))
+            #sys.path.append(os.path.abspath(os.getcwd()))    
+            configModule = __import__(config_name,globals(),locals())
             config = configModule.config
         except ModuleNotFoundError as mfe:
             print("\n\033[91mYou need to create a config.py file (see 'example/config.example.py')\033[0m\n")
@@ -108,8 +118,8 @@ def main():
 
     cr_client = cr.get_client(config)
     command = None
-    if len(sys.argv)>1:
-        command = sys.argv[1]
+    if len(sys.argv)>2:
+        command = sys.argv[2]
     
     if command == 'wait':
         asyncio.run( waitloop(cr_client) )

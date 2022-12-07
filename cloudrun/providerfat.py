@@ -151,7 +151,7 @@ class CloudRunFatProvider(CloudRunProvider,ABC):
             # change dir to global dir (should be done once)
             ftp_client.chdir(global_path)
             for file in ['config.py','bootstrap.sh','run.sh','microrun.sh','state.sh','tail.sh','getpid.sh','reset.sh']:
-                ftp_client.putfo(self._get_resource_file('remote_files/'+file),file)    
+                ftp_client.putfo(self._get_remote_file(file),file)    
 
             self.debug(1,"Installing PyYAML for newly created instance ...")
             stdin , stdout, stderr = self._exec_command(ssh_client,"pip install pyyaml")
@@ -237,7 +237,7 @@ class CloudRunFatProvider(CloudRunProvider,ABC):
 
                 self.debug(1,"uploaded.")        
 
-                print_deploy = self._config.get('print_deploy') == True
+                print_deploy = self._config.get('print_deploy',False) == True
 
                 config_py = instance.path_join( global_path , 'config.py' )
 
@@ -462,7 +462,7 @@ class CloudRunFatProvider(CloudRunProvider,ABC):
         self.debug(1,'RESETTING instance',instance.get_name())
         instanceid, ssh_client , ftp_client = self._wait_and_connect(instance)
         if ssh_client is not None:
-            ftp_client.putfo(self._get_resource_file('remote_files/reset.sh'),'reset.sh') 
+            ftp_client.putfo(self._get_remote_file('reset.sh'),'reset.sh') 
             reset_file = instance.path_join( instance.get_home_dir() , 'reset.sh' )
             commands = [
                 { 'cmd' : 'chmod +x '+reset_file+' && ' + reset_file , 'out' : True }
@@ -871,13 +871,13 @@ class CloudRunFatProvider(CloudRunProvider,ABC):
                 ssh_client = clients[instance.get_name()]['ssh']
                 ftp_client = clients[instance.get_name()]['ftp']
             
-            out_file = dpl_job.get_config('output_file')
+            out_file = dpl_job.get_config('output_file') # this file is written for the local machine
             remote_file_path = instance.path_join( process.get_path() , out_file )
             directory = instance.path_dirname( remote_file_path )
             filename  = instance.path_basename( remote_file_path )
             
             file_name , file_extension = os.path.splitext(out_file)
-            file_name = file_name.replace('/','_')
+            file_name = file_name.replace(os.sep,'_')
             #ftp_client.chdir(directory)
             with open(os.path.join(out_dir,'job_'+str(rank).zfill(3)+'_'+file_name+file_extension),'wb') as outfile:
                 ftp_client.chdir( directory )
@@ -1138,12 +1138,12 @@ class CloudRunFatProvider(CloudRunProvider,ABC):
             # lets wait 1 minutes before stopping
             # this helps with the demo which runs a wait() and a get() sequentially ...
             if not programmatic:
-                if self._config.get('auto_stop'):
+                if self._auto_stop:
                     time.sleep(60*1)  
 
                 self._instances_watching[instance.get_name()] = False            
                 
-                if self._config.get('auto_stop'):
+                if self._auto_stop:
                     try:
                         self.debug(1,"Stopping instance",instance.get_name(),color=bcolors.WARNING)
                         self.stop_instance(instance)

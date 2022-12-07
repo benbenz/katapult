@@ -157,13 +157,13 @@ cp example/config.example.py config.py
 #
 
 # to run with pip
-python3 -m cloudrun.demo 
+python3 -m cloudrun.demo config
 # to run with pip with reset (maestro and instances)
-python3 -m cloudrun.demo reset
+python3 -m cloudrun.demo config reset
 # to run with poetry
-poetry run demo
+poetry run demo config
 # to run with poetry with reset (maestro and the instances)
-poetry run demo reset
+poetry run demo config reset
 ```
 
 # Configuration example

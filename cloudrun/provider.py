@@ -42,6 +42,7 @@ class CloudRunProvider(ABC):
         DBG_LVL = conf.get('debug',1)
 
         self._config  = conf
+        self._auto_stop = conf.get('auto_stop',False)
 
         self._profile_name = self._config.get('profile')
         if self._config.get('profile'):
@@ -337,7 +338,7 @@ class CloudRunProvider(ABC):
 
         # Could be any dot-separated package or module name or a "Requirement"
         resource_package = 'cloudrun'
-        resource_path = '/'.join(('resources', resource_file))  # Do not use os.path.join()
+        resource_path = os.sep.join(('resources', resource_file))  # Do not use os.path.join()
         #template = pkg_resources.resource_string(resource_package, resource_path)
         # or for a file-like stream:
         #template = pkg_resources.resource_stream(resource_package, resource_path)        
@@ -369,7 +370,7 @@ class CloudRunProvider(ABC):
 
     def _get_resource_file(self,resource_file):
         resource_package = 'cloudrun'
-        resource_path = '/'.join(('resources', resource_file))  # Do not use os.path.join()
+        resource_path = os.sep.join(('resources', resource_file))  # Do not use os.path.join()
         #template = pkg_resources.resource_string(resource_package, resource_path)
         # or for a file-like stream:
         #template = pkg_resources.resource_stream(resource_package, resource_path)        
@@ -377,6 +378,9 @@ class CloudRunProvider(ABC):
         #fileio = pkg_resources.resource_string(resource_package, resource_path)
         #self._csv_reader = csv.DictReader(io.StringIO(csvstr.decode()))              
         return pkg_resources.resource_stream(resource_package, resource_path)  
+
+    def _get_remote_file(self,file):
+        return self._get_resource_file(os.sep.join(('remote_files',file)))
 
     def get_key_filename(self,profile_name,region):
         userid = profile_name
@@ -498,7 +502,7 @@ class CloudRunProvider(ABC):
 
 def get_client(config):
 
-    if config.get('provider') == 'aws':
+    if config.get('provider','aws') == 'aws':
 
         if config.get('maestro','local') == 'local':
             

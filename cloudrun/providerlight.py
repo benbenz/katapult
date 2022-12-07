@@ -384,7 +384,7 @@ class CloudRunLightProvider(CloudRunProvider,ABC):
         self.debug(1,'RESETTING instance',instance.get_name())
         instanceid, ssh_client , ftp_client = self._wait_and_connect(instance)
         if ssh_client is not None:
-            ftp_client.putfo(self._get_resource_file('remote_files/resetmaestro.sh'),'resetmaestro.sh') 
+            ftp_client.putfo(self._get_remote_file('resetmaestro.sh'),'resetmaestro.sh') 
             resetmaestro_sh = self._maestro.path_join( self._maestro.get_home_dir() , 'resetmaestro.sh' )
             commands = [
                { 'cmd' : 'chmod +x '+resetmaestro_sh+' && ' + resetmaestro_sh , 'out' : True }
@@ -400,7 +400,6 @@ class CloudRunLightProvider(CloudRunProvider,ABC):
 
     def deploy(self):
         # triggers maestro::deploy
-        #self._exec_maestro_command("deploy",self._config.get('print_deploy',False))
         self._exec_maestro_command("deploy") # use output - the deploy part will be skipped depending on option ...
 
     def run(self):
