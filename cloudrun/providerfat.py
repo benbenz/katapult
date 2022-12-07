@@ -446,6 +446,7 @@ class CloudRunFatProvider(CloudRunProvider,ABC):
 
     def start(self,reset=False):
         self._instances_states = dict() 
+        self.debug(3,"Starting ...")
         with concurrent.futures.ThreadPoolExecutor(max_workers=self._get_num_workers()) as pool:
             future_to_instance = { pool.submit(self._start_and_update_and_reset_instance,instance,reset) : instance for instance in self._instances }
             for future in concurrent.futures.as_completed(future_to_instance):
@@ -1114,9 +1115,15 @@ class CloudRunFatProvider(CloudRunProvider,ABC):
                 self.print_jobs_summary(instance)
 
             # all retrived attributes need to be true
-            retrieved = all( [ pinfo['retrieved'] for pinfo in processes_infos.values()] )
+            arr_retrieved = [ pinfo['retrieved'] for pinfo in processes_infos.values()]
+            arr_test      = [ pinfo['test'] for pinfo in processes_infos.values()]
+            retrieved = all( arr_retrieved )
+            tested    = all( arr_test )
 
-            if retrieved and all( [ pinfo['test'] for pinfo in processes_infos.values()] ) :
+            self.debug(2,retrieved,arr_retrieved)
+            self.debug(2,tested   ,arr_test     )
+
+            if retrieved and tested :
                 break
 
             if not programmatic:

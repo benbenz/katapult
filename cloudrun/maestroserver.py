@@ -143,7 +143,8 @@ def client_handler(cr_client,conn):
         except:
             pass
     if kill_thread:
-        sys.exit(99) #force exit thread 
+        pass
+        #sys.exit(99) #force exit thread 
 
 async def mainloop(cr_client):
 
@@ -156,7 +157,8 @@ async def mainloop(cr_client):
             conn, addr = s.accept()
             t = Thread(target=client_handler, args=(cr_client,conn,))
             t.start()  
-            t.join()      
+            #t.join()      
+
             # p = Process(target=client_handler, args=(cr_client,conn,))
             # p.start()
             # p.join()
