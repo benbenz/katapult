@@ -358,11 +358,13 @@ class CloudRunProvider(ABC):
                             pass
                     if len(res)==0:
                         return None
+                    return res
                 elif return_type == int:
                     try:
                         res = int(row[attr])
                     except:
                         return None
+                    return res 
                 elif return_type == str:
                     return row[attr]
                 else:
