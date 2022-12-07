@@ -852,7 +852,7 @@ class CloudRunFatProvider(CloudRunProvider,ABC):
 
         for process in processes:
 
-            if process.get_state() != CloudRunProcessState.RUNNING:
+            if process.get_state() != CloudRunProcessState.DONE:
                 self.debug(2,"Skipping process import",process.get_uid(),process.get_state())
             
             dpl_job  = process.get_job()
@@ -899,7 +899,7 @@ class CloudRunFatProvider(CloudRunProvider,ABC):
 
         for process in processes:
 
-            if process.get_state() != CloudRunProcessState.RUNNING:
+            if process.get_state() != CloudRunProcessState.DONE:
                 self.debug(2,"Skipping process import",process.get_uid(),process.get_state())
             
             dpl_job  = process.get_job()

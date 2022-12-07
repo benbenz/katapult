@@ -103,13 +103,14 @@
   - [x] fetch log when process has aborted, and print it
   - [ ] improve UI with Python RICH , OR https://towardsdatascience.com/a-complete-guide-to-using-progress-bars-in-python-aa7f4130cda8
   - [ ] handle when we stop an instance while its still deploying / waiting ... 
-  - [ ] debug why successive runs locks
+  - [x] debug why successive runs locks
   - [x] debug why remote mode prints nothing with state recovery ON
-  - [ ] handle KeyPair better: append the owner ID to the file name so that we can switch profile without deleting and terminating stuff 
-  - [ ] handle when the KeyPair is not found on file better ...
-  - [ ] debug:  An error occurred (InvalidParameterValue) when calling the AssociateIamInstanceProfile operation: Value (arn:aws:iam::870777542080:instance-profile/cloudrun-maestro-profile) for parameter iamInstanceProfile.arn is invalid. Invalid IAM Instance Profile ARN
+  - [x] handle KeyPair better: append the owner ID to the file name so that we can switch profile without deleting and terminating stuff 
+  - [x] handle when the KeyPair is not found on file better ...
+  - [x] debug:  An error occurred (InvalidParameterValue) when calling the AssociateIamInstanceProfile operation: Value (arn:aws:iam::870777542080:instance-profile/cloudrun-maestro-profile) for parameter iamInstanceProfile.arn is invalid. Invalid IAM Instance Profile ARN
   - [x] debug 'local' why when terminating an instance, the watch() AS daemon + wait() method are not stopping ... ISSUE WITH PROCESSES LIST?
-  - [ ] auto-stop function
+  - [x] auto-stop function
+  - [ ] maestro multiple projects handling
 
 4) local mode:
   - [x] handle new config 

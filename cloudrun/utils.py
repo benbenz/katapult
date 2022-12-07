@@ -4,13 +4,13 @@ import uuid
 import os
 
 # keys used for hash computation
-# Note: we include market options (SPOT ON/OFF e.g.) for the instance because it defines how the 'hardware' will run 
+# Note: we include market options (SPOT ON|OFF e.g.) for the instance because it defines how the 'hardware' will run 
 #       so it's considered part of the intrinsic characteristics of the machine
 cr_instance_keys       = [ 'region'  , 'cloud_id' , 'img_id' , 'type' , 'cpus' , 'gpu' , 'disk_size' , 'disk_type' , 'eco' , 'max_bid' ] 
 cr_environment_keys    = [ 'command' , 'env_pypi' , 'env_conda' , 'env_aptget' , 'env_julia' ]
 
 def compute_instance_hash(instance_cfg):
-    instance_config = { your_key: instance_cfg[your_key] for your_key in cr_instance_keys }
+    instance_config = { your_key: instance_cfg.get(your_key) for your_key in cr_instance_keys }
     instance_config_canon = jcs.canonicalize(instance_config)
     #print("INSTANCE CONFIG CANON",instance_config_canon)
     #instance_hash = str(hash(instance_config_canon))
@@ -244,7 +244,7 @@ def compute_job_hash(job_config):
 def generate_unique_filename():
     return str(uuid.uuid4())
 
-def compute_job_command(script_dir,job_config):
+def compute_job_command(instance,script_dir,job_config):
     script_command = ''
     if 'run_script' in job_config and job_config['run_script'] is not None:
         script_args = job_config['run_script'].split()
@@ -252,11 +252,10 @@ def compute_job_command(script_dir,job_config):
         file_ext = os.path.splitext(filename)[1]
         script_args.pop(0)
         if file_ext.lower() == '.py':
-            # -u is to skip stdout buffering (used by tail function)
-            #script_command = "python3 -u " + script_dir + '/' + filename + " " + " ".join(script_args)
-            script_command = "python3 " + script_dir + '/' + filename + " " + " ".join(script_args)
+            # use -u if i you want to skip stdout buffering (used by tail function)
+            script_command = "python3 " + instance.path_join( script_dir , filename ) + " " + " ".join(script_args)
         elif file_ext.lower() == '.jl':
-            script_command = "julia " + script_dir + '/' + filename + " " + " ".join(script_args)
+            script_command = "julia " + instance.path_join( script_dir , filename ) + " " + " ".join(script_args)
         else:
             script_command = "echo 'SCRIPT NOT HANDLED'"
     elif 'run_command' in job_config and job_config['run_command']:
@@ -301,6 +300,13 @@ def resolve_paths(the_file,ref_file,remote_ref_dir,mutualize=True):
         rel_path = local_abs_path # LETS USE THE ABS PATH as a REL PATH !
         if rel_path.startswith(os.sep):
             rel_path = rel_path[1:]
+        drive , path = os.path.splitdrive(rel_path)
+        if drive:
+            rel_path = os.path.join( drive.replace(':','') , path ) 
+            if rel_path.startswith('//'): # //network_drive
+                rel_path = rel_path[2:]
+            elif rel_path.startswith(os.sep): # /absolute
+                rel_path = rel_path[1:]
         external = True
 
     # use the first case if you want to leave stuff in the job's directory
@@ -315,10 +321,10 @@ def resolve_paths(the_file,ref_file,remote_ref_dir,mutualize=True):
         remote_rel_path = remote_abs_path
         remote_abs_path = os.path.join(remote_ref_dir,remote_abs_path)
 
-    # local_abs_path   = the local file path
+    # local_abs_path  = the local file path
+    # rel_path        = the relative path (from the job directory aka script dir)
     # remote_abs_path = the absolute remote file path
     # remote_rel_path = the relative remote path (from remote_ref_dir)
-    # rel_path        = the relative path (from the job directory / script dir)
     # external        = is the file external to the script directory structure
     return local_abs_path , rel_path, remote_abs_path , remote_rel_path , external
 

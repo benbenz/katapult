@@ -391,7 +391,7 @@ class CloudRunDeployedJob(CloudRunJob):
         self._env       = dpl_env
         self._instance  = dpl_env.get_instance()
         self._path      = self._instance.path_join( dpl_env.get_path() , self.get_hash() )
-        self._command   = cloudrunutils.compute_job_command(self._path,self._job._config)
+        self._command   = cloudrunutils.compute_job_command(self._instance,self._path,self._job._config)
 
     def attach_process(self,process):
         self._processes.append(process)
