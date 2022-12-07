@@ -55,6 +55,7 @@ config = {
             'command'      : 'example/install_julia.sh' ,      # None, or a string: path to a bash file to execute when deploying
             'env_aptget'   : [ "openssh-client"] ,        # None, an array of librarires/binaries for apt-get
             'env_conda'    : "example/environment.yml",   # None, an array of libraries, a path to environment.yml  file, or a path to the root of a conda environment
+            'env_conda_channels' : None ,                 # None, an array of channels. If None, defaults and conda-forge will be used
             'env_pypi'     : "example/requirements.txt" , # None, an array of libraries, a path to requirements.txt file, or a path to the root of a venv environment 
             'env_julia'    : ["Wavelets"] ,                       # None, a string or an array of Julia packages to install (requires julia)
         }

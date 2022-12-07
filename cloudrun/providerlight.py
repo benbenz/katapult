@@ -81,6 +81,7 @@ class CloudRunLightProvider(CloudRunProvider,ABC):
             activate_file = self._maestro.path_join( cloudrun_dir , '.venv' , 'maestro' , 'bin' , 'activate' )
         elif self._maestro.get_platform() == CloudRunPlatform.WINDOWS:
             activate_file = self._maestro.path_join( cloudrun_dir , '.venv' , 'maestro' , 'Scripts' , 'activate.bat' )
+        
         re_init  = self._test_reupload(self._maestro,ready_file, ssh_client)
 
         if re_init:
@@ -116,12 +117,14 @@ class CloudRunLightProvider(CloudRunProvider,ABC):
         self._run_server(ssh_client)
 
         # wait for maestro to have started
-        self._wait_for_maestro()
+        self._wait_for_maestro(ssh_client)
 
         #time.sleep(30)
 
-        ftp_client.close()
-        ssh_client.close()
+        self.ssh_client = ssh_client
+        self.ftp_client = ftp_client
+        #ftp_client.close()
+        #ssh_client.close()
 
         self.debug(1,"MAESTRO is READY",color=bcolors.OKCYAN)
 
@@ -305,14 +308,14 @@ class CloudRunLightProvider(CloudRunProvider,ABC):
 
         return zip_buffer
 
-    def _wait_for_maestro(self):
-        if self.ssh_client is None:
-            instanceid , self.ssh_client , self.ftp_client = self._wait_and_connect(self._maestro)
+    def _wait_for_maestro(self,ssh_client):
+        #if self.ssh_client is None:
+        #    instanceid , self.ssh_client , self.ftp_client = self._wait_and_connect(self._maestro)
         
         waitmaestro_sh = self._get_remote_files_path( 'waitmaestro.sh' )
         cmd = waitmaestro_sh+" 1" # 1 = with tail log
 
-        stdin , stdout , stderr = self._exec_command(self.ssh_client,cmd)      
+        stdin , stdout , stderr = self._exec_command(ssh_client,cmd)      
 
         for l in line_buffered(stdout):
             if not l:

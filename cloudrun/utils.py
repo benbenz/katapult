@@ -116,6 +116,10 @@ def compute_environment_object(env_config):
             env_conda = list(map(str.strip,env_conda)) # strip the strings
             environment_obj['env_conda'] = dict()
             environment_obj['env_conda']['dependencies'] = env_conda
+            conda_channels = env_config.get('env_conda_channels')
+            if not conda_channels:
+                conda_channels = [ 'conda-forge' , 'defaults' ]
+            environment_obj['env_conda']['channels'] = conda_channels
         
         elif isinstance(env_conda,str) and os.path.isfile(env_conda):
 

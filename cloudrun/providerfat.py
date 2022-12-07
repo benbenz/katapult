@@ -220,7 +220,6 @@ class CloudRunFatProvider(CloudRunProvider,ABC):
             if re_upload:
                 files_path = dpl_env.get_path()
                 global_path = instance.get_global_dir() 
-                ready_file = instance.path_join( dpl_env.get_path() , 'ready' )
 
                 self.debug(2,"creating environment directories ...")
                 stdin0, stdout0, stderr0 = self._exec_command(ssh_client,"mkdir -p "+files_path+" && rm -f "+ready_file)
