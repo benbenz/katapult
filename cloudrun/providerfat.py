@@ -927,9 +927,11 @@ class CloudRunFatProvider(CloudRunProvider,ABC):
                 lnstr = lnstr + (" && " if lnstr else "") + "mkdir -p " + fulldir + " && ln -sf " + abs_path + " " +  full_file_path
             else:
                 fulldir   = instance.path_join( dpl_job.get_path() , uid )
+                fulldir2  = dpl_job.get_path() # let's also put symbolic links by the file itself ... 
                 uploaddir = dpl_job.get_path()
-                full_file_path = instance.path_join( fulldir , filename )
-                lnstr = lnstr + (" && " if lnstr else "") + "ln -sf " + abs_path + " " + full_file_path
+                full_file_path  = instance.path_join( fulldir  , filename )
+                full_file_path2 = instance.path_join( fulldir2 , filename )
+                lnstr = lnstr + (" && " if lnstr else "") + "ln -sf " + abs_path + " " + full_file_path + " && ln -sf " + abs_path + " " + full_file_path2
 
         return lnstr
 
