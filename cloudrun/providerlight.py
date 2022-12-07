@@ -130,7 +130,7 @@ class CloudRunLightProvider(CloudRunProvider,ABC):
         ftp_client.chdir(self._get_cloudrun_dir())
         ftp_client.putfo(self._create_cloudrun_zip(),'cloudrun.zip')
         commands = [
-            { 'cmd' : 'cd $HOME/cloudrun && unzip -o cloudrun.zip && rm cloudrun.zip' , 'out' : True } ,
+            { 'cmd' : 'cd '+self._get_cloudrun_dir()+' && unzip -o cloudrun.zip && rm cloudrun.zip' , 'out' : True } ,
         ]
         self._run_ssh_commands(self._maestro,ssh_client,commands) 
         
@@ -139,9 +139,9 @@ class CloudRunLightProvider(CloudRunProvider,ABC):
         for file in filesOfDirectory:
             if fnmatch.fnmatch(file, pattern):
                 ftp_client.put(os.path.abspath(file),os.path.basename(file))
-
+        sh_files = self._get_remote_files_path( '*.sh')
         commands = [
-            { 'cmd' : 'chmod +x $HOME/cloudrun/cloudrun/resources/remote_files/*.sh' , 'out' : True } ,
+            { 'cmd' : 'chmod +x ' + sh_files , 'out' : True } ,
         ]
         self._run_ssh_commands(self._maestro,ssh_client,commands) 
 
@@ -151,20 +151,19 @@ class CloudRunLightProvider(CloudRunProvider,ABC):
         # upload cloudrun files
         self._deploy_cloudrun_files(ssh_client,ftp_client)
         
+        maestroenv_sh = self._get_remote_files_path( 'maestroenv.sh' )
         # unzip cloudrun files, install and run
         commands = [
-            { 'cmd' : '$HOME/cloudrun/cloudrun/resources/remote_files/maestroenv.sh' , 'out' : True } ,
-#            { 'cmd' : 'cd $HOME/cloudrun && curl -sSL https://install.python-poetry.org | python3 -' , 'out' : True } ,
-#            { 'cmd' : 'cd $HOME/cloudrun && $HOME/.local/bin/poetry install' , 'out' : True } ,
-#            { 'cmd' : 'cd $HOME/cloudrun && $HOME/.local/bin/poetry run demo' , 'out' : True }
+            { 'cmd' : maestroenv_sh , 'out' : True } ,
         ]
         self._run_ssh_commands(self._maestro,ssh_client,commands)
 
     def _run_server(self,ssh_client):
         # run the server
+        startmaestro_sh = self._get_remote_files_path( 'startmaestro.sh' )
         commands = [
-            { 'cmd' : '$HOME/cloudrun/cloudrun/resources/remote_files/startmaestro.sh' , 'out' : False , 'output' : 'maestro.log' },
-            { 'cmd' : 'crontab -r ; echo "* * * * * /home/ubuntu/cloudrun/cloudrun/resources/remote_files/startmaestro.sh" | crontab', 'out' : True }
+            { 'cmd' : startmaestro_sh , 'out' : False , 'output' : 'maestro.log' },
+            { 'cmd' : 'crontab -r ; echo "* * * * * '+startmaestro_sh+'" | crontab', 'out' : True }
         ]
         self._run_ssh_commands(self._maestro,ssh_client,commands)
 
@@ -200,7 +199,7 @@ class CloudRunLightProvider(CloudRunProvider,ABC):
         for i , env_cfg in enumerate(config.get('environments')):
             # Note: we are using a simple CloudRunEnvironment here 
             # we're not deploying at this stage
-            # but this will help use re-use all the business logic in cloudrunutils / env
+            # but this will help use re-use all the business logic in cloudrunutils envs
             # in order to standardize the environment and create an inline version 
             # through the CloudRunEnvironment::json() method
             env = CloudRunEnvironment(self._config.get('project'),env_cfg)
@@ -258,22 +257,29 @@ class CloudRunLightProvider(CloudRunProvider,ABC):
         return config , mkdir_cmd , files_to_upload_per_dir
 
     def _resolve_maestro_job_paths(self,upfile,ref_file,home_dir):
-        return cloudrunutils.resolve_paths(upfile,ref_file,home_dir+'/files',True) # True for mutualized 
+        files_path = self._maestro.path_join( home_dir , 'files' )
+        return cloudrunutils.resolve_paths(upfile,ref_file,files_path,True) # True for mutualized 
 
     def _get_home_dir(self):
-        return '/home/' + self._maestro.get_config('img_username') 
+        return self._maestro.get_home_dir()
 
     def _get_cloudrun_dir(self):
-        return self._get_home_dir() + '/cloudrun'
+        return self._maestro.path_join( self._get_home_dir() , 'cloudrun' )
+
+    def _get_remote_files_path(self,files=None):
+        if not files:
+            return self._maestro.path_join( self._get_cloudrun_dir() , 'cloudrun' , 'resources' , 'remote_files' )        
+        else:
+            return self._maestro.path_join( self._get_cloudrun_dir() , 'cloudrun' , 'resources' , 'remote_files' , files )        
 
     def _zip_package(self,package_name,src,dest,zipObj):
-        dest = (dest + "/" + os.path.basename(src)).rstrip("/")
+        dest = os.path.join( dest , os.path.basename(src) ).rstrip( os.sep )
         if pkg_resources.resource_isdir(package_name, src):
             #if not os.path.isdir(dest):
             #    os.makedirs(dest)
             for res in pkg_resources.resource_listdir(package_name, src):
                 self.debug(2,'scanning package resource',res)
-                self._zip_package(package_name,src + "/" + res, dest, zipObj)
+                self._zip_package(package_name,os.path.join( src , res), dest, zipObj)
         else:
             if os.path.splitext(src)[1] not in [".pyc"] and not src.strip().endswith(".DS_Store"):
                 #copy_resource_file(src, dest) 
@@ -285,11 +291,11 @@ class CloudRunLightProvider(CloudRunProvider,ABC):
         zip_buffer = io.BytesIO()
         # create a ZipFile object
         with ZipFile(zip_buffer, 'a') as zipObj:    
-            for otherfilepath in ['./pyproject.toml' , './requirements.txt' ]:
+            for otherfilepath in ['pyproject.toml' , 'requirements.txt' ]:
                 with open(otherfilepath,'r') as thefile:
                     data = thefile.read()
                     zipObj.writestr(otherfilepath,data)
-            # write the resources / package
+            # write the package
             self._zip_package("cloudrun",".","cloudrun",zipObj)
 
         self.debug(2,"ZIP BUFFER SIZE =",zip_buffer.getbuffer().nbytes)
@@ -297,15 +303,14 @@ class CloudRunLightProvider(CloudRunProvider,ABC):
         # very important...
         zip_buffer.seek(0)
 
-        # with open('C:/1.zip', 'wb') as f:
-        #     f.write(zip_buffer.getvalue())            
         return zip_buffer
 
     def _wait_for_maestro(self):
         if self.ssh_client is None:
             instanceid , self.ssh_client , self.ftp_client = self._wait_and_connect(self._maestro)
         
-        cmd = "$HOME/cloudrun/cloudrun/resources/remote_files/waitmaestro.sh 1" # 1 = with tail log
+        waitmaestro_sh = self._get_remote_files_path( 'waitmaestro.sh' )
+        cmd = waitmaestro_sh+" 1" # 1 = with tail log
 
         stdin , stdout , stderr = self._exec_command(self.ssh_client,cmd)      
 
@@ -322,8 +327,10 @@ class CloudRunLightProvider(CloudRunProvider,ABC):
         private_ip = self._maestro.get_ip_addr_priv()
 
         # -u for no buffering
-        #cmd = "cd $HOME/cloudrun && $HOME/cloudrun/cloudrun/resources/remote_files/waitmaestro.sh && $HOME/cloudrun/.venv/maestro/bin/python3 -u -m cloudrun.maestroclient " + private_ip + " " + maestro_command
-        cmd = "cd $HOME/cloudrun && $HOME/cloudrun/cloudrun/resources/remote_files/waitmaestro.sh && sudo $HOME/cloudrun/.venv/maestro/bin/python3 -u -m cloudrun.maestroclient " + maestro_command
+        waitmaestro_sh = self._get_remote_files_path( 'waitmaestro.sh' )
+        venv_python    = self._maestro.path_join( self._get_cloudrun_dir() , '.venv' , 'maestro' , 'bin' , 'python3' )
+
+        cmd = "cd "+self._get_cloudrun_dir()+ " && "+waitmaestro_sh+" && sudo "+venv_python+" -u -m cloudrun.maestroclient " + maestro_command
 
         stdin , stdout , stderr = self._exec_command(self.ssh_client,cmd)
 
@@ -378,8 +385,9 @@ class CloudRunLightProvider(CloudRunProvider,ABC):
         instanceid, ssh_client , ftp_client = self._wait_and_connect(instance)
         if ssh_client is not None:
             ftp_client.putfo(self._get_resource_file('remote_files/resetmaestro.sh'),'resetmaestro.sh') 
+            resetmaestro_sh = self._maestro.path_join( self._maestro.get_home_dir() , 'resetmaestro.sh' )
             commands = [
-               { 'cmd' : 'chmod +x $HOME/resetmaestro.sh && $HOME/resetmaestro.sh' , 'out' : True }
+               { 'cmd' : 'chmod +x '+resetmaestro_sh+' && ' + resetmaestro_sh , 'out' : True }
             ]
             self._run_ssh_commands(instance,ssh_client,commands)
             ftp_client.close()
