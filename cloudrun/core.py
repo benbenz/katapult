@@ -44,8 +44,9 @@ class CloudRunProcessState(IntFlag):
     ANY       = 32 + 16 + 8 + 4 + 2 + 1 
 
 class CloudRunPlatform(IntFlag):
-    LINUX   = 1
-    WINDOWS = 2
+    LINUX       = 1
+    WINDOWS     = 2
+    WINDOWS_WSL = 3
 
 class CloudRunInstance():
 
@@ -109,7 +110,7 @@ class CloudRunInstance():
         return self._platform
 
     def get_home_dir(self,absolute=True):
-        if self._platform == CloudRunPlatform.LINUX:
+        if self._platform == CloudRunPlatform.LINUX or self._platform == CloudRunPlatform.WINDOWS_WSL:
             return '/home/' + self.get_config('img_username') if absolute else '%HOME'
         elif self._platform == CloudRunPlatform.WINDOWS:
             return 'C:\>' + self.get_config('img_username') if absolute else '%HOME%'
@@ -118,7 +119,7 @@ class CloudRunInstance():
         return self.path_join( self.get_home_dir() , 'run' )
 
     def path_join(self,*args):
-        if self._platform == CloudRunPlatform.LINUX:
+        if self._platform == CloudRunPlatform.LINUX or self._platform == CloudRunPlatform.WINDOWS_WSL:
             return '/'.join(args)
         elif self._platform == CloudRunPlatform.WINDOWS:
             return '\\'.join(args)
@@ -143,7 +144,7 @@ class CloudRunInstance():
 
 
     def path_sep(self):
-        if self._platform == CloudRunPlatform.LINUX:
+        if self._platform == CloudRunPlatform.LINUX or self._platform == CloudRunPlatform.WINDWS_WSL:
             return '/'
         elif self._platform == CloudRunPlatform.WINDWS:
             return '\\'

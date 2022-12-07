@@ -141,9 +141,10 @@ class CloudRunProvider(ABC):
         if self._mutualize_uploads:
             instance = dpl_job.get_instance()
             remote_ref_dir = instance.path_join( instance.get_home_dir() , 'run' , 'files')
-            return cloudrunutils.resolve_paths(upfile,dpl_job.get_config('run_script'),remote_ref_dir,True) 
+            return cloudrunutils.resolve_paths(instance,upfile,dpl_job.get_config('run_script'),remote_ref_dir,True) 
         else:
-            return cloudrunutils.resolve_paths(upfile,dpl_job.get_config('run_script'),dpl_job.get_path(),False)
+            instance = dpl_job.get_instance()
+            return cloudrunutils.resolve_paths(instance,upfile,dpl_job.get_config('run_script'),dpl_job.get_path(),False)
 
     def _lock(self,instance):
         if not self._thread_safe_ultra:

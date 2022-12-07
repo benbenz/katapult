@@ -77,7 +77,7 @@ class CloudRunLightProvider(CloudRunProvider,ABC):
         maestro_file = self._maestro.path_join( home_dir , 'maestro' )
         aws_dir = self._maestro.path_join( home_dir , '.aws' )
         aws_config = self._maestro.path_join( aws_dir , 'config' )
-        if self._maestro.get_platform() == CloudRunPlatform.LINUX:
+        if self._maestro.get_platform() == CloudRunPlatform.LINUX or self._maestro.get_platform() == CloudRunPlatform.WINDOWS_WSL :
             activate_file = self._maestro.path_join( cloudrun_dir , '.venv' , 'maestro' , 'bin' , 'activate' )
         elif self._maestro.get_platform() == CloudRunPlatform.WINDOWS:
             activate_file = self._maestro.path_join( cloudrun_dir , '.venv' , 'maestro' , 'Scripts' , 'activate.bat' )
@@ -258,7 +258,7 @@ class CloudRunLightProvider(CloudRunProvider,ABC):
 
     def _resolve_maestro_job_paths(self,upfile,ref_file,home_dir):
         files_path = self._maestro.path_join( home_dir , 'files' )
-        return cloudrunutils.resolve_paths(upfile,ref_file,files_path,True) # True for mutualized 
+        return cloudrunutils.resolve_paths(self._maestro,upfile,ref_file,files_path,True) # True for mutualized 
 
     def _get_home_dir(self):
         return self._maestro.get_home_dir()

@@ -265,7 +265,7 @@ def compute_job_command(instance,script_dir,job_config):
 
     return script_command 
 
-def resolve_paths(the_file,ref_file,remote_ref_dir,mutualize=True):
+def resolve_paths(instance,the_file,ref_file,remote_ref_dir,mutualize=True):
 
     # if we have a script
     # let's make sure we upload the right directory structure so we dont have to change the script
@@ -311,7 +311,7 @@ def resolve_paths(the_file,ref_file,remote_ref_dir,mutualize=True):
 
     # use the first case if you want to leave stuff in the job's directory
     if not mutualize:
-        remote_abs_path = os.path.join(remote_ref_dir,rel_path)
+        remote_abs_path = instance.path_join(remote_ref_dir,rel_path)
         remote_rel_path = rel_path
     # use the second case if you want to mutualize uploads
     else:
@@ -319,7 +319,7 @@ def resolve_paths(the_file,ref_file,remote_ref_dir,mutualize=True):
         if remote_abs_path.startswith(os.sep):
             remote_abs_path = remote_abs_path[1:] # make relative
         remote_rel_path = remote_abs_path
-        remote_abs_path = os.path.join(remote_ref_dir,remote_abs_path)
+        remote_abs_path = instance.path_join(remote_ref_dir,remote_abs_path)
 
     # local_abs_path  = the local file path
     # rel_path        = the relative path (from the job directory aka script dir)
