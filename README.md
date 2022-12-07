@@ -1,6 +1,6 @@
 # Description
 
-CloudRun is a Python package that allows you to run any script on a cloud service (for now AWS only).
+CloudSend is a Python package that allows you to run any script on a cloud service (for now AWS only).
 
 # Features
 
@@ -9,7 +9,7 @@ CloudRun is a Python package that allows you to run any script on a cloud servic
 - Handles PyPi , Conda/Mamba, Apt-get and Julia environments
 - Multithreaded instance support
 - Handles disconnections from instances, including stopped or terminated instances
-- Handles interruption of CloudRun, with state recovery
+- Handles interruption of CloudSend, with state recovery
 - Runs locally or on a remote instance, with 'watcher' functionality 
 
 # Pre-requisites
@@ -59,8 +59,8 @@ aws_secret_access_key = YOUR_SECRET_ACCESS_KEY
 
 ## Setting up a separate user with least permissions (manually) 
 
-1. In the AWS web console, in the IAM service, create a group 'cloudrun-users' with `AmazonEC2FullAccess` and `IAMFullAccess` permissions
-2. In the AWS web console, in the IAM service, create a user USERNAME attached to the 'cloudrun-users' group:
+1. In the AWS web console, in the IAM service, create a group 'cloudsend-users' with `AmazonEC2FullAccess` and `IAMFullAccess` permissions
+2. In the AWS web console, in the IAM service, create a user USERNAME attached to the 'cloudsend-users' group:
 ### Step 1
 ![add user 1](./images/adduser1.jpg)
 ### Step 2
@@ -79,7 +79,7 @@ aws_secret_access_key = YOUR_SECRET_ACCESS_KEY
 region = eu-west-3
 output = json
 
-[profile cloudrun_USERNAME]
+[profile cloudsend_USERNAME]
 region = eu-west-3
 output = json
 ```
@@ -91,12 +91,12 @@ output = json
 aws_access_key_id = YOUR_ACCESS_KEY_ID
 aws_secret_access_key = YOUR_SECRET_ACCESS_KEY
 
-[cloudrun_USERNAME]
+[cloudsend_USERNAME]
 aws_access_key_id = YOU_PROFILE_ACCESS_KEY_ID
 aws_secret_access_key = YOUR_PROFILE_SECRET_ACCESS_KEY
 ```
 
-4. add the 'profile' : 'cloudrun_USERNAME' to the configuration
+4. add the 'profile' : 'cloudsend_USERNAME' to the configuration
 
 ```python
 config = {
@@ -106,7 +106,7 @@ config = {
     ################################################################################
 
     'project'      : 'test' ,                             # this will be concatenated with the instance hashes (if not None) 
-    'profile'      : 'cloudrun_USERNAME' ,
+    'profile'      : 'cloudsend_USERNAME' ,
     ...
 ```
 
@@ -157,9 +157,9 @@ cp example/config.example.py config.py
 #
 
 # to run with pip
-python3 -m cloudrun.demo config
+python3 -m cloudsend.demo config
 # to run with pip with reset (maestro and instances)
-python3 -m cloudrun.demo config reset
+python3 -m cloudsend.demo config reset
 # to run with poetry
 poetry run demo config
 # to run with poetry with reset (maestro and the instances)
@@ -183,7 +183,7 @@ config = {
     'auto_stop'    : True ,                               # will automatically stop the instances and the maestro, once the jobs are done
     'provider'     : 'aws' ,                              # the provider name ('aws' | 'azure' | ...)
     'job_assign'   : None ,                               # algorithm used for job assignation / task scheduling ('random' | 'multi_knapsack')
-    'recover'      : True ,                               # if True, CloudRun will always save the state and try to recover this state on the next execution
+    'recover'      : True ,                               # if True, CloudSend will always save the state and try to recover this state on the next execution
     'print_deploy' : False ,                              # if True, this will cause the deploy stage to print more (and lock)
     'mutualize_uploads' : True ,                          # adjusts the directory structure of the uploads ... (False = per job or True = global/mutualized)
 
@@ -309,7 +309,7 @@ config = {
 # Python API
 
 ```python
-class CloudRunProcessState(IntFlag):
+class CloudSendProcessState(IntFlag):
     UNKNOWN   = 0
     WAIT      = 1  # waiting for bootstraping
     QUEUE     = 2  # queued (for sequential scripts)
@@ -319,13 +319,13 @@ class CloudRunProcessState(IntFlag):
     ABORTED   = 32 # script has been aborted
     ANY       = 32 + 16 + 8 + 4 + 2 + 1 
 
-class CLoudRunLightProvider(ABC):
-class CloudRunFatProvider(ABC):
+class CloudSendLightProvider(ABC):
+class CloudSendFatProvider(ABC):
 
     def debug(self,level,*args,**kwargs):
 
     # start the provider: creates the instances
-    # if reset = True, CloudRun forces a process cleanup as well as more re-uploads
+    # if reset = True, CloudSend forces a process cleanup as well as more re-uploads
     def start(self,reset):
 
     # assign jobs to instances
@@ -390,23 +390,23 @@ def init_instance_name(instance_config):
 def debug(level,*args,**kwargs):
 ```
 
-# CloudRun usage
+# CloudSend usage
 
 ## Python programmatic use
 
-Note: this demo works the same way, whether CloudRun runs locally or remotely
+Note: this demo works the same way, whether CloudSend runs locally or remotely
 
 ```python
 
-from cloudrun      import provider as cloudrun
-from cloudrun.core import CloudRunProcessState
+from cloudsend      import provider as cloudsend
+from cloudsend.core import CloudSendProcessState
 import asyncio 
 
 # load config
 config = __import__(config).config
 
 # create provider: this loads the config
-provider = cloudrun.get_client(config)
+provider = cloudsend.get_client(config)
 
 # start the provider: this attempts to create the instances
 provider.start()
@@ -423,7 +423,7 @@ processes = provider.run()
 # watch mode: revive instances (started as daemon here)
 processes = provider.watch(processes)
 # wait for the active proccesses to be done:
-processes = provider.wait_for_jobs_state(CloudRunProcessState.DONE|CloudRunProcessState.ABORTED,processes)
+processes = provider.wait_for_jobs_state(CloudSendProcessState.DONE|CloudSendProcessState.ABORTED,processes)
 
 # you can get the state of all jobs this way:
 processes = provider.get_jobs_states()
@@ -440,7 +440,7 @@ provider.fetch_results('./tmp')
 
 ## CLI use
 
-Note: the commands below work the same way, whether CloudRun runs locally or remotely
+Note: the commands below work the same way, whether CloudSend runs locally or remotely
 
 ```bash
 CLI commands go here

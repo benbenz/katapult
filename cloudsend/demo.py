@@ -1,6 +1,6 @@
-from cloudrun import provider as cr
+from cloudsend import provider as cr
 import asyncio , os , sys
-from cloudrun.core import CloudRunProcessState
+from cloudsend.core import CloudSendProcessState
 import traceback
 import json
 
@@ -48,7 +48,7 @@ async def mainloop(cr_client,reset=False):
     print("Waiting for DONE or ABORTED ...")
     # now that we have 'watch' before 'wait' , this will exit instantaneously
     # because watch includes 'wait' mode intrinsiquely
-    processes = cr_client.wait_for_jobs_state(CloudRunProcessState.DONE|CloudRunProcessState.ABORTED,processes)
+    processes = cr_client.wait_for_jobs_state(CloudSendProcessState.DONE|CloudSendProcessState.ABORTED,processes)
 
     print("\n== SUMMARY ==\n")
 
@@ -57,7 +57,7 @@ async def mainloop(cr_client,reset=False):
 
     # print("\n== WAIT and TAIL ==\n")
 
-    # task1 = asyncio.create_task(cr_client.wait_for_script_state(CloudRunProcessState.DONE|CloudRunProcessState.ABORTED,script_hash,uid))
+    # task1 = asyncio.create_task(cr_client.wait_for_script_state(CloudSendProcessState.DONE|CloudSendProcessState.ABORTED,script_hash,uid))
     # task2 = asyncio.create_task(tail_loop(script_hash,uid))
     # await asyncio.gather(task1,task2)
     cr_client.print_aborted_logs()
@@ -76,10 +76,10 @@ async def waitloop(cr_client):
 
     print("\n== WAIT ==\n")
     
-    cr_client.wait_for_jobs_state(CloudRunProcessState.DONE|CloudRunProcessState.ABORTED)
+    cr_client.wait_for_jobs_state(CloudSendProcessState.DONE|CloudSendProcessState.ABORTED)
 
     #rint("Waiting for DONE or ABORTED ...")
-    #processes = cr_client.wait_for_jobs_state(CloudRunProcessState.DONE|CloudRunProcessState.ABORTED)
+    #processes = cr_client.wait_for_jobs_state(CloudSendProcessState.DONE|CloudSendProcessState.ABORTED)
 
     print("\n== SUMMARY ==\n")
 

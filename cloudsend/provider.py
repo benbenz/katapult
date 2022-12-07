@@ -1,16 +1,16 @@
 from abc import ABC , abstractmethod
-import cloudrun.utils as cloudrunutils
+import cloudsend.utils as cloudsendutils
 import sys , json , os , time 
 import paramiko
 import re
 from io import BytesIO
 import csv , io
 import pkg_resources
-from cloudrun.core import *
+from cloudsend.core import *
 from enum import IntFlag
 import multiprocessing
 
-class CloudRunProviderState(IntFlag):
+class CloudSendProviderState(IntFlag):
     NEW           = 0  # provider created
     STARTED       = 1  # provider started
     ASSIGNED      = 2  # provider assigned jobs
@@ -30,11 +30,11 @@ class bcolors:
     BOLD = '\033[1m'
     UNDERLINE = '\033[4m'
     
-class CloudRunProvider(ABC):
+class CloudSendProvider(ABC):
 
     def __init__(self, conf):
 
-        self._state = CloudRunProviderState.NEW
+        self._state = CloudSendProviderState.NEW
 
         self.DBG_LVL = conf.get('debug',1)
         self.DBG_PREFIX = None
@@ -126,7 +126,7 @@ class CloudRunProvider(ABC):
                     self._instances_states = dict()
                 self._instances_states[instance.get_name()] = { 'changed' : True }
 
-        except CloudRunError as cre:
+        except CloudSendError as cre:
 
             instance.set_invalid(True)
 
@@ -141,10 +141,10 @@ class CloudRunProvider(ABC):
         if self._mutualize_uploads:
             instance = dpl_job.get_instance()
             remote_ref_dir = instance.path_join( instance.get_home_dir() , 'run' , 'files')
-            return cloudrunutils.resolve_paths(instance,upfile,dpl_job.get_config('run_script'),remote_ref_dir,True) 
+            return cloudsendutils.resolve_paths(instance,upfile,dpl_job.get_config('run_script'),remote_ref_dir,True) 
         else:
             instance = dpl_job.get_instance()
-            return cloudrunutils.resolve_paths(instance,upfile,dpl_job.get_config('run_script'),dpl_job.get_path(),False)
+            return cloudsendutils.resolve_paths(instance,upfile,dpl_job.get_config('run_script'),dpl_job.get_path(),False)
 
     def _lock(self,instance):
         if not self._thread_safe_ultra:
@@ -186,18 +186,18 @@ class CloudRunProvider(ABC):
 
             lookForState = True
             # 'pending'|'running'|'shutting-down'|'terminated'|'stopping'|'stopped'
-            if instanceState == CloudRunInstanceState.STOPPED:
+            if instanceState == CloudSendInstanceState.STOPPED:
                 try:
                     # restart the instance
                     self.start_instance(instance)
-                except CloudRunError:
+                except CloudSendError:
                     self.hard_reset_instance(instance)
 
 
-            elif instanceState == CloudRunInstanceState.RUNNING:
+            elif instanceState == CloudSendInstanceState.RUNNING:
                 lookForState = False
 
-            elif instanceState == CloudRunInstanceState.TERMINATING or instanceState == CloudRunInstanceState.TERMINATED:
+            elif instanceState == CloudSendInstanceState.TERMINATING or instanceState == CloudSendInstanceState.TERMINATED:
                 try:
                     self._start_and_update_instance(instance)
                 except:
@@ -244,7 +244,7 @@ class CloudRunProvider(ABC):
             except Exception as cexc:
                 # check whats going on
                 self.update_instance_info(instance)
-                if instance.get_state() != CloudRunInstanceState.RUNNING:
+                if instance.get_state() != CloudSendInstanceState.RUNNING:
                     self._wait_for_instance(instance)
             #except paramiko.ssh_exception.NoValidConnectionsError as cexc:
                 if retrys < 5:
@@ -252,13 +252,13 @@ class CloudRunProvider(ABC):
                     time.sleep(4)
                     self.debug(1,"Retrying ...")
                     retrys = retrys + 1
-                elif retrys == 5 and instance.get_state() == CloudRunInstanceState.RUNNING:
+                elif retrys == 5 and instance.get_state() == CloudSendInstanceState.RUNNING:
                     retrys = retrys + 1
                     self.debug(1,"Trying a reboot ...")
                     self.reboot_instance(instance)
                     time.sleep(4)
                     self._wait_for_instance(instance)
-                elif retrys == 6 and instance.get_state() == CloudRunInstanceState.RUNNING:
+                elif retrys == 6 and instance.get_state() == CloudSendInstanceState.RUNNING:
                     retrys = retrys + 1
                     self.debug(1,"Trying a hard reset ...")
                     self.hard_reset_instance(instance)
@@ -292,7 +292,7 @@ class CloudRunProvider(ABC):
         except paramiko.ssh_exception.SSHException as sshe:
             self.debug(1,"The SSH Client has been disconnected!")
             self.debug(1,sshe)
-            raise CloudRunError()  
+            raise CloudSendError()  
             
     def _run_ssh_commands(self,instance,ssh_client,commands):
         for command in commands:
@@ -321,7 +321,7 @@ class CloudRunProvider(ABC):
             except paramiko.ssh_exception.SSHException as sshe:
                 self.debug(1,"The SSH Client has been disconnected!")
                 self.debug(1,sshe)
-                raise CloudRunError()  
+                raise CloudSendError()  
 
     def _test_reupload(self,instance,file_test,ssh_client,isfile=True):
         re_upload = False
@@ -338,7 +338,7 @@ class CloudRunProvider(ABC):
     def _get_instancetypes_attribute(self,inst_cfg,resource_file,type_col,attr,return_type):
 
         # Could be any dot-separated package or module name or a "Requirement"
-        resource_package = 'cloudrun'
+        resource_package = 'cloudsend'
         resource_path = os.sep.join(('resources', resource_file))  # Do not use os.path.join()
         #template = pkg_resources.resource_string(resource_package, resource_path)
         # or for a file-like stream:
@@ -372,7 +372,7 @@ class CloudRunProvider(ABC):
         return         
 
     def _get_resource_file(self,resource_file):
-        resource_package = 'cloudrun'
+        resource_package = 'cloudsend'
         resource_path = os.sep.join(('resources', resource_file))  # Do not use os.path.join()
         #template = pkg_resources.resource_string(resource_package, resource_path)
         # or for a file-like stream:
@@ -389,9 +389,9 @@ class CloudRunProvider(ABC):
         userid = profile_name
         if not userid:
             userid = 'default'
-        #key_filename = 'cloudrun-'+str(userid)+'-'+str(region)+'.pem'
-        #key_filename = 'cloudrun-'+str(region)+'.pem'
-        key_filename = 'cloudrun-'+self.get_account_id()+'-'+str(region)+'.pem'
+        #key_filename = 'cloudsend-'+str(userid)+'-'+str(region)+'.pem'
+        #key_filename = 'cloudsend-'+str(region)+'.pem'
+        key_filename = 'cloudsend-'+self.get_account_id()+'-'+str(region)+'.pem'
         return key_filename
 
     def get_keypair_name(self,profile_name,region):
@@ -509,17 +509,17 @@ def get_client(config):
 
         if config.get('maestro','local') == 'local':
             
-            craws  = __import__("cloudrun.aws")
+            craws  = __import__("cloudsend.aws")
 
-            client = craws.aws.AWSCloudRunFatProvider(config)
+            client = craws.aws.AWSCloudSendFatProvider(config)
 
             return client
 
         else:
 
-            craws  = __import__("cloudrun.aws")
+            craws  = __import__("cloudsend.aws")
 
-            client = craws.aws.AWSCloudRunLightProvider(config)
+            client = craws.aws.AWSCloudSendLightProvider(config)
 
             return client
 
@@ -527,7 +527,7 @@ def get_client(config):
 
         debug(1,config.get('provider'), " not implemented yet")
 
-        raise CloudRunError()
+        raise CloudSendError()
 
 def line_buffered(f):
     line_buf = ""

@@ -2,13 +2,13 @@
 aws-creds
 .venv
 *.pyc
-cloudrun.pem
-cloudrun*.pem
+cloudsend.pem
+cloudsend*.pem
 remote_files/config.json
 /config.py
 /config*.py
 /example/config.py
-/config-cloudrun*.json
+/config-cloudsend*.json
 poetry.lock
 __pycache__
 state.json

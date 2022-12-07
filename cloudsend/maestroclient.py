@@ -6,7 +6,7 @@ HOST = 'localhost' #'127.0.0.1' #'0.0.0.0'
 PORT = 5000
 
 if len(sys.argv)<2:
-    print("python3 -m cloudrun.maestroclient [IP_ADDR] CMD")
+    print("python3 -m cloudsend.maestroclient [IP_ADDR] CMD")
     sys.exit()
 
 if len(sys.argv) >= 3:

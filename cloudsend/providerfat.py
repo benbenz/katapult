@@ -1,5 +1,5 @@
 from abc import ABC , abstractmethod
-import cloudrun.utils as cloudrunutils
+import cloudsend.utils as cloudsendutils
 import sys , json , os , time
 import paramiko
 import re
@@ -7,13 +7,13 @@ import asyncio
 import concurrent.futures
 import multiprocessing
 import math , random
-import cloudrun.combopt as combopt
+import cloudsend.combopt as combopt
 from io import BytesIO
 import csv , io
 import pkg_resources
-from cloudrun.core import *
-from cloudrun.provider import CloudRunProvider , CloudRunProviderState , bcolors , debug
-from cloudrun.config_state import ConfigManager , StateSerializer
+from cloudsend.core import *
+from cloudsend.provider import CloudSendProvider , CloudSendProviderState , bcolors , debug
+from cloudsend.config_state import ConfigManager , StateSerializer
 from enum import IntFlag
 from threading import current_thread
 import shutil
@@ -21,16 +21,16 @@ import shutil
 random.seed()
 
 
-class CloudRunProviderStateWaitMode(IntFlag):
+class CloudSendProviderStateWaitMode(IntFlag):
     NO_WAIT       = 0  # provider dont wait for state
     WAIT          = 1  # provider wait for state 
     WATCH         = 2  # provider watch out for state = wait + revive
 
-class CloudRunFatProvider(CloudRunProvider,ABC):
+class CloudSendFatProvider(CloudSendProvider,ABC):
 
     def __init__(self, conf):
 
-        CloudRunProvider.__init__(self,conf)
+        CloudSendProvider.__init__(self,conf)
 
         # self._load_objects()
         # self._preprocess_jobs()
@@ -119,7 +119,7 @@ class CloudRunFatProvider(CloudRunProvider,ABC):
 
             combopt.multiple_knapsack_assignation(self._jobs,self._instances)   
 
-        self._state = CloudRunProviderState.ASSIGNED            
+        self._state = CloudSendProviderState.ASSIGNED            
 
         self.serialize_state()         
                
@@ -456,7 +456,7 @@ class CloudRunFatProvider(CloudRunProvider,ABC):
                 if inst.is_invalid():
                     self.debug(1,"ERROR: Your configuration is causing an instance to not be created. Please fix.",inst.get_config_DIRTY(),color=bcolors.FAIL)
                     sys.exit()
-        self._state = CloudRunProviderState.STARTED
+        self._state = CloudSendProviderState.STARTED
 
     def reset_instance(self,instance):
         self.debug(1,'RESETTING instance',instance.get_name())
@@ -501,13 +501,13 @@ class CloudRunFatProvider(CloudRunProvider,ABC):
                 instanceid = inst.get_id()
                 #future.result()
             #pool.shutdown()
-        self._state = CloudRunProviderState.DEPLOYED    
+        self._state = CloudSendProviderState.DEPLOYED    
 
     def revive(self,instance,rerun=False):
         self.debug(1,"REVIVING instance",instance)
 
         jobs_can_be_saved = False
-        if instance.get_state()==CloudRunInstanceState.STOPPED or instance.get_state()==CloudRunInstanceState.STOPPING:
+        if instance.get_state()==CloudSendInstanceState.STOPPED or instance.get_state()==CloudSendInstanceState.STOPPING:
             self.debug(1,"Instance is stopping|stopped, we just have to re-start the instance",instance,color=bcolors.OKCYAN)
             jobs_can_be_saved = True
             #self.start_instance(instance)
@@ -530,7 +530,7 @@ class CloudRunFatProvider(CloudRunProvider,ABC):
 
         for process in processes:
             if process.get_state() & state_mask:
-                process.set_state(CloudRunProcessState.ABORTED)
+                process.set_state(CloudSendProcessState.ABORTED)
 
     def get_log(self,process,ssh_client):
         uid   = process.get_uid()
@@ -578,7 +578,7 @@ class CloudRunFatProvider(CloudRunProvider,ABC):
         do_run = True
         if instance.get_name() in instances_processes:
             processes_infos = instances_processes[instance.get_name()]
-            last_processes_new = self.__get_jobs_states_internal(processes_infos,CloudRunProviderStateWaitMode.NO_WAIT|CloudRunProviderStateWaitMode.WATCH,CloudRunProcessState.ANY,False,True) # Programmatic >> no print, no serialize
+            last_processes_new = self.__get_jobs_states_internal(processes_infos,CloudSendProviderStateWaitMode.NO_WAIT|CloudSendProviderStateWaitMode.WATCH,CloudSendProcessState.ANY,False,True) # Programmatic >> no print, no serialize
             do_run = False
             all_done = True
             for process_old in last_processes_old:
@@ -591,12 +591,12 @@ class CloudRunFatProvider(CloudRunProvider,ABC):
                 # let's just run the jobs ...
                 #TODO: improve precision of recovery
                 self.debug(2,state_old.name,"vs",state_new.name)
-                if state_new!=CloudRunProcessState.DONE and (state_new < state_old or (state_new == CloudRunProcessState.ABORTED or state_old == CloudRunProcessState.ABORTED or state_new == CloudRunProcessState.UNKNOWN or state_old == CloudRunProcessState.UNKNOWN)):
+                if state_new!=CloudSendProcessState.DONE and (state_new < state_old or (state_new == CloudSendProcessState.ABORTED or state_old == CloudSendProcessState.ABORTED or state_new == CloudSendProcessState.UNKNOWN or state_old == CloudSendProcessState.UNKNOWN)):
                     self.debug(1,"We will run the following job because of an unsatisfying state. Job#",process_new.get_job().get_rank(),"=",process_new.get_state())
                     do_run = True
                     # do not break cause we want to check all_done properly!
                     #break
-                all_done = all_done and state_new == CloudRunProcessState.DONE
+                all_done = all_done and state_new == CloudSendProcessState.DONE
 
             if all_done:
                 do_run = False
@@ -607,7 +607,7 @@ class CloudRunFatProvider(CloudRunProvider,ABC):
             # (note: an ABORTED state will not switch to UNKNOWN state - in order to keep the most information)
             instances_processes = self._organize_instances_processes(last_processes_old)
             processes_infos = instances_processes[instance.get_name()]
-            self.__get_jobs_states_internal(processes_infos,CloudRunProviderStateWaitMode.NO_WAIT|CloudRunProviderStateWaitMode.WATCH,CloudRunProcessState.ANY,False,True) # Programmatic >> no print, no serialize
+            self.__get_jobs_states_internal(processes_infos,CloudSendProviderStateWaitMode.NO_WAIT|CloudSendProviderStateWaitMode.WATCH,CloudSendProcessState.ANY,False,True) # Programmatic >> no print, no serialize
 
             if do_run:
                 return True , None, False
@@ -645,7 +645,7 @@ class CloudRunFatProvider(CloudRunProvider,ABC):
             batch_pid_file = instance.path_join( global_path , 'batch_pid-'+batch_uid+'.sh')
             ssh_client = self._connect_to_instance(instance)
             if ssh_client is None:
-                ssh_client , processes = self._handle_instance_disconnect(instance,CloudRunProviderStateWaitMode.WATCH,"could not run jobs for instance")
+                ssh_client , processes = self._handle_instance_disconnect(instance,CloudSendProviderStateWaitMode.WATCH,"could not run jobs for instance")
                 if ssh_client is None:
                     return []
 
@@ -666,7 +666,7 @@ class CloudRunFatProvider(CloudRunProvider,ABC):
             except Exception as e:
                 self.debug(1,e)
                 self.debug(1,"ERROR: the instance is unreachable while sending batch",instance,color=bcolors.FAIL)
-                ssh_client , processes = self._handle_instance_disconnect(instance,CloudRunProviderStateWaitMode.WATCH,"could not run jobs for instance")
+                ssh_client , processes = self._handle_instance_disconnect(instance,CloudSendProviderStateWaitMode.WATCH,"could not run jobs for instance")
                 if ssh_client is None:
                     return []
                 tryagain = True
@@ -675,7 +675,7 @@ class CloudRunFatProvider(CloudRunProvider,ABC):
                 # we dont have the pid of everybody yet because its sequential
                 # lets leave it blank. it can work with the uid ...
                 job = dpl_jobs[uid]
-                process = CloudRunProcess( job , uid , None , batch_uid) 
+                process = CloudSendProcess( job , uid , None , batch_uid) 
                 self.debug(2,process) 
                 processes.append(process)
 
@@ -699,7 +699,7 @@ class CloudRunFatProvider(CloudRunProvider,ABC):
         jobs = self._jobs if not instance_filter else instance_filter.get_jobs()
 
         # batch uid is shared accross instances
-        batch_uid = cloudrunutils.generate_unique_filename()
+        batch_uid = cloudsendutils.generate_unique_filename()
 
         for job in jobs:
 
@@ -739,7 +739,7 @@ class CloudRunFatProvider(CloudRunProvider,ABC):
             files_path  = dpl_env.get_path()
 
             # generate unique PID file
-            uid = cloudrunutils.generate_unique_filename() 
+            uid = cloudsendutils.generate_unique_filename() 
 
             dpl_jobs[uid] = dpl_job
             instances_runs[instance.get_name()]['jobs'].append(uid)
@@ -795,7 +795,7 @@ class CloudRunFatProvider(CloudRunProvider,ABC):
                     self._current_processes.append(process)
             #pool.shutdown()        
 
-        self._state = CloudRunProviderState.RUNNING
+        self._state = CloudSendProviderState.RUNNING
 
         self.serialize_state()
 
@@ -823,7 +823,7 @@ class CloudRunFatProvider(CloudRunProvider,ABC):
             ssh_client = self._connect_to_instance(_instance)
             for job in _instance.get_jobs():
                 process = job.get_last_process()
-                if process.get_state() == CloudRunProcessState.ABORTED:
+                if process.get_state() == CloudSendProcessState.ABORTED:
                     self.debug(1,"----------------------------------------------------------------------",color=bcolors.WARNING)
                     self.debug(1,"Job #",job.get_rank(),"has ABORTED with errors:",color=bcolors.WARNING)
                     self.debug(1,self.get_log(process,ssh_client),color=bcolors.WARNING)
@@ -852,7 +852,7 @@ class CloudRunFatProvider(CloudRunProvider,ABC):
 
         for process in processes:
 
-            if process.get_state() != CloudRunProcessState.DONE:
+            if process.get_state() != CloudSendProcessState.DONE:
                 self.debug(2,"Skipping process import",process.get_uid(),process.get_state())
             
             dpl_job  = process.get_job()
@@ -899,7 +899,7 @@ class CloudRunFatProvider(CloudRunProvider,ABC):
 
         for process in processes:
 
-            if process.get_state() != CloudRunProcessState.DONE:
+            if process.get_state() != CloudSendProcessState.DONE:
                 self.debug(2,"Skipping process import",process.get_uid(),process.get_state())
             
             dpl_job  = process.get_job()
@@ -953,7 +953,7 @@ class CloudRunFatProvider(CloudRunProvider,ABC):
             return None , None
 
         # this is an Internet error
-        if instance.get_state() == CloudRunInstanceState.RUNNING:
+        if instance.get_state() == CloudSendInstanceState.RUNNING:
             ssh_client = self._connect_to_instance(instance)
             if ssh_client is None:
                 self.debug(1,"FATAL ERROR(0):",msgs,instance,color=bcolors.FAIL)
@@ -963,14 +963,14 @@ class CloudRunFatProvider(CloudRunProvider,ABC):
 
         self.debug(1,"ERROR:",msg,instance,color=bcolors.FAIL)
         if processes is not None:
-            if instance.get_state() & (CloudRunInstanceState.STOPPING | CloudRunInstanceState.STOPPED) :
+            if instance.get_state() & (CloudSendInstanceState.STOPPING | CloudSendInstanceState.STOPPED) :
                 # mark any type of process as aborted, but DONE
-                self._mark_aborted(processes,CloudRunProcessState.ANY - CloudRunProcessState.DONE) 
-            elif instance.get_state() & (CloudRunInstanceState.TERMINATING | CloudRunInstanceState.TERMINATED):
+                self._mark_aborted(processes,CloudSendProcessState.ANY - CloudSendProcessState.DONE) 
+            elif instance.get_state() & (CloudSendInstanceState.TERMINATING | CloudSendInstanceState.TERMINATED):
                 # mark any type of process as aborted
-                self._mark_aborted(processes,CloudRunProcessState.ANY) 
+                self._mark_aborted(processes,CloudSendProcessState.ANY) 
         rerun_jobs = processes is not None
-        if wait_mode & CloudRunProviderStateWaitMode.WATCH:
+        if wait_mode & CloudSendProviderStateWaitMode.WATCH:
             processes = self.revive(instance,rerun_jobs)
         ssh_client = self._connect_to_instance(instance)
         if ssh_client is None:
@@ -1009,7 +1009,7 @@ class CloudRunFatProvider(CloudRunProvider,ABC):
 
         jobsinfo , instance = self._compute_jobs_info(processes_infos)
 
-        if not programmatic and wait_mode & CloudRunProviderStateWaitMode.WATCH:
+        if not programmatic and wait_mode & CloudSendProviderStateWaitMode.WATCH:
             self._instances_watching[instance.get_name()] = True
         
         ssh_client = self._connect_to_instance(instance)
@@ -1082,13 +1082,13 @@ class CloudRunFatProvider(CloudRunProvider,ABC):
                         if process.get_pid() is None and pid != "None":
                             process.set_pid( int(pid) )
                         try:
-                            state = CloudRunProcessState[statestr.upper()]
+                            state = CloudSendProcessState[statestr.upper()]
                             # let's keep as much history as we know 
                             # ABORTED state has more info than UNKNOWN ...
                             # on a new state recovery, the newly created instance is returining UNKNOWN
                             # but if the maestro witnessed an ABORTED state
                             # we prefer to keep this ...
-                            if not (process.get_state() == CloudRunProcessState.ABORTED and state == CloudRunProcessState.UNKNOWN):
+                            if not (process.get_state() == CloudSendProcessState.ABORTED and state == CloudSendProcessState.UNKNOWN):
                                 process.set_state(state)
                             self.debug(2,process)
                             processes_infos[uid]['retrieved'] = True
@@ -1100,7 +1100,7 @@ class CloudRunFatProvider(CloudRunProvider,ABC):
                         except Exception as e:
                             debug(1,"\nUnhandled state received by state.sh!!!",statestr,"\n")
                             debug(2,e)
-                            state = CloudRunProcessState.UNKNOWN
+                            state = CloudSendProcessState.UNKNOWN
 
                         processes.append(process)
 
@@ -1129,7 +1129,7 @@ class CloudRunFatProvider(CloudRunProvider,ABC):
             if not programmatic:
                 self.serialize_state()
 
-            if wait_mode & CloudRunProviderStateWaitMode.WAIT:
+            if wait_mode & CloudSendProviderStateWaitMode.WAIT:
                 #await asyncio.sleep(15)
                 time.sleep(15)
             else:
@@ -1142,7 +1142,7 @@ class CloudRunFatProvider(CloudRunProvider,ABC):
             # TODO: debug why ...
             self.serialize_state()
 
-        if wait_mode & CloudRunProviderStateWaitMode.WATCH:
+        if wait_mode & CloudSendProviderStateWaitMode.WATCH:
             # lets wait 1 minutes before stopping
             # this helps with the demo which runs a wait() and a get() sequentially ...
             if not programmatic:
@@ -1217,7 +1217,7 @@ class CloudRunFatProvider(CloudRunProvider,ABC):
         return instances_processes
 
 
-    def __get_or_wait_jobs_state( self, processes , wait_state = CloudRunProviderStateWaitMode.NO_WAIT , job_state = CloudRunProcessState.ANY , daemon = False ):   
+    def __get_or_wait_jobs_state( self, processes , wait_state = CloudSendProviderStateWaitMode.NO_WAIT , job_state = CloudSendProcessState.ANY , daemon = False ):   
 
         if processes is None: 
             processes = self.get_last_processes()
@@ -1253,29 +1253,29 @@ class CloudRunFatProvider(CloudRunProvider,ABC):
             for instance_name , processes_infos in instances_processes.items():
                 self._watch_pool.submit(self.__get_jobs_states_internal,processes_infos,wait_state,job_state,daemon)
             #pool.shutdown()
-            if wait_state & CloudRunProviderStateWaitMode.WATCH:
+            if wait_state & CloudSendProviderStateWaitMode.WATCH:
                 self.debug(1,"Watching ...")
 
             return None
         # done
 
     def wakeup(self):
-        # if self._state != CloudRunProviderState.WATCHING:
+        # if self._state != CloudSendProviderState.WATCHING:
         #     self.debug(1,"Provider was not watching: cancelling automatic wakeup")
         #     return 
         # else:
         if self._recovery:
-            if self._state >= CloudRunProviderState.STARTED:
+            if self._state >= CloudSendProviderState.STARTED:
                 self.start()
-            if self._state >= CloudRunProviderState.ASSIGNED:
+            if self._state >= CloudSendProviderState.ASSIGNED:
                 self.assign()
-            if self._state >= CloudRunProviderState.DEPLOYED:
+            if self._state >= CloudSendProviderState.DEPLOYED:
                 self.deploy()
             # should we have those here ? Or just let watch do it's thing ? 
             # actually, thanks to state recovery, run_jobs should be smart enough to not run DONE jobs again...
-            if self._state >= CloudRunProviderState.RUNNING:
+            if self._state >= CloudSendProviderState.RUNNING:
                 self.run()
-            if self._state >= CloudRunProviderState.WATCHING:
+            if self._state >= CloudSendProviderState.WATCHING:
                 self.watch(None,True) # daemon mode
         else:
             # self.start()
@@ -1285,15 +1285,15 @@ class CloudRunFatProvider(CloudRunProvider,ABC):
 
     def watch(self,processes=None,daemon=True):
 
-        job_state = CloudRunProcessState.DONE|CloudRunProcessState.ABORTED
+        job_state = CloudSendProcessState.DONE|CloudSendProcessState.ABORTED
         
         # switch the state to watch mode ... 
         # this will allow to check if the Provider needs to run all methods until watch, on wakeup
         # (no matter the state recovery)
-        self._state = CloudRunProviderState.WATCHING
+        self._state = CloudSendProviderState.WATCHING
         self.serialize_state()
 
-        return self.__get_or_wait_jobs_state(processes,CloudRunProviderStateWaitMode.WAIT|CloudRunProviderStateWaitMode.WATCH,job_state,daemon)
+        return self.__get_or_wait_jobs_state(processes,CloudSendProviderStateWaitMode.WAIT|CloudSendProviderStateWaitMode.WATCH,job_state,daemon)
 
 
     def wait_for_jobs_state(self,job_state,processes=None):
@@ -1301,7 +1301,7 @@ class CloudRunFatProvider(CloudRunProvider,ABC):
         if not processes or len(processes)==0:
             self.debug(2,"No process to wait for")
 
-        return self.__get_or_wait_jobs_state(processes,CloudRunProviderStateWaitMode.WAIT,job_state)
+        return self.__get_or_wait_jobs_state(processes,CloudSendProviderStateWaitMode.WAIT,job_state)
 
     def get_jobs_states(self,processes=None):
 

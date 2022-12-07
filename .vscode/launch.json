@@ -8,7 +8,7 @@
             "name": "Demo",
             "type": "python",
             "request": "launch",
-            "program": "${workspaceFolder}/cloudrun/demo.py",
+            "program": "${workspaceFolder}/cloudsend/demo.py",
             "console": "integratedTerminal",
             "cwd": "${workspaceFolder}",
             "args": ["config.py","reset"]
@@ -17,7 +17,7 @@
             "name": "Demo Wait",
             "type": "python",
             "request": "launch",
-            "program": "${workspaceFolder}/cloudrun/demo.py",
+            "program": "${workspaceFolder}/cloudsend/demo.py",
             "console": "integratedTerminal",
             "cwd": "${workspaceFolder}",
             "args": ["config.py","wait"]
@@ -26,7 +26,7 @@
             "name": "Demo Montecarlo",
             "type": "python",
             "request": "launch",
-            "program": "${workspaceFolder}/cloudrun/demo.py",
+            "program": "${workspaceFolder}/cloudsend/demo.py",
             "console": "integratedTerminal",
             "cwd": "${workspaceFolder}",
             "args": ["config-montecarlo10.py","reset"]
@@ -35,7 +35,7 @@
             "name": "Maestro Server",
             "type": "python",
             "request": "launch",
-            "program": "${workspaceFolder}/cloudrun/maestroserver.py",
+            "program": "${workspaceFolder}/cloudsend/maestroserver.py",
             "console": "integratedTerminal",
             "cwd": "${workspaceFolder}",
             "args": ["-u"]

@@ -1,6 +1,6 @@
-from cloudrun import provider as cr
+from cloudsend import provider as cr
 import asyncio , os , sys , time
-from cloudrun.core import CloudRunProcessState
+from cloudsend.core import CloudSendProcessState
 import traceback
 import json
 import socket
@@ -50,7 +50,7 @@ def process_command(cr_client,command,args,conn):
 
         elif command == 'wait':
 
-            cr_client.wait_for_jobs_state(CloudRunProcessState.DONE|CloudRunProcessState.ABORTED)
+            cr_client.wait_for_jobs_state(CloudSendProcessState.DONE|CloudSendProcessState.ABORTED)
 
         elif command == 'get_states':
 

@@ -1,7 +1,7 @@
 
 from abc import ABC , abstractmethod
-from cloudrun.provider import CloudRunProvider , bcolors , line_buffered 
-from cloudrun.core import *
+from cloudsend.provider import CloudSendProvider , bcolors , line_buffered 
+from cloudsend.core import *
 import copy , io
 from zipfile import ZipFile
 import os , fnmatch
@@ -18,10 +18,10 @@ random.seed()
 # Client handling MAESTRO instance #
 ####################################
 
-class CloudRunLightProvider(CloudRunProvider,ABC):
+class CloudSendLightProvider(CloudSendProvider,ABC):
 
     def __init__(self,conf):
-        CloudRunProvider.__init__(self,conf)
+        CloudSendProvider.__init__(self,conf)
         self._load()
 
         self.ssh_client = None
@@ -59,7 +59,7 @@ class CloudRunLightProvider(CloudRunProvider,ABC):
                     'project'      : self._config.get('project',None) ,
                     'region'       : region
                 }
-                self._maestro = CloudRunInstance(maestro_cfg,None)
+                self._maestro = CloudSendInstance(maestro_cfg,None)
 
     def _deploy_maestro(self,reset):
         # deploy the maestro ...
@@ -71,23 +71,23 @@ class CloudRunLightProvider(CloudRunProvider,ABC):
         instanceid , ssh_client , ftp_client = self._wait_and_connect(self._maestro)
 
         home_dir = self._maestro.get_home_dir()
-        cloudrun_dir = self._maestro.path_join( home_dir , 'cloudrun' )
-        files_dir = self._maestro.path_join( cloudrun_dir , 'files' )
-        ready_file = self._maestro.path_join( cloudrun_dir , 'ready' )
+        cloudsend_dir = self._maestro.path_join( home_dir , 'cloudsend' )
+        files_dir = self._maestro.path_join( cloudsend_dir , 'files' )
+        ready_file = self._maestro.path_join( cloudsend_dir , 'ready' )
         maestro_file = self._maestro.path_join( home_dir , 'maestro' )
         aws_dir = self._maestro.path_join( home_dir , '.aws' )
         aws_config = self._maestro.path_join( aws_dir , 'config' )
-        if self._maestro.get_platform() == CloudRunPlatform.LINUX or self._maestro.get_platform() == CloudRunPlatform.WINDOWS_WSL :
-            activate_file = self._maestro.path_join( cloudrun_dir , '.venv' , 'maestro' , 'bin' , 'activate' )
-        elif self._maestro.get_platform() == CloudRunPlatform.WINDOWS:
-            activate_file = self._maestro.path_join( cloudrun_dir , '.venv' , 'maestro' , 'Scripts' , 'activate.bat' )
+        if self._maestro.get_platform() == CloudSendPlatform.LINUX or self._maestro.get_platform() == CloudSendPlatform.WINDOWS_WSL :
+            activate_file = self._maestro.path_join( cloudsend_dir , '.venv' , 'maestro' , 'bin' , 'activate' )
+        elif self._maestro.get_platform() == CloudSendPlatform.WINDOWS:
+            activate_file = self._maestro.path_join( cloudsend_dir , '.venv' , 'maestro' , 'Scripts' , 'activate.bat' )
         
         re_init  = self._test_reupload(self._maestro,ready_file, ssh_client)
 
         if re_init:
             # remove the file
             self._exec_command(ssh_client,'rm -f ' + ready_file )
-            # make cloudrun dir
+            # make cloudsend dir
             self._exec_command(ssh_client,'mkdir -p ' + files_dir ) 
             # mark it as maestro...
             self._exec_command(ssh_client,'echo "" > ' + maestro_file ) 
@@ -101,8 +101,8 @@ class CloudRunLightProvider(CloudRunProvider,ABC):
             self.grant_admin_rights(self._maestro)
             # setup auto_stop behavior for maestro
             self.setup_auto_stop(self._maestro)
-            # deploy CloudRun on the maestro
-            self._deploy_cloudrun(ssh_client,ftp_client)
+            # deploy CloudSend on the maestro
+            self._deploy_cloudsend(ssh_client,ftp_client)
             # mark as ready
             self._exec_command(ssh_client,'if [ -f '+activate_file+' ]; then echo "" > '+ready_file+' ; fi')
 
@@ -111,7 +111,7 @@ class CloudRunLightProvider(CloudRunProvider,ABC):
 
         # let's redeploy the code every time for now ... (if not already done in re_init)
         if not re_init and reset:
-            self._deploy_cloudrun_files(ssh_client,ftp_client)
+            self._deploy_cloudsend_files(ssh_client,ftp_client)
 
         # start the server (if not already started)
         self._run_server(ssh_client)
@@ -129,16 +129,16 @@ class CloudRunLightProvider(CloudRunProvider,ABC):
         self.debug(1,"MAESTRO is READY",color=bcolors.OKCYAN)
 
 
-    def _deploy_cloudrun_files(self,ssh_client,ftp_client):
-        ftp_client.chdir(self._get_cloudrun_dir())
-        ftp_client.putfo(self._create_cloudrun_zip(),'cloudrun.zip')
+    def _deploy_cloudsend_files(self,ssh_client,ftp_client):
+        ftp_client.chdir(self._get_cloudsend_dir())
+        ftp_client.putfo(self._create_cloudsend_zip(),'cloudsend.zip')
         commands = [
-            { 'cmd' : 'cd '+self._get_cloudrun_dir()+' && unzip -o cloudrun.zip && rm cloudrun.zip' , 'out' : True } ,
+            { 'cmd' : 'cd '+self._get_cloudsend_dir()+' && unzip -o cloudsend.zip && rm cloudsend.zip' , 'out' : True } ,
         ]
         self._run_ssh_commands(self._maestro,ssh_client,commands) 
         
         filesOfDirectory = os.listdir('.')
-        pattern = "cloudrun*.pem"
+        pattern = "cloudsend*.pem"
         for file in filesOfDirectory:
             if fnmatch.fnmatch(file, pattern):
                 ftp_client.put(os.path.abspath(file),os.path.basename(file))
@@ -149,13 +149,13 @@ class CloudRunLightProvider(CloudRunProvider,ABC):
         self._run_ssh_commands(self._maestro,ssh_client,commands) 
 
 
-    def _deploy_cloudrun(self,ssh_client,ftp_client):
+    def _deploy_cloudsend(self,ssh_client,ftp_client):
 
-        # upload cloudrun files
-        self._deploy_cloudrun_files(ssh_client,ftp_client)
+        # upload cloudsend files
+        self._deploy_cloudsend_files(ssh_client,ftp_client)
         
         maestroenv_sh = self._get_remote_files_path( 'maestroenv.sh' )
-        # unzip cloudrun files, install and run
+        # unzip cloudsend files, install and run
         commands = [
             { 'cmd' : maestroenv_sh , 'out' : True } ,
         ]
@@ -173,7 +173,7 @@ class CloudRunLightProvider(CloudRunProvider,ABC):
     def _deploy_config(self,ssh_client,ftp_client):
         config , mkdir_cmd , files_to_upload_per_dir = self._translate_config_for_maestro()
         # serialize the config and send it to the maestro
-        ftp_client.chdir(self._get_cloudrun_dir())
+        ftp_client.chdir(self._get_cloudsend_dir())
         ftp_client.putfo(io.StringIO(json.dumps(config)),'config.json')
         # execute the mkdir_cmd
         if mkdir_cmd:
@@ -200,19 +200,19 @@ class CloudRunLightProvider(CloudRunProvider,ABC):
                 config['instances'][i]['region'] = self.get_region()
 
         for i , env_cfg in enumerate(config.get('environments')):
-            # Note: we are using a simple CloudRunEnvironment here 
+            # Note: we are using a simple CloudSendEnvironment here 
             # we're not deploying at this stage
-            # but this will help use re-use all the business logic in cloudrunutils envs
+            # but this will help use re-use all the business logic in cloudsendutils envs
             # in order to standardize the environment and create an inline version 
-            # through the CloudRunEnvironment::json() method
-            env = CloudRunEnvironment(self._config.get('project'),env_cfg)
+            # through the CloudSendEnvironment::json() method
+            env = CloudSendEnvironment(self._config.get('project'),env_cfg)
             config['environments'][i] = env.get_env_obj()
             config['environments'][i]['_computed_'] = True
 
         files_to_upload = dict()
 
         for i , job_cfg in enumerate(config.get('jobs')):
-            job = CloudRunJob(job_cfg,i)
+            job = CloudSendJob(job_cfg,i)
             run_script = job.get_config('run_script')  
             ref_file0  = run_script
             args       = ref_file0.split(' ')
@@ -261,19 +261,19 @@ class CloudRunLightProvider(CloudRunProvider,ABC):
 
     def _resolve_maestro_job_paths(self,upfile,ref_file,home_dir):
         files_path = self._maestro.path_join( home_dir , 'files' )
-        return cloudrunutils.resolve_paths(self._maestro,upfile,ref_file,files_path,True) # True for mutualized 
+        return cloudsendutils.resolve_paths(self._maestro,upfile,ref_file,files_path,True) # True for mutualized 
 
     def _get_home_dir(self):
         return self._maestro.get_home_dir()
 
-    def _get_cloudrun_dir(self):
-        return self._maestro.path_join( self._get_home_dir() , 'cloudrun' )
+    def _get_cloudsend_dir(self):
+        return self._maestro.path_join( self._get_home_dir() , 'cloudsend' )
 
     def _get_remote_files_path(self,files=None):
         if not files:
-            return self._maestro.path_join( self._get_cloudrun_dir() , 'cloudrun' , 'resources' , 'remote_files' )        
+            return self._maestro.path_join( self._get_cloudsend_dir() , 'cloudsend' , 'resources' , 'remote_files' )        
         else:
-            return self._maestro.path_join( self._get_cloudrun_dir() , 'cloudrun' , 'resources' , 'remote_files' , files )        
+            return self._maestro.path_join( self._get_cloudsend_dir() , 'cloudsend' , 'resources' , 'remote_files' , files )        
 
     def _zip_package(self,package_name,src,dest,zipObj):
         dest = os.path.join( dest , os.path.basename(src) ).rstrip( os.sep )
@@ -290,7 +290,7 @@ class CloudRunLightProvider(CloudRunProvider,ABC):
                 self.debug(2,"Writing",src)
                 zipObj.writestr(dest,data_str)
 
-    def _create_cloudrun_zip(self):
+    def _create_cloudsend_zip(self):
         zip_buffer = io.BytesIO()
         # create a ZipFile object
         with ZipFile(zip_buffer, 'a') as zipObj:    
@@ -299,7 +299,7 @@ class CloudRunLightProvider(CloudRunProvider,ABC):
                     data = thefile.read()
                     zipObj.writestr(otherfilepath,data)
             # write the package
-            self._zip_package("cloudrun",".","cloudrun",zipObj)
+            self._zip_package("cloudsend",".","cloudsend",zipObj)
 
         self.debug(2,"ZIP BUFFER SIZE =",zip_buffer.getbuffer().nbytes)
 
@@ -331,9 +331,9 @@ class CloudRunLightProvider(CloudRunProvider,ABC):
 
         # -u for no buffering
         waitmaestro_sh = self._get_remote_files_path( 'waitmaestro.sh' )
-        venv_python    = self._maestro.path_join( self._get_cloudrun_dir() , '.venv' , 'maestro' , 'bin' , 'python3' )
+        venv_python    = self._maestro.path_join( self._get_cloudsend_dir() , '.venv' , 'maestro' , 'bin' , 'python3' )
 
-        cmd = "cd "+self._get_cloudrun_dir()+ " && "+waitmaestro_sh+" && sudo "+venv_python+" -u -m cloudrun.maestroclient " + maestro_command
+        cmd = "cd "+self._get_cloudsend_dir()+ " && "+waitmaestro_sh+" && sudo "+venv_python+" -u -m cloudsend.maestroclient " + maestro_command
 
         stdin , stdout , stderr = self._exec_command(self.ssh_client,cmd)
 
@@ -447,7 +447,7 @@ class CloudRunLightProvider(CloudRunProvider,ABC):
 
         randnum          = str(random.randrange(1000))
         homedir          = self._maestro.get_home_dir()
-        maestro_dir      = self._maestro.path_join( homedir , "cloudrun_tmp_fetch" + randnum )
+        maestro_dir      = self._maestro.path_join( homedir , "cloudsend_tmp_fetch" + randnum )
         maestro_tar_file = "maestro"+randnum+".tar"
         maestro_tar_path = self._maestro.path_join( homedir , maestro_tar_file )
 
@@ -495,7 +495,7 @@ class CloudRunLightProvider(CloudRunProvider,ABC):
     def setup_auto_stop(self,instance):
         pass
 
-    # needed by CloudRunProvider::_wait_for_instance 
+    # needed by CloudSendProvider::_wait_for_instance 
     def serialize_state(self):
         pass
 

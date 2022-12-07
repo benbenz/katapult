@@ -5,7 +5,7 @@ import os , signal
 import json
 import pickle
 import math
-from cloudrun.core import *
+from cloudsend.core import *
 from datetime import date, datetime
 import traceback
 
@@ -58,7 +58,7 @@ class ConfigManager():
                         # starts calling the Service here !
                         # instance , created = self.start_instance( real_inst_cfg )
                         # let's put some dummy instances for now ...
-                        instance = CloudRunInstance( real_inst_cfg , None, None )
+                        instance = CloudSendInstance( real_inst_cfg , None, None )
                         self._instances.append( instance )
                     else:
                         total_inst_cpus = inst_cfg.get('cpus',1)
@@ -104,7 +104,7 @@ class ConfigManager():
                             self._load_other_instance_info(real_inst_cfg)
 
                             # let's put some dummy instances for now ...
-                            instance = CloudRunInstance( real_inst_cfg , None, None )
+                            instance = CloudSendInstance( real_inst_cfg , None, None )
                             self._instances.append( instance )
 
                             cpus_created = cpus_created + inst_cpus
@@ -116,7 +116,7 @@ class ConfigManager():
             for env_cfg in env_cfgs:
                 # copy the dev global paramter to the environment configuration (will be used for names)
                 env_cfg['dev']  = self._config.get('dev',False)
-                env = CloudRunEnvironment(projectName,env_cfg)
+                env = CloudSendEnvironment(projectName,env_cfg)
                 self._environments.append(env)
 
         #self._jobs = [ ] 
@@ -124,7 +124,7 @@ class ConfigManager():
             rank=0
             for i,job_cfg in enumerate(job_cfgs):
                 for j in range(job_cfg.get('repeat',1)):
-                    job = CloudRunJob(job_cfg,rank)
+                    job = CloudSendJob(job_cfg,rank)
                     self._jobs.append(job)
                     rank = rank + 1
 
@@ -175,31 +175,31 @@ class ConfigManager():
         return None
 
 # def json_get_key(obj):
-#     if isinstance(obj,CloudRunInstance):
-#         return "__cloudrun_instance:" + obj.get_name()
-#     elif isinstance(obj,CloudRunDeployedEnvironment):
-#         return "__cloudrun_environment_dpl:" + obj.get_name()
-#     elif isinstance(obj,CloudRunEnvironment):
-#         return "__cloudrun_environment:" + obj.get_name()
-#     elif isinstance(obj,CloudRunDeployedJob):
-#         return "__cloudrun_job_dpl:" + obj.get_hash() + "|" + str(obj.get_job().get_rank()) + "," + str(obj.get_rank())
-#     elif isinstance(obj,CloudRunJob):
-#         return "__cloudrun_job:" + obj.get_hash() + "|" + str(obj.get_rank()) 
-#     elif isinstance(obj,CloudRunProcess):
-#         return "__cloudrun_process:" + obj.get_uid()
+#     if isinstance(obj,CloudSendInstance):
+#         return "__cloudsend_instance:" + obj.get_name()
+#     elif isinstance(obj,CloudSendDeployedEnvironment):
+#         return "__cloudsend_environment_dpl:" + obj.get_name()
+#     elif isinstance(obj,CloudSendEnvironment):
+#         return "__cloudsend_environment:" + obj.get_name()
+#     elif isinstance(obj,CloudSendDeployedJob):
+#         return "__cloudsend_job_dpl:" + obj.get_hash() + "|" + str(obj.get_job().get_rank()) + "," + str(obj.get_rank())
+#     elif isinstance(obj,CloudSendJob):
+#         return "__cloudsend_job:" + obj.get_hash() + "|" + str(obj.get_rank()) 
+#     elif isinstance(obj,CloudSendProcess):
+#         return "__cloudsend_process:" + obj.get_uid()
 #     else:
 #         return str(cr_obj)
 
-# class CloudRunJSONEncoder(json.JSONEncoder):
+# class CloudSendJSONEncoder(json.JSONEncoder):
 
 #     def __init__(self, *args, **kwargs):
 #         kwargs['check_circular'] = False  # no need to check anymore
-#         super(CloudRunJSONEncoder,self).__init__(*args, **kwargs)
+#         super(CloudSendJSONEncoder,self).__init__(*args, **kwargs)
 #         self.proc_objs = []
 
 #     def default(self, obj):
 
-#         if  isinstance(obj, (CloudRunInstance, CloudRunEnvironment, CloudRunDeployedEnvironment, CloudRunJob, CloudRunDeployedJob, CloudRunProcess)):
+#         if  isinstance(obj, (CloudSendInstance, CloudSendEnvironment, CloudSendDeployedEnvironment, CloudSendJob, CloudSendDeployedJob, CloudSendProcess)):
 #             if obj in self.proc_objs:
 #                 return json_get_key(obj)
 #             else:
@@ -209,9 +209,9 @@ class ConfigManager():
 #         elif isinstance(obj, (datetime, date)):
 #             return obj.isoformat()  # Let the base class default method raise the TypeError
 
-#         return super(CloudRunJSONEncoder,self).default(obj) #json.JSONEncoder.default(self, obj)
+#         return super(CloudSendJSONEncoder,self).default(obj) #json.JSONEncoder.default(self, obj)
 
-# class CloudRunJSONDecoder(json.JSONDecoder):
+# class CloudSendJSONDecoder(json.JSONDecoder):
 #     def __init__(self, *args, **kwargs):
 #         json.JSONDecoder.__init__(self, object_hook=self.object_hook, *args, **kwargs)
 #         self._references = dict()
@@ -221,28 +221,28 @@ class ConfigManager():
 #         if '__class__' in dct:
 #             class_name = dct['__class__']
 #             try :
-#                 if class_name == 'CloudRunInstance':
-#                     obj = CloudRunInstance(dct['_config'],dct['_id'],dct['_data'])
+#                 if class_name == 'CloudSendInstance':
+#                     obj = CloudSendInstance(dct['_config'],dct['_id'],dct['_data'])
 #                     obj.__dict__.update(dct)
-#                 elif class_name == 'CloudRunEnvironment':
-#                     obj = CloudRunEnvironment(dct['_project'],dct['_config'])
+#                 elif class_name == 'CloudSendEnvironment':
+#                     obj = CloudSendEnvironment(dct['_project'],dct['_config'])
 #                     obj.__dict__.update(dct)
-#                 elif class_name == 'CloudRunDeployedEnvironment':
+#                 elif class_name == 'CloudSendDeployedEnvironment':
 #                     env_ref = None #self._references[dct['_env']]
 #                     ins_ref = None #self._references[dct['_instance']]
-#                     obj = CloudRunDeployedEnvironment.__new__(CloudRunDeployedEnvironment) #CloudRunDeployedEnvironment(env_ref,ins_ref)
+#                     obj = CloudSendDeployedEnvironment.__new__(CloudSendDeployedEnvironment) #CloudSendDeployedEnvironment(env_ref,ins_ref)
 #                     obj.__dict__.update(dct)
-#                 elif class_name == 'CloudRunJob':
-#                     obj = CloudRunJob(dct['_config'],dct['_rank'])
+#                 elif class_name == 'CloudSendJob':
+#                     obj = CloudSendJob(dct['_config'],dct['_rank'])
 #                     obj.__dict__.update(dct)
-#                 elif class_name == 'CloudRunDeployedJob':
+#                 elif class_name == 'CloudSendDeployedJob':
 #                     job_ref = None #self._references[dct['_job']]
 #                     env_ref = None #self._references[dct['_env']]
-#                     obj = CloudRunDeployedJob.__new__(CloudRunDeployedJob) #CloudRunDeployedJob(job_ref,env_ref)
+#                     obj = CloudSendDeployedJob.__new__(CloudSendDeployedJob) #CloudSendDeployedJob(job_ref,env_ref)
 #                     obj.__dict__.update(dct)
-#                 elif class_name == 'CloudRunProcess':
+#                 elif class_name == 'CloudSendProcess':
 #                     job_ref = None #self._references[dct['_job']]
-#                     obj = CloudRunProcess.__new__(CloudRunProcess) #CloudRunProcess(job_ref,dct['_uid'],dct['_pid'],dct['_batch_uid'])
+#                     obj = CloudSendProcess.__new__(CloudSendProcess) #CloudSendProcess(job_ref,dct['_uid'],dct['_pid'],dct['_batch_uid'])
 #                     obj.__dict__.update(dct)
 #                 self._references[json_get_key(obj)] = obj
 #                 return obj
@@ -274,7 +274,7 @@ class StateSerializer():
                 lastp = job.get_last_process()
                 self._provider.debug(3,"PROCESS TO SERIALIZE",lastp)
 
-            #json_data = json.dumps(state,indent=4,cls=CloudRunJSONEncoder)
+            #json_data = json.dumps(state,indent=4,cls=CloudSendJSONEncoder)
             with open(self._state_file,'wb') as state_file:
                 pickle.dump(state,state_file)#,protocol=0) # protocol 0 = readable
                 #state_file.write(json_data)
@@ -289,7 +289,7 @@ class StateSerializer():
         try:
             with open(self._state_file,'rb') as state_file:
                 #json_data = state_file.read()
-                #objects   = json.loads(json_data,cls=CloudRunJSONDecoder)
+                #objects   = json.loads(json_data,cls=CloudSendJSONDecoder)
                 self._loaded = pickle.load(state_file)
         except Exception as e:
             traceback.print_exc()

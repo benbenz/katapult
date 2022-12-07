@@ -1,27 +1,27 @@
 from enum import IntFlag
 from abc import ABC , abstractmethod
-import cloudrun.utils as cloudrunutils
+import cloudsend.utils as cloudsendutils
 import json
 import copy
 import os
 
-cr_keypairName         = 'cloudrun-keypair'
-cr_secGroupName        = 'cloudrun-sec-group-allow-ssh'
-cr_secGroupNameMaestro = 'cloudrun-sec-group-allow-maestro'
-cr_bucketName          = 'cloudrun-bucket'
-cr_vpcName             = 'cloudrun-vpc'
-cr_instanceNameRoot    = 'cloudrun-instance'
-cr_instanceMaestro     = 'cloudrun-maestro'
-cr_environmentNameRoot = 'cloudrun-env'
-cr_maestroProfileName  = 'cloudrun-maestro-profile'
-cr_maestroRoleName     = 'cloudrun-maestro-role'
-cr_maestroPolicyName   = 'cloudrun-maestro-policy'
+cr_keypairName         = 'cloudsend-keypair'
+cr_secGroupName        = 'cloudsend-sec-group-allow-ssh'
+cr_secGroupNameMaestro = 'cloudsend-sec-group-allow-maestro'
+cr_bucketName          = 'cloudsend-bucket'
+cr_vpcName             = 'cloudsend-vpc'
+cr_instanceNameRoot    = 'cloudsend-instance'
+cr_instanceMaestro     = 'cloudsend-maestro'
+cr_environmentNameRoot = 'cloudsend-env'
+cr_maestroProfileName  = 'cloudsend-maestro-profile'
+cr_maestroRoleName     = 'cloudsend-maestro-role'
+cr_maestroPolicyName   = 'cloudsend-maestro-policy'
 
 
-class CloudRunError(Exception):
+class CloudSendError(Exception):
     pass
 
-class CloudRunInstanceState(IntFlag):
+class CloudSendInstanceState(IntFlag):
     UNKNOWN     = 0
     STARTING    = 1  # instance starting
     RUNNING     = 2  # instance running
@@ -32,7 +32,7 @@ class CloudRunInstanceState(IntFlag):
     ANY         = 32 + 16 + 8 + 4 + 2 + 1     
 
 
-class CloudRunProcessState(IntFlag):
+class CloudSendProcessState(IntFlag):
 #    FOO = 100
     UNKNOWN   = 0
     WAIT      = 1  # waiting for bootstraping
@@ -43,12 +43,12 @@ class CloudRunProcessState(IntFlag):
     ABORTED   = 32 # script has been aborted
     ANY       = 32 + 16 + 8 + 4 + 2 + 1 
 
-class CloudRunPlatform(IntFlag):
+class CloudSendPlatform(IntFlag):
     LINUX       = 1
     WINDOWS     = 2
     WINDOWS_WSL = 3
 
-class CloudRunInstance():
+class CloudSendInstance():
 
     def __init__(self,config,id,proprietaryData=None):
         # instance region
@@ -63,7 +63,7 @@ class CloudRunInstance():
         self._ip_addr_priv = None
         self._dns_addr_priv = None
         # state
-        self._state    = CloudRunProcessState.UNKNOWN
+        self._state    = CloudSendProcessState.UNKNOWN
         # the config the instance has been created on
         self._config   = config 
         # dict data associated with it (AWS response data e.g.)
@@ -74,7 +74,7 @@ class CloudRunInstance():
         self._envs     = dict()
         # invalid
         self._invalid  = False
-        self._platform = CloudRunPlatform.LINUX
+        self._platform = CloudSendPlatform.LINUX
 
     def get_region(self):
         return self._region
@@ -110,18 +110,18 @@ class CloudRunInstance():
         return self._platform
 
     def get_home_dir(self,absolute=True):
-        if self._platform == CloudRunPlatform.LINUX or self._platform == CloudRunPlatform.WINDOWS_WSL:
+        if self._platform == CloudSendPlatform.LINUX or self._platform == CloudSendPlatform.WINDOWS_WSL:
             return '/home/' + self.get_config('img_username') if absolute else '%HOME'
-        elif self._platform == CloudRunPlatform.WINDOWS:
+        elif self._platform == CloudSendPlatform.WINDOWS:
             return 'C:\>' + self.get_config('img_username') if absolute else '%HOME%'
 
     def get_global_dir(self):
         return self.path_join( self.get_home_dir() , 'run' )
 
     def path_join(self,*args):
-        if self._platform == CloudRunPlatform.LINUX or self._platform == CloudRunPlatform.WINDOWS_WSL:
+        if self._platform == CloudSendPlatform.LINUX or self._platform == CloudSendPlatform.WINDOWS_WSL:
             return '/'.join(args)
-        elif self._platform == CloudRunPlatform.WINDOWS:
+        elif self._platform == CloudSendPlatform.WINDOWS:
             return '\\'.join(args)
 
     def path_dirname(self,path):
@@ -144,9 +144,9 @@ class CloudRunInstance():
 
 
     def path_sep(self):
-        if self._platform == CloudRunPlatform.LINUX or self._platform == CloudRunPlatform.WINDWS_WSL:
+        if self._platform == CloudSendPlatform.LINUX or self._platform == CloudSendPlatform.WINDWS_WSL:
             return '/'
-        elif self._platform == CloudRunPlatform.WINDWS:
+        elif self._platform == CloudSendPlatform.WINDWS:
             return '\\'
 
     def set_ip_addr(self,value):
@@ -228,13 +228,13 @@ class CloudRunInstance():
         return "{0}: NAME = {1} , IP = {2}".format(type(self).__name__,self._name,self._ip_addr)
 
 
-class CloudRunEnvironment():
+class CloudSendEnvironment():
 
     def __init__(self,projectName,env_config):
         self._config   = env_config
         self._project  = projectName
-        _env_obj       = cloudrunutils.compute_environment_object(env_config)
-        self._hash     = cloudrunutils.compute_environment_hash(_env_obj)
+        _env_obj       = cloudsendutils.compute_environment_object(env_config)
+        self._hash     = cloudsendutils.compute_environment_hash(_env_obj)
         if not self._config.get('name'):
             self._name = cr_environmentNameRoot
 
@@ -258,18 +258,18 @@ class CloudRunEnvironment():
         return self._config.get(key)
 
     def get_env_obj(self):
-        _env_obj = cloudrunutils.compute_environment_object(self._config)
+        _env_obj = cloudsendutils.compute_environment_object(self._config)
         return _env_obj 
 
     def json(self):
         return json.dumps(self.get_env_obj())          
 
     def deploy(self,instance):
-        return CloudRunDeployedEnvironment(self,instance)
+        return CloudSendDeployedEnvironment(self,instance)
 
 # "Temporary" objects used when starting scripts      
 
-class CloudRunDeployedEnvironment(CloudRunEnvironment):
+class CloudSendDeployedEnvironment(CloudSendEnvironment):
 
     # constructor by copy...
     def __init__(self, env, instance):
@@ -296,22 +296,22 @@ class CloudRunDeployedEnvironment(CloudRunEnvironment):
         # replace __REQUIREMENTS_TXT_LINK__ with the actual requirements.txt path (dependent of config and env hash)
         # the file needs to be absolute
         requirements_txt_path = self._instance.path_join(self._path,'requirements.txt')
-        _env_obj = cloudrunutils.update_requirements_path(_env_obj,requirements_txt_path)
+        _env_obj = cloudsendutils.update_requirements_path(_env_obj,requirements_txt_path)
         return json.dumps(_env_obj)  
 
 
-class CloudRunJob():
+class CloudSendJob():
 
     def __init__(self,job_cfg,rank):
         self._config    = job_cfg
         self._rank      = rank
-        self._hash      = cloudrunutils.compute_job_hash(self._config)
+        self._hash      = cloudsendutils.compute_job_hash(self._config)
         self._env       = None
         self._instance  = None
         self._deployed = [ ]
         if (not 'input_file' in self._config) or (not 'output_file' in self._config) or not isinstance(self._config['input_file'],str) or not isinstance(self._config['output_file'],str):
             print("\n\n\033[91mConfiguration requires an input and output file names\033[0m\n\n")
-            raise CloudRunError() 
+            raise CloudSendError() 
 
     def attach_env(self,env):
         self._env = env 
@@ -336,7 +336,7 @@ class CloudRunJob():
         return self._deployed
 
     def deploy(self,dpl_env,add_permanently=True):
-        dpl_job = CloudRunDeployedJob(self,dpl_env)
+        dpl_job = CloudSendDeployedJob(self,dpl_env)
         if add_permanently:
             self._deployed.append(dpl_job)
         return dpl_job
@@ -344,7 +344,7 @@ class CloudRunJob():
     def has_completed(self):
         for dpl_job in self._deployed:
             for process in dpl_job.get_processes():
-                if process.get_state() == CloudRunProcessState.DONE:
+                if process.get_state() == CloudSendProcessState.DONE:
                     return True
         return False
 
@@ -383,7 +383,7 @@ class CloudRunJob():
 # We proxy all parent methods instead of using inheritance
 # this allows to keep the same behavior while keeping the link and sharing memory objects
 
-class CloudRunDeployedJob(CloudRunJob):
+class CloudSendDeployedJob(CloudSendJob):
 
     def __init__(self,job,dpl_env):
         #super().__init__( job._config )
@@ -395,7 +395,7 @@ class CloudRunDeployedJob(CloudRunJob):
         self._env       = dpl_env
         self._instance  = dpl_env.get_instance()
         self._path      = self._instance.path_join( dpl_env.get_path() , self.get_hash() )
-        self._command   = cloudrunutils.compute_job_command(self._instance,self._path,self._job._config)
+        self._command   = cloudsendutils.compute_job_command(self._instance,self._path,self._job._config)
 
     def attach_process(self,process):
         self._processes.append(process)
@@ -407,7 +407,7 @@ class CloudRunDeployedJob(CloudRunJob):
         return self._command
 
     def attach_env(self,env):
-        raise CloudRunError('Can not attach env to deployed job')
+        raise CloudSendError('Can not attach env to deployed job')
 
     # proxied
     def get_rank(self):
@@ -431,20 +431,20 @@ class CloudRunDeployedJob(CloudRunJob):
         return self._processes
 
     def deploy(self,dpl_env):
-        raise CloudRunError('Can not deploy a deployed job')
+        raise CloudSendError('Can not deploy a deployed job')
 
     def set_instance(self,instance):
-        raise CloudRunError('Can not set the instance of a deployed job')
+        raise CloudSendError('Can not set the instance of a deployed job')
 
 
-class CloudRunProcess():
+class CloudSendProcess():
 
     def __init__(self,dpl_job,uid,pid=None,batch_uid=None):
         self._job    = dpl_job
         self._uid   = uid
         self._pid   = pid
         self._batch_uid = batch_uid
-        self._state = CloudRunProcessState.UNKNOWN
+        self._state = CloudSendProcessState.UNKNOWN
         self._job.attach_process(self)
      
     def get_uid(self):
@@ -474,15 +474,15 @@ class CloudRunProcess():
 
     def str_simple(self):
         if self._batch_uid:
-            return "CloudRunProcess: UID = {0} , PID = {1} , BATCH = {2} , STATE = {3}".format(self._uid,str(self._pid).rjust(5),self._batch_uid,self._state.name)
+            return "CloudSendProcess: UID = {0} , PID = {1} , BATCH = {2} , STATE = {3}".format(self._uid,str(self._pid).rjust(5),self._batch_uid,self._state.name)
         else:
-            return "CloudRunProcess: UID = {0} , PID = {1} , STATE = {2}".format(self._uid,str(self._pid).rjust(5),self._state.name)
+            return "CloudSendProcess: UID = {0} , PID = {1} , STATE = {2}".format(self._uid,str(self._pid).rjust(5),self._state.name)
 
     def __repr__(self):
-        return "CloudRunProcess: job = {0} , UID = {1} , PID = {2} , STATE = {3}".format(self._job,self._uid,str(self._pid).rjust(5),self._state.name)
+        return "CloudSendProcess: job = {0} , UID = {1} , PID = {2} , STATE = {3}".format(self._job,self._uid,str(self._pid).rjust(5),self._state.name)
          
     def __str__(self):
-        return "CloudRunProcess: job = {0} , UID = {1} , PID = {2} , STATE = {3}".format(self._job,self._uid,str(self._pid).rjust(5),self._state.name)
+        return "CloudSendProcess: job = {0} , UID = {1} , PID = {2} , STATE = {3}".format(self._job,self._uid,str(self._pid).rjust(5),self._state.name)
 
 
 
@@ -493,7 +493,7 @@ def init_instance_name(instance_config):
         if instance_config.get('dev',False)==True:
             append_str = '' 
         else:
-            append_str = '-' + cloudrunutils.compute_instance_hash(instance_config)
+            append_str = '-' + cloudsendutils.compute_instance_hash(instance_config)
 
         if 'rank' not in instance_config:
             debug(1,"\033[93mDeveloper: you need to set dynamically a 'rank' attribute in the config for the new instance\033[0m")
