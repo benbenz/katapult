@@ -1,11 +1,11 @@
 import boto3
 import os , sys
 from .utils import *
-from cloudrun.core     import CloudRunError , CloudRunInstance , CloudRunInstanceState , CloudRunPlatform
-from cloudrun.core     import cr_keypairName , cr_secGroupName , cr_secGroupNameMaestro , cr_bucketName , cr_vpcName , cr_maestroRoleName , cr_maestroProfileName, cr_maestroPolicyName , init_instance_name
-from cloudrun.provider import debug , bcolors
-from cloudrun.providerfat import CloudRunFatProvider
-from cloudrun.providerlight import CloudRunLightProvider
+from cloudsend.core     import CloudSendError , CloudSendInstance , CloudSendInstanceState , CloudSendPlatform
+from cloudsend.core     import cr_keypairName , cr_secGroupName , cr_secGroupNameMaestro , cr_bucketName , cr_vpcName , cr_maestroRoleName , cr_maestroProfileName, cr_maestroPolicyName , init_instance_name
+from cloudsend.provider import debug , bcolors
+from cloudsend.providerfat import CloudSendFatProvider
+from cloudsend.providerlight import CloudSendLightProvider
 from botocore.exceptions import ClientError
 from datetime import datetime , timedelta
 from botocore.config import Config
@@ -66,7 +66,7 @@ def aws_create_keypair(session,region,keypair_name,key_filename,force=False):
             debug(1,"The account is not authorized to create a keypair, please specify an existing keypair in the configuration or add Administrator privileges to the account")
             keypair = None
             #sys.exit()
-            raise CloudRunError()
+            raise CloudSendError()
 
         elif 'DryRunOperation' in errmsg: # we are good with credentials
             try :
@@ -105,14 +105,14 @@ def aws_create_keypair(session,region,keypair_name,key_filename,force=False):
                     debug(1,"An unknown error occured while retrieving the KeyPair")
                     debug(2,errmsg2)
                     #sys.exit()
-                    raise CloudRunError()
+                    raise CloudSendError()
 
         
         else:
             debug(1,"An unknown error occured while creating the KeyPair")
             debug(2,errmsg)
             #sys.exit()
-            raise CloudRunError()
+            raise CloudSendError()
     
     return keypair 
 
@@ -205,7 +205,7 @@ def aws_create_security_group(session,region,vpc):
     if secGroup is None:
         debug(1,"An unknown error occured while creating the security group")
         #sys.exit()
-        raise CloudRunError()
+        raise CloudSendError()
     
     debug(2,secGroup) 
 
@@ -253,7 +253,7 @@ def aws_add_maestro_security_group(session,instance):
     if secGroup is None:
         debug(1,"An unknown error occured while creating the security group")
         #sys.exit()
-        raise CloudRunError()
+        raise CloudSendError()
     
     debug(2,secGroup) 
 
@@ -351,7 +351,7 @@ def aws_find_instance(session,instance_config):
         instance_data = existing['Reservations'][0]['Instances'][0]
         debug(1,"Found exisiting instance !",instance_data['InstanceId'],instanceName)
         debug(3,instance_data)
-        instance = CloudRunInstance( instance_config , instance_data['InstanceId'] , instance_data )
+        instance = CloudSendInstance( instance_config , instance_data['InstanceId'] , instance_data )
         return instance 
     
     else:
@@ -397,7 +397,7 @@ def aws_create_instance(session,instance_config,vpc,subnet,secGroup,keypair_name
         instance_data = existing['Reservations'][0]['Instances'][0]
         debug(1,"Found exisiting instance !",instance_data['InstanceId'])
         debug(3,instance_data)
-        instance = CloudRunInstance( instance_config, instance_data['InstanceId'] , instance_data )
+        instance = CloudSendInstance( instance_config, instance_data['InstanceId'] , instance_data )
         return instance , created
 
     if instance_config.get('cpus') is not None:
@@ -496,14 +496,14 @@ def aws_create_instance(session,instance_config,vpc,subnet,secGroup,keypair_name
             sys.exit()
         else:
             debug(1,"An error occured while trying to create this instance",errmsg)
-        raise CloudRunError()
+        raise CloudSendError()
 
 
     created = True
 
     debug(2,instances["Instances"][0])
 
-    instance = CloudRunInstance( instance_config, instances["Instances"][0]["InstanceId"] , instances["Instances"][0] )
+    instance = CloudSendInstance( instance_config, instances["Instances"][0]["InstanceId"] , instances["Instances"][0] )
 
     return instance , created
 
@@ -537,12 +537,12 @@ def aws_start_instance(session,instance):
                 errmsg2 = str(botoerr2)
                 if 'IncorrectSpotRequestState' in errmsg2:
                     debug(1,"Could not reboot instance because of SPOT ... ",errmsg2)
-                    raise CloudRunError()
+                    raise CloudSendError()
                     # terminate_instance(config,instance)
                 
         else:
             debug(2,botoerr)
-            raise CloudRunError()
+            raise CloudSendError()
 
 def aws_stop_instance(session,instance):
     region  = instance.get_region()
@@ -579,7 +579,7 @@ def aws_update_instance_info(session,instance):
 
     debug(3,instance_new_data)
 
-    #instance = CloudRunInstance( region , instance.get_name() , instance.get_id() , instance_config, instance_new )
+    #instance = CloudSendInstance( region , instance.get_name() , instance.get_id() , instance_config, instance_new )
     # proprietary values
     instance.set_dns_addr(instance_new_data.get('PublicDnsName'))
     instance.set_ip_addr(instance_new_data.get('PublicIpAddress'))
@@ -587,27 +587,27 @@ def aws_update_instance_info(session,instance):
     instance.set_ip_addr_priv(instance_new_data.get('PrivateIpAddress'))
     statestr = instance_new_data.get('State').get('Name').lower()
     #'terminated' | 'shutting-down' | 'pending' | 'running' | 'stopping' | 'stopped'
-    state = CloudRunInstanceState.UNKNOWN
+    state = CloudSendInstanceState.UNKNOWN
     if statestr == "pending":
-        state = CloudRunInstanceState.STARTING
+        state = CloudSendInstanceState.STARTING
     elif statestr == "running":
-        state = CloudRunInstanceState.RUNNING
+        state = CloudSendInstanceState.RUNNING
     elif statestr == 'stopping':
-        state = CloudRunInstanceState.STOPPING
+        state = CloudSendInstanceState.STOPPING
     elif statestr == 'stopped':
-        state = CloudRunInstanceState.STOPPED
+        state = CloudSendInstanceState.STOPPED
     elif statestr == 'shutting-down':
-        state = CloudRunInstanceState.TERMINATING
+        state = CloudSendInstanceState.TERMINATING
     elif statestr == 'terminated':
-        state = CloudRunInstanceState.TERMINATED
+        state = CloudSendInstanceState.TERMINATED
     instance.set_state(state)
     instance.set_data(instance_new_data)
 
     platform_details = instance_new_data.get('PlatformDetails').lower()
     if 'linux' in platform_details:
-        instance.set_platform(CloudRunPlatform.LINUX)
+        instance.set_platform(CloudSendPlatform.LINUX)
     elif 'windows' in platform_details:
-        instance.set_platform(CloudRunPlatform.WINDOWS_WSL)
+        instance.set_platform(CloudSendPlatform.WINDOWS_WSL)
 
     return instance
 
@@ -643,7 +643,7 @@ def aws_grant_admin_rights(session,instance):
         create_role_res = iam_client.create_role(
             RoleName=cr_maestroRoleName,
             AssumeRolePolicyDocument=json.dumps(trust_relationship_policy_another_aws_service),
-            Description='CloudRun Admin Role'
+            Description='CloudSend Admin Role'
         )
     except ClientError as error:
         if error.response['Error']['Code'] == 'EntityAlreadyExists':
@@ -786,7 +786,7 @@ def aws_get_suggested_image(session,region):
 # PUBLIC #
 ##########
 
-class AWSCloudRunProviderImpl():
+class AWSCloudSendProviderImpl():
 
     def find_instance(self,config):
         session = self.get_session(config)
@@ -847,46 +847,46 @@ class AWSCloudRunProviderImpl():
         return aws_get_session(self._profile_name,region)        
 
 
-class AWSCloudRunFatProvider(CloudRunFatProvider,AWSCloudRunProviderImpl):
+class AWSCloudSendFatProvider(CloudSendFatProvider,AWSCloudSendProviderImpl):
 
     def __init__(self, conf):
-        CloudRunFatProvider.__init__(self,conf)
+        CloudSendFatProvider.__init__(self,conf)
 
     def find_instance(self,config):
-        return AWSCloudRunProviderImpl.find_instance(self,config)
+        return AWSCloudSendProviderImpl.find_instance(self,config)
 
     def update_instance_info(self,instance):
-        AWSCloudRunProviderImpl.update_instance_info(self,instance)
+        AWSCloudSendProviderImpl.update_instance_info(self,instance)
 
     def create_keypair(self,region,force=False):
-        AWSCloudRunProviderImpl.create_keypair(self,region,force=False)
+        AWSCloudSendProviderImpl.create_keypair(self,region,force=False)
 
     def create_instance_objects(self,config):
-        return AWSCloudRunProviderImpl.create_instance_objects(self,config)
+        return AWSCloudSendProviderImpl.create_instance_objects(self,config)
 
     def start_instance(self,instance):
-        AWSCloudRunProviderImpl.start_instance(self,instance)
+        AWSCloudSendProviderImpl.start_instance(self,instance)
 
     def stop_instance(self,instance):
-        AWSCloudRunProviderImpl.stop_instance(self,instance)
+        AWSCloudSendProviderImpl.stop_instance(self,instance)
 
     def terminate_instance(self,instance):
-        AWSCloudRunProviderImpl.terminate_instance(self,instance)
+        AWSCloudSendProviderImpl.terminate_instance(self,instance)
 
     def reboot_instance(self,instance):
-        AWSCloudRunProviderImpl.reboot_instance(self,instance)
+        AWSCloudSendProviderImpl.reboot_instance(self,instance)
 
     def get_region(self):
-        return AWSCloudRunProviderImpl.get_region(self)
+        return AWSCloudSendProviderImpl.get_region(self)
     
     def get_account_id(self):
-        return AWSCloudRunProviderImpl.get_account_id(self)
+        return AWSCloudSendProviderImpl.get_account_id(self)
 
     def set_profile(self,profile_name):
-        AWSCloudRunProviderImpl.set_profile(self,profile_name)     
+        AWSCloudSendProviderImpl.set_profile(self,profile_name)     
 
     def get_suggested_image(self,region):
-        return AWSCloudRunProviderImpl.get_suggested_image(self,region)
+        return AWSCloudSendProviderImpl.get_suggested_image(self,region)
 
     def get_recommended_cpus(self,inst_cfg):
         return self._get_instancetypes_attribute(inst_cfg,"instancetypes-aws.csv","Instance type","Valid cores",list)
@@ -895,46 +895,46 @@ class AWSCloudRunFatProvider(CloudRunFatProvider,AWSCloudRunProviderImpl):
         return self._get_instancetypes_attribute(inst_cfg,"instancetypes-aws.csv","Instance type","Cores",int)
 
 
-class AWSCloudRunLightProvider(CloudRunLightProvider,AWSCloudRunProviderImpl):        
+class AWSCloudSendLightProvider(CloudSendLightProvider,AWSCloudSendProviderImpl):        
 
     def __init__(self, conf):
-        CloudRunLightProvider.__init__(self,conf)
+        CloudSendLightProvider.__init__(self,conf)
 
     def find_instance(self,config):
-        return AWSCloudRunProviderImpl.find_instance(self,config)
+        return AWSCloudSendProviderImpl.find_instance(self,config)
 
     def update_instance_info(self,instance):
-        AWSCloudRunProviderImpl.update_instance_info(self,instance)
+        AWSCloudSendProviderImpl.update_instance_info(self,instance)
 
     def create_keypair(self,region,force=False):
-        AWSCloudRunProviderImpl.create_keypair(self,region,force=False)
+        AWSCloudSendProviderImpl.create_keypair(self,region,force=False)
 
     def create_instance_objects(self,config):
-        return AWSCloudRunProviderImpl.create_instance_objects(self,config)
+        return AWSCloudSendProviderImpl.create_instance_objects(self,config)
 
     def start_instance(self,instance):
-        AWSCloudRunProviderImpl.start_instance(self,instance)
+        AWSCloudSendProviderImpl.start_instance(self,instance)
 
     def stop_instance(self,instance):
-        AWSCloudRunProviderImpl.stop_instance(self,instance)
+        AWSCloudSendProviderImpl.stop_instance(self,instance)
 
     def terminate_instance(self,instance):
-        AWSCloudRunProviderImpl.terminate_instance(self,instance)
+        AWSCloudSendProviderImpl.terminate_instance(self,instance)
 
     def reboot_instance(self,instance):
-        AWSCloudRunProviderImpl.reboot_instance(self,instance)
+        AWSCloudSendProviderImpl.reboot_instance(self,instance)
 
     def get_region(self):
-        return AWSCloudRunProviderImpl.get_region(self)
+        return AWSCloudSendProviderImpl.get_region(self)
     
     def get_account_id(self):
-        return AWSCloudRunProviderImpl.get_account_id(self)
+        return AWSCloudSendProviderImpl.get_account_id(self)
 
     def set_profile(self,profile_name):
-        AWSCloudRunProviderImpl.set_profile(self,profile_name)   
+        AWSCloudSendProviderImpl.set_profile(self,profile_name)   
 
     def get_suggested_image(self,region):
-        return AWSCloudRunProviderImpl.get_suggested_image(self,region)
+        return AWSCloudSendProviderImpl.get_suggested_image(self,region)
 
     def grant_admin_rights(self,instance):
         session = self.get_session(instance)

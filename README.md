@@ -79,7 +79,7 @@ aws_secret_access_key = YOUR_SECRET_ACCESS_KEY
 region = eu-west-3
 output = json
 
-[profile cloudsend_USERNAME]
+[profile cloudsend]
 region = eu-west-3
 output = json
 ```
@@ -91,7 +91,7 @@ output = json
 aws_access_key_id = YOUR_ACCESS_KEY_ID
 aws_secret_access_key = YOUR_SECRET_ACCESS_KEY
 
-[cloudsend_USERNAME]
+[cloudsend]
 aws_access_key_id = YOU_PROFILE_ACCESS_KEY_ID
 aws_secret_access_key = YOUR_PROFILE_SECRET_ACCESS_KEY
 ```
@@ -106,7 +106,7 @@ config = {
     ################################################################################
 
     'project'      : 'test' ,                             # this will be concatenated with the instance hashes (if not None) 
-    'profile'      : 'cloudsend_USERNAME' ,
+    'profile'      : 'cloudsend' ,
     ...
 ```
 
