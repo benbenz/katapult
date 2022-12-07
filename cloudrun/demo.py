@@ -50,7 +50,7 @@ async def mainloop(cr_client,reset=False):
     # because watch includes 'wait' mode intrinsiquely
     processes = cr_client.wait_for_jobs_state(CloudRunProcessState.DONE|CloudRunProcessState.ABORTED,processes)
 
-    print("\n== GET STATE ==\n")
+    print("\n== SUMMARY ==\n")
 
     # just to show the API ...
     cr_client.get_jobs_states()
@@ -86,6 +86,10 @@ async def waitloop(cr_client):
     # just to show the API ...
     cr_client.get_jobs_states()
     cr_client.print_aborted_logs()
+
+    print("\n== FETCH RESULTS ==\n")
+
+    cr_client.fetch_results(os.path.join(os.getcwd(),'tmp'))
 
     print("\n== DONE ==\n")        
 

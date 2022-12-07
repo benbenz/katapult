@@ -114,6 +114,7 @@ def compute_environment_object(env_config):
         
             # sort the array and set dependencies as this
             env_conda = list(map(str.strip,env_conda)) # strip the strings
+            environment_obj['env_conda'] = dict()
             environment_obj['env_conda']['dependencies'] = env_conda
         
         elif isinstance(env_conda,str) and os.path.isfile(env_conda):

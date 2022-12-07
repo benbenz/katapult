@@ -11,7 +11,7 @@
             "program": "${workspaceFolder}/cloudrun/demo.py",
             "console": "integratedTerminal",
             "cwd": "${workspaceFolder}",
-            "args": ["reset"]
+            "args": ["config.py","reset"]
         },
         {
             "name": "Demo Wait",
@@ -20,8 +20,17 @@
             "program": "${workspaceFolder}/cloudrun/demo.py",
             "console": "integratedTerminal",
             "cwd": "${workspaceFolder}",
-            "args": ["wait"]
+            "args": ["config.py","wait"]
         },
+        {
+            "name": "Demo Montecarlo",
+            "type": "python",
+            "request": "launch",
+            "program": "${workspaceFolder}/cloudrun/demo.py",
+            "console": "integratedTerminal",
+            "cwd": "${workspaceFolder}",
+            "args": ["config-montecarlo10.py","reset"]
+        },        
         {
             "name": "Maestro Server",
             "type": "python",
