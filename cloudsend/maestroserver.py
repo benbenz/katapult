@@ -7,6 +7,7 @@ import socket
 from io import StringIO , TextIOWrapper
 from multiprocessing import Process, Queue
 from threading import Thread
+import asyncio
 
 HOST = 'localhost' #'0.0.0.0' #127.0.0.1' 
 PORT = 5000
@@ -21,54 +22,54 @@ def process_command(cs_client,command,args,conn):
 
         if command == 'wakeup':
 
-            cs_client.wakeup()
+            await cs_client.wakeup()
 
         elif command == 'start':
             reset = False
             if args:
                 reset = args[0].strip().lower() == "true"
-            cs_client.start(reset)
+            await cs_client.start(reset)
 
         elif command == 'allocate' or command == 'assign':
 
-            cs_client.assign()
+            await cs_client.assign()
 
         elif command == 'deploy':
 
-            cs_client.deploy()
+            await cs_client.deploy()
 
         elif command == 'run':
 
-            cs_client.run()
+            await cs_client.run()
         
         elif command == 'watch':
 
             daemon = True
             if args:
                 daemon = args[0].strip().lower() == "true"
-            cs_client.watch(None,daemon)
+            await cs_client.watch(None,daemon)
 
         elif command == 'wait':
 
-            cs_client.wait_for_jobs_state(CloudSendProcessState.DONE|CloudSendProcessState.ABORTED)
+            await cs_client.wait_for_jobs_state(CloudSendProcessState.DONE|CloudSendProcessState.ABORTED)
 
         elif command == 'get_states':
 
-            cs_client.get_jobs_states()
+            await cs_client.get_jobs_states()
 
         elif command == 'print_summary' or command == 'print':
 
-            cs_client.print_jobs_summary()
+            await cs_client.print_jobs_summary()
 
         elif command == 'print_aborted':
 
-            cs_client.print_aborted_logs()
+            await cs_client.print_aborted_logs()
 
         elif command == 'fetch_results':
 
             if args:
                 directory = args[0].strip()
-                cs_client.fetch_results(directory)
+                await cs_client.fetch_results(directory)
 
         elif command == 'test':
 

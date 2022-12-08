@@ -517,7 +517,7 @@ class CloudSendFatProvider(CloudSendProvider,ABC):
             # re-deploy it
             await self._deploy_all(instance)
         if rerun:
-            processes = self.run(instance,jobs_can_be_saved) #will run the jobs for this instance
+            processes = await self.run(instance,jobs_can_be_saved) #will run the jobs for this instance
             return processes #instance_processes, jobsinfo 
         else :
             return None 
@@ -540,7 +540,8 @@ class CloudSendFatProvider(CloudSendProvider,ABC):
             run_log1 = instance.path_join( run_path , 'run-'+uid+'.log' )
             run_log2 = instance.path_join( run_path , 'run.log' )
             stdout , stderr = await self._exec_command(ssh_conn,"cat "+run_log1+' '+run_log2)
-            return stdout.read()
+            log = await stdout.read()
+            return log
         except:
             return None
 
@@ -866,9 +867,9 @@ class CloudSendFatProvider(CloudSendProvider,ABC):
             file_name , file_extension = os.path.splitext(out_file)
             file_name = file_name.replace(os.sep,'_')
             #ftp_client.chdir(directory)
-            with open(os.path.join(out_dir,'job_'+str(rank).zfill(3)+'_'+file_name+file_extension),'wb') as outfile:
-                await ftp_client.chdir( directory )
-                await ftp_client.get( filename , outfile )   
+            local_path = os.path.join(out_dir,'job_'+str(rank).zfill(3)+'_'+file_name+file_extension)
+            await ftp_client.chdir( directory )
+            await ftp_client.get( filename , local_path )   
         
         for client in clients.values():
             #client['ftp'].close()
@@ -1228,7 +1229,7 @@ class CloudSendFatProvider(CloudSendProvider,ABC):
             asyncio.ensure_future( asyncio.gather( *jobs ) )
             if wait_state & CloudSendProviderStateWaitMode.WATCH:
                 self.debug(1,"Watching ...")
-            await asyncio.sleep(1) # let it go to the loop
+            await asyncio.sleep(2) # let it go to the loop
 
             return None
         # done

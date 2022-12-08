@@ -266,7 +266,7 @@ class CloudSendProvider(ABC):
             proc = await ssh_conn.create_process(command)
             return proc.stdout , proc.stderr 
         except (OSError, asyncssh.Error) as sshe:
-            sys.exit('SSH connection failed: ' + str(sshe))
+            self.debug(1,'SSH connection failed: ' + str(sshe))
             self.debug(1,"The SSH Client has been disconnected!")
             self.debug(1,sshe)
             raise CloudSendError()  
@@ -296,7 +296,7 @@ class CloudSendProvider(ABC):
                         output = command['output']
                     await ssh_conn.create_process(command['cmd'] + " 1>"+output+" 2>&1 &")
             except (OSError, asyncssh.Error) as sshe:
-                sys.exit('SSH connection failed: ' + str(sshe))
+                self.debug(1,'SSH connection failed: ' + str(sshe))
                 self.debug(1,"The SSH Client has been disconnected!")
                 self.debug(1,sshe)
                 raise CloudSendError()  
