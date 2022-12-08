@@ -16,12 +16,12 @@ async def mainloop(cs_client,reset=False):
     print("\n== START ==\n")
 
     # distribute the jobs on the instances (dummy algo for now)
-    cs_client.start(reset) 
+    await cs_client.start(reset) 
 
     print("\n== ALLOCATE JOBS ==\n")
 
     # distribute the jobs on the instances (dummy algo for now)
-    cs_client.assign()
+    await cs_client.assign()
 
     print("\n== DEPLOY ==\n")
 
@@ -29,7 +29,7 @@ async def mainloop(cs_client,reset=False):
     # it is recommended to wait here allthough run.sh should wait for bootstraping
     # currently, the bootstraping is non-blocking
     # so this will barely wait ... (the jobs will do the waiting ...)
-    cs_client.deploy()
+    await cs_client.deploy()
 
     print("\n== RUN ==\n")
 
@@ -37,34 +37,34 @@ async def mainloop(cs_client,reset=False):
     # process1  = await cs_client.run_job(cs_client.get_job(0)) 
     # process2  = await cs_client.run_job(cs_client.get_job(1)) 
     # processes = [ process1 , process2 ]
-    processes = cs_client.run()
+    processes = await cs_client.run()
 
     print("\n== WATCH ==\n")
 
-    processes = cs_client.watch(processes,True) #daemon = True >> no wait
+    processes = await cs_client.watch(processes,True) #daemon = True >> no wait
 
     print("\n== WAIT ==\n")
 
     print("Waiting for DONE or ABORTED ...")
     # now that we have 'watch' before 'wait' , this will exit instantaneously
     # because watch includes 'wait' mode intrinsiquely
-    processes = cs_client.wait_for_jobs_state(CloudSendProcessState.DONE|CloudSendProcessState.ABORTED,processes)
+    processes = await cs_client.wait_for_jobs_state(CloudSendProcessState.DONE|CloudSendProcessState.ABORTED,processes)
 
     print("\n== SUMMARY ==\n")
 
     # just to show the API ...
-    cs_client.get_jobs_states()
+    await cs_client.get_jobs_states()
 
     # print("\n== WAIT and TAIL ==\n")
 
     # task1 = asyncio.create_task(cs_client.wait_for_script_state(CloudSendProcessState.DONE|CloudSendProcessState.ABORTED,script_hash,uid))
     # task2 = asyncio.create_task(tail_loop(script_hash,uid))
     # await asyncio.gather(task1,task2)
-    cs_client.print_aborted_logs()
+    await cs_client.print_aborted_logs()
 
     print("\n== FETCH RESULTS ==\n")
 
-    cs_client.fetch_results(os.path.join(os.getcwd(),'tmp'))
+    await cs_client.fetch_results(os.path.join(os.getcwd(),'tmp'))
 
     print("\n== DONE ==\n")
 

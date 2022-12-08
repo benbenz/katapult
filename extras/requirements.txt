@@ -5,5 +5,6 @@ boto3; sys_platform != 'darwin' or (platform_version > '13.4.0' or platform_rele
 jcs
 pyyaml
 paramiko
+asyncssh
 ortools==9.0.9048; sys_platform == 'darwin' and (platform_version <= '13.4.0' or platform_release <= '13.4.0')
 ortools; sys_platform != 'darwin' or (platform_version > '13.4.0' or platform_release > '13.4.0')

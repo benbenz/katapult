@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "cloudsend"
-version = "0.2.0"
+version = "0.1.0"
 description = "CloudSend is a Python package that allows you to run any script on a cloud service (for now AWS only)."
 authors = ["Your Name <you@example.com>"]
 license = "MIT"
@@ -9,20 +9,22 @@ repository = "https://github.com/benbenz/cloudsend"
 
 [tool.poetry.dependencies]
 python = "^3.9"
-boto3 = "^1"
+bcrypt = "3.1.5"
+cryptography =  "3.1.1"
+protobuf = "^3.20"
+boto3 = "1.23.10"
 jcs = "^0.2.1"
 pyyaml = "^6.0"
 paramiko = "^2.12.0"
 asyncssh = "~2.12.0"
-ortools = "^9"
+ortools = "9.0.9048"
 
 [build-system]
 requires = ["poetry-core"]
 build-backend = "poetry.core.masonry.api"
 
 [tool.poetry.scripts]
-demo = 'cloudsend.demo:main'
-cli = 'cloudsend.cli:main'
+demo = 'cloudsend.app:main'
 
 [tool.pytest.ini_options]
 asyncio_mode="strict"

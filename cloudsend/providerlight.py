@@ -1,6 +1,6 @@
 
 from abc import ABC , abstractmethod
-from cloudsend.provider import CloudSendProvider , bcolors , line_buffered 
+from cloudsend.provider import CloudSendProvider , line_buffered 
 from cloudsend.core import *
 import copy , io
 from zipfile import ZipFile
@@ -24,7 +24,7 @@ class CloudSendLightProvider(CloudSendProvider,ABC):
         CloudSendProvider.__init__(self,conf)
         self._load()
 
-        self.ssh_client = None
+        self.ssh_conn = None
         self.ftp_client = None
 
         #self._install_maestro()
@@ -61,14 +61,14 @@ class CloudSendLightProvider(CloudSendProvider,ABC):
                 }
                 self._maestro = CloudSendInstance(maestro_cfg,None)
 
-    def _deploy_maestro(self,reset):
+    async def _deploy_maestro(self,reset):
         # deploy the maestro ...
         if self._maestro is None:
             self.debug(2,"no MAESTRO object to deploy")
             return
 
         # wait for maestro to be ready
-        instanceid , ssh_client , ftp_client = self._wait_and_connect(self._maestro)
+        instanceid , ssh_conn , ftp_client = await self._wait_and_connect(self._maestro)
 
         home_dir = self._maestro.get_home_dir()
         cloudsend_dir = self._maestro.path_join( home_dir , 'cloudsend' )
@@ -82,108 +82,108 @@ class CloudSendLightProvider(CloudSendProvider,ABC):
         elif self._maestro.get_platform() == CloudSendPlatform.WINDOWS:
             activate_file = self._maestro.path_join( cloudsend_dir , '.venv' , 'maestro' , 'Scripts' , 'activate.bat' )
         
-        re_init  = self._test_reupload(self._maestro,ready_file, ssh_client)
+        re_init  = await self._test_reupload(self._maestro,ready_file, ssh_conn)
 
         if re_init:
             # remove the file
-            self._exec_command(ssh_client,'rm -f ' + ready_file )
+            await self._exec_command(ssh_conn,'rm -f ' + ready_file )
             # make cloudsend dir
-            self._exec_command(ssh_client,'mkdir -p ' + files_dir ) 
+            await self._exec_command(ssh_conn,'mkdir -p ' + files_dir ) 
             # mark it as maestro...
-            self._exec_command(ssh_client,'echo "" > ' + maestro_file ) 
+            await self._exec_command(ssh_conn,'echo "" > ' + maestro_file ) 
             # add manually the 
             if self._config.get('profile'):
                 profile = self._config.get('profile')
                 region  = self.get_region() # we have a profile so this returns the region for this profile
                 aws_config_cmd = "mkdir -p "+aws_dir+" && echo \"[profile "+profile+"]\nregion = " + region + "\noutput = json\" > " + aws_config
-                self._exec_command(ssh_client,aws_config_cmd)
+                await self._exec_command(ssh_conn,aws_config_cmd)
             # grant its admin rights (we need to be (stopped or) running to be able to do that)
             self.grant_admin_rights(self._maestro)
             # setup auto_stop behavior for maestro
             self.setup_auto_stop(self._maestro)
             # deploy CloudSend on the maestro
-            self._deploy_cloudsend(ssh_client,ftp_client)
+            await self._deploy_cloudsend(ssh_conn,ftp_client)
             # mark as ready
-            self._exec_command(ssh_client,'if [ -f '+activate_file+' ]; then echo "" > '+ready_file+' ; fi')
+            await self._exec_command(ssh_conn,'if [ -f '+activate_file+' ]; then echo "" > '+ready_file+' ; fi')
 
         # deploy the config to the maestro (every time)
-        self._deploy_config(ssh_client,ftp_client)
+        await self._deploy_config(ssh_conn,ftp_client)
 
         # let's redeploy the code every time for now ... (if not already done in re_init)
         if not re_init and reset:
-            self._deploy_cloudsend_files(ssh_client,ftp_client)
+            await self._deploy_cloudsend_files(ssh_conn,ftp_client)
 
         # start the server (if not already started)
-        self._run_server(ssh_client)
+        await self._run_server(ssh_conn)
 
         # wait for maestro to have started
-        self._wait_for_maestro(ssh_client)
+        await self._wait_for_maestro(ssh_conn)
 
         #time.sleep(30)
 
-        self.ssh_client = ssh_client
+        self.ssh_conn = ssh_conn
         self.ftp_client = ftp_client
         #ftp_client.close()
-        #ssh_client.close()
+        #ssh_conn.close()
 
         self.debug(1,"MAESTRO is READY",color=bcolors.OKCYAN)
 
 
-    def _deploy_cloudsend_files(self,ssh_client,ftp_client):
+    async def _deploy_cloudsend_files(self,ssh_conn,ftp_client):
         ftp_client.chdir(self._get_cloudsend_dir())
-        ftp_client.putfo(self._create_cloudsend_zip(),'cloudsend.zip')
+        await self.sftp_put_byteio(ftp_client,'cloudsend.zip',self._create_cloudsend_zip())
         commands = [
             { 'cmd' : 'cd '+self._get_cloudsend_dir()+' && unzip -o cloudsend.zip && rm cloudsend.zip' , 'out' : True } ,
         ]
-        self._run_ssh_commands(self._maestro,ssh_client,commands) 
+        await self._run_ssh_commands(self._maestro,ssh_conn,commands) 
         
         filesOfDirectory = os.listdir('.')
         pattern = "cloudsend*.pem"
         for file in filesOfDirectory:
             if fnmatch.fnmatch(file, pattern):
-                ftp_client.put(os.path.abspath(file),os.path.basename(file))
+                await ftp_client.put(os.path.abspath(file),os.path.basename(file))
         sh_files = self._get_remote_files_path( '*.sh')
         commands = [
             { 'cmd' : 'chmod +x ' + sh_files , 'out' : True } ,
         ]
-        self._run_ssh_commands(self._maestro,ssh_client,commands) 
+        await self._run_ssh_commands(self._maestro,ssh_conn,commands) 
 
 
-    def _deploy_cloudsend(self,ssh_client,ftp_client):
+    async def _deploy_cloudsend(self,ssh_conn,ftp_client):
 
         # upload cloudsend files
-        self._deploy_cloudsend_files(ssh_client,ftp_client)
+        await self._deploy_cloudsend_files(ssh_conn,ftp_client)
         
         maestroenv_sh = self._get_remote_files_path( 'maestroenv.sh' )
         # unzip cloudsend files, install and run
         commands = [
             { 'cmd' : maestroenv_sh , 'out' : True } ,
         ]
-        self._run_ssh_commands(self._maestro,ssh_client,commands)
+        await self._run_ssh_commands(self._maestro,ssh_conn,commands)
 
-    def _run_server(self,ssh_client):
+    async def _run_server(self,ssh_conn):
         # run the server
         startmaestro_sh = self._get_remote_files_path( 'startmaestro.sh' )
         commands = [
             { 'cmd' : startmaestro_sh , 'out' : False , 'output' : 'maestro.log' },
             { 'cmd' : 'crontab -r ; echo "* * * * * '+startmaestro_sh+'" | crontab', 'out' : True }
         ]
-        self._run_ssh_commands(self._maestro,ssh_client,commands)
+        await self._run_ssh_commands(self._maestro,ssh_conn,commands)
 
-    def _deploy_config(self,ssh_client,ftp_client):
+    async def _deploy_config(self,ssh_conn,ftp_client):
         config , mkdir_cmd , files_to_upload_per_dir = self._translate_config_for_maestro()
         # serialize the config and send it to the maestro
-        ftp_client.chdir(self._get_cloudsend_dir())
-        ftp_client.putfo(io.StringIO(json.dumps(config)),'config.json')
+        await ftp_client.chdir(self._get_cloudsend_dir())
+        await self.sftp_put_file_string(ftp_client,'config.json',json.dumps(config))
         # execute the mkdir_cmd
         if mkdir_cmd:
-            self._exec_command(ssh_client,mkdir_cmd)
+            await self._exec_command(ssh_conn,mkdir_cmd)
         for remote_dir , files_infos in files_to_upload_per_dir.items():
-            ftp_client.chdir(remote_dir)
+            await ftp_client.chdir(remote_dir)
             for file_info in files_infos:
                 remote_file = os.path.basename(file_info['remote'])
                 try:
-                    ftp_client.put(file_info['local'],remote_file)
+                    await ftp_client.put(file_info['local'],remote_file)
                 except FileNotFoundError as fnfe:
                     self.debug(1,"You have specified a file that does not exist:",fnfe,color=bcolors.FAIL)
 
@@ -308,24 +308,27 @@ class CloudSendLightProvider(CloudSendProvider,ABC):
 
         return zip_buffer
 
-    def _wait_for_maestro(self,ssh_client):
-        #if self.ssh_client is None:
-        #    instanceid , self.ssh_client , self.ftp_client = self._wait_and_connect(self._maestro)
+    async def _wait_for_maestro(self,ssh_conn):
+        #if self.ssh_conn is None:
+        #    instanceid , self.ssh_conn , self.ftp_client = self._wait_and_connect(self._maestro)
         
         waitmaestro_sh = self._get_remote_files_path( 'waitmaestro.sh' )
         cmd = waitmaestro_sh+" 1" # 1 = with tail log
 
-        stdin , stdout , stderr = self._exec_command(ssh_client,cmd)      
+        stdout , stderr = await self._exec_command(ssh_conn,cmd)      
 
-        for l in line_buffered(stdout):
-            if not l:
-                break
-            self.debug(1,l,end='')
+        async for line in proc.stdout:
+            self.debug(1,line,end='')
+
+        # for l in await line_buffered(stdout):
+        #     if not l:
+        #         break
+        #     self.debug(1,l,end='')
 
 
-    def _exec_maestro_command(self,maestro_command):
-        if self.ssh_client is None:
-            instanceid , self.ssh_client , self.ftp_client = self._wait_and_connect(self._maestro)
+    async def _exec_maestro_command(self,maestro_command):
+        if self.ssh_conn is None:
+            instanceid , self.ssh_conn , self.ftp_client = await self._wait_and_connect(self._maestro)
         
         private_ip = self._maestro.get_ip_addr_priv()
 
@@ -335,12 +338,17 @@ class CloudSendLightProvider(CloudSendProvider,ABC):
 
         cmd = "cd "+self._get_cloudsend_dir()+ " && "+waitmaestro_sh+" && sudo "+venv_python+" -u -m cloudsend.maestroclient " + maestro_command
 
-        stdin , stdout , stderr = self._exec_command(self.ssh_client,cmd)
+        stdout , stderr = await self._exec_command(self.ssh_conn,cmd)
 
-        for l in line_buffered(stdout):
-            if not l:
+        async for line in proc.stdout:
+            if not line:
                 break
-            self.debug(1,l,end='')
+            self.debug(1,line,end='')
+
+        # for l in await line_buffered(stdout):
+        #     if not l:
+        #         break
+        #     self.debug(1,l,end='')
         
         # while True:
         #     outlines = stdout.readlines()
@@ -367,73 +375,73 @@ class CloudSendLightProvider(CloudSendProvider,ABC):
         #         self.debug(1,eline,end='')
 
 
-    def _install_maestro(self,reset):
+    async def _install_maestro(self,reset):
         # this will block for some time the first time...
         self.debug_set_prefix(bcolors.BOLD+'INSTALLING MAESTRO: '+bcolors.ENDC)
         self._instances_states = dict()        
         self._start_and_update_instance(self._maestro)
         if reset:
             self.reset_instance(self._maestro)
-        self._deploy_maestro(reset) # deploy the maestro now !
+        await self._deploy_maestro(reset) # deploy the maestro now !
         self.debug_set_prefix(None)
 
-    def start(self,reset=False):
+    async def start(self,reset=False):
         # install maestro materials
         self._install_maestro(reset)
         # triggers maestro::start
-        self._exec_maestro_command("start:"+str(reset))
+        await self._exec_maestro_command("start:"+str(reset))
 
-    def reset_instance(self,instance):
+    async def reset_instance(self,instance):
         self.debug(1,'RESETTING instance',instance.get_name())
-        instanceid, ssh_client , ftp_client = self._wait_and_connect(instance)
-        if ssh_client is not None:
-            ftp_client.putfo(self._get_remote_file('resetmaestro.sh'),'resetmaestro.sh') 
+        instanceid, ssh_conn , ftp_client = await self._wait_and_connect(instance)
+        if ssh_conn is not None:
+            await self.put_remote_file(ftp_client,'resetmaestro.sh')
             resetmaestro_sh = self._maestro.path_join( self._maestro.get_home_dir() , 'resetmaestro.sh' )
             commands = [
                { 'cmd' : 'chmod +x '+resetmaestro_sh+' && ' + resetmaestro_sh , 'out' : True }
             ]
-            self._run_ssh_commands(instance,ssh_client,commands)
-            ftp_client.close()
-            ssh_client.close()
+            await self._run_ssh_commands(instance,ssh_conn,commands)
+            #ftp_client.close()
+            ssh_conn.close()
         self.debug(1,'RESETTING done')
 
-    def assign(self):
+    async def assign(self):
         # triggers maestro::assign
-        self._exec_maestro_command("allocate")
+        await self._exec_maestro_command("allocate")
 
-    def deploy(self):
+    async def deploy(self):
         # triggers maestro::deploy
-        self._exec_maestro_command("deploy") # use output - the deploy part will be skipped depending on option ...
+        await self._exec_maestro_command("deploy") # use output - the deploy part will be skipped depending on option ...
 
-    def run(self):
+    async def run(self):
         # triggers maestro::run
-        self._exec_maestro_command("run")
+        await self._exec_maestro_command("run")
 
-    def watch(self,processes=None,daemon=True):
+    async def watch(self,processes=None,daemon=True):
         # triggers maestro::wait_for_jobs_state
-        self._exec_maestro_command("watch:"+str(daemon))
+        await self._exec_maestro_command("watch:"+str(daemon))
 
-    def wakeup(self):
+    async def wakeup(self):
         # triggers maestro::wakeup
-        self._exec_maestro_command("wakeup")
+        await self._exec_maestro_command("wakeup")
 
-    def wait_for_jobs_state(self,job_state,processes=None):
+    async def wait_for_jobs_state(self,job_state,processes=None):
         # triggers maestro::wait_for_jobs_state
-        self._exec_maestro_command("wait")
+        await self._exec_maestro_command("wait")
 
-    def get_jobs_states(self,processes=None):
+    async def get_jobs_states(self,processes=None):
         # triggers maestro::get_jobs_states
-        self._exec_maestro_command("get_states")
+        await self._exec_maestro_command("get_states")
 
-    def print_jobs_summary(self,instance=None):
+    async def print_jobs_summary(self,instance=None):
         # triggers maestro::print_jobs_summary
-        self._exec_maestro_command("print_summary")
+        await self._exec_maestro_command("print_summary")
 
-    def print_aborted_logs(self,instance=None):
+    async def print_aborted_logs(self,instance=None):
         # triggers maestro::print_aborted_logs
-        self._exec_maestro_command("print_aborted")
+        await self._exec_maestro_command("print_aborted")
 
-    def fetch_results(self,out_dir,processes=None):
+    async def fetch_results(self,out_dir,processes=None):
 
         try:
             #os.rmdir(out_dir)
@@ -452,11 +460,11 @@ class CloudSendLightProvider(CloudSendProvider,ABC):
         maestro_tar_path = self._maestro.path_join( homedir , maestro_tar_file )
 
         # fetch the results on the maestro
-        self._exec_maestro_command("fetch_results:"+maestro_dir)
+        await self._exec_maestro_command("fetch_results:"+maestro_dir)
 
         # get the tar file of the results
-        instanceid , ssh_client , ftp_client = self._wait_and_connect(self._maestro)
-        stdin,stdout,stderr = self._exec_command(ssh_client,"cd " + maestro_dir + " && tar -cvf "+maestro_tar_path+" .")      
+        instanceid , ssh_conn , ftp_client = await self._wait_and_connect(self._maestro)
+        stdout,stderr = await self._exec_command(ssh_conn,"cd " + maestro_dir + " && tar -cvf "+maestro_tar_path+" .")      
         self.debug(1,stdout.read()) #blocks
         self.debug(2,stderr.read()) #blocks
         local_tar_path = os.path.join(out_dir,maestro_tar_file)
@@ -469,11 +477,11 @@ class CloudSendLightProvider(CloudSendProvider,ABC):
 
         # cleanup
         os.remove(local_tar_path)
-        stdin,stdout,stderr = self._exec_command(ssh_client,"rm -rf "+maestro_dir+" "+maestro_tar_path)
+        stdout,stderr = await self._exec_command(ssh_conn,"rm -rf "+maestro_dir+" "+maestro_tar_path)
 
         # close
-        ftp_client.close()
-        ssh_client.close()
+        #ftp_client.close()
+        ssh_conn.close()
 
     def _get_or_create_instance(self,instance):
         instance , created = super()._get_or_create_instance(instance)

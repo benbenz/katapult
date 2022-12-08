@@ -1,10 +1,7 @@
 from abc import ABC , abstractmethod
 import cloudsend.utils as cloudsendutils
 import sys , json , os , time
-import paramiko
 import re
-import asyncio
-import concurrent.futures
 import multiprocessing
 import math , random
 import cloudsend.combopt as combopt
@@ -12,11 +9,12 @@ from io import BytesIO
 import csv , io
 import pkg_resources
 from cloudsend.core import *
-from cloudsend.provider import CloudSendProvider , CloudSendProviderState , bcolors , debug
+from cloudsend.provider import CloudSendProvider , CloudSendProviderState , debug
 from cloudsend.config_state import ConfigManager , StateSerializer
 from enum import IntFlag
 from threading import current_thread
 import shutil
+import asyncio , asyncssh
 
 random.seed()
 
@@ -86,7 +84,7 @@ class CloudSendFatProvider(CloudSendProvider,ABC):
 
     #     return self._jobs[index] 
 
-    def assign(self):
+    async def assign(self):
 
         if self._recovery == True:
             assign_jobs = False
@@ -123,7 +121,7 @@ class CloudSendFatProvider(CloudSendProvider,ABC):
 
         self.serialize_state()         
                
-    def _deploy_instance(self,instance,deploy_states,ssh_client,ftp_client):
+    async def _deploy_instance(self,instance,deploy_states,ssh_conn,ftp_client):
 
         homedir     = instance.get_home_dir()
         global_path = instance.get_global_dir()
@@ -131,7 +129,7 @@ class CloudSendFatProvider(CloudSendProvider,ABC):
         ready_path  = instance.path_join(global_path,'ready')
 
         # last file uploaded ...
-        re_upload  = self._test_reupload(instance,ready_path,ssh_client)
+        re_upload  = await self._test_reupload(instance,ready_path,ssh_conn)
 
         #created = deploy_states[instance.get_name()].get('created')
 
@@ -140,40 +138,40 @@ class CloudSendFatProvider(CloudSendProvider,ABC):
         if re_upload:
 
             self.debug(2,"creating instance's directories ...")
-            stdin0, stdout0, stderr0 = self._exec_command(ssh_client,"mkdir -p "+global_path+" "+files_path+" && rm -f "+ready_path)
+            stdout0, stderr0 = await self._exec_command(ssh_conn,"mkdir -p "+global_path+" "+files_path+" && rm -f "+ready_path)
             self.debug(2,"directories created")
 
             self.debug(1,"uploading instance's files ... ")
 
             # upload the install file, the env file and the script file
-            ftp_client = ssh_client.open_sftp()
+            ftp_client = await ssh_conn.start_sftp_client()
 
             # change dir to global dir (should be done once)
-            ftp_client.chdir(global_path)
+            await ftp_client.chdir(global_path)
             for file in ['config.py','bootstrap.sh','run.sh','microrun.sh','state.sh','tail.sh','getpid.sh','reset.sh']:
-                ftp_client.putfo(self._get_remote_file(file),file)    
+                await self.sftp_put_remote_file(ftp_client,file) 
 
             self.debug(1,"Installing PyYAML for newly created instance ...")
-            stdin , stdout, stderr = self._exec_command(ssh_client,"pip install pyyaml")
-            self.debug(2,stdout.read())
+            stdout, stderr = await self._exec_command(ssh_conn,"pip install pyyaml")
+            self.debug(2,await stdout.read())
             self.debug(2, "Errors")
-            self.debug(2,stderr.read())
+            self.debug(2,await stderr.read())
 
             commands = [ 
                 # make bootstrap executable
                 { 'cmd': "chmod +x "+instance.path_join(global_path,"*.sh"), 'out' : True },              
             ]
 
-            self._run_ssh_commands(instance,ssh_client,commands)
+            await self._run_ssh_commands(instance,ssh_conn,commands)
 
-            ftp_client.putfo(BytesIO("".encode()), 'ready')
+            await self.sftp_put_string(ftp_client,'ready',"")
 
             self.debug(1,"files uploaded.")
 
 
         deploy_states[instance.get_name()] = { 'upload' : re_upload } 
 
-    def _deploy_environments(self,instance,deploy_states,ssh_client,ftp_client):
+    async def _deploy_environments(self,instance,deploy_states,ssh_conn,ftp_client):
 
         re_upload_inst = deploy_states[instance.get_name()]['upload']
 
@@ -191,7 +189,7 @@ class CloudSendFatProvider(CloudSendProvider,ABC):
             self.debug(3,dpl_env.json())
 
             ready_file = instance.path_join( dpl_env.get_path() , 'ready' )
-            re_upload_env = self._test_reupload(instance,ready_file, ssh_client)
+            re_upload_env = await self._test_reupload(instance,ready_file, ssh_conn)
 
             re_upload_env_mamba  = False
             re_upload_env_pip    = False
@@ -200,11 +198,11 @@ class CloudSendFatProvider(CloudSendProvider,ABC):
             if not re_upload_env:
                 if dpl_env.get_config('env_conda') is not None:
                     mamba_test = instance.path_join( instance.get_home_dir() , 'micromamba' , 'envs' , dpl_env.get_name_with_hash() )
-                    re_upload_env_mamba = self._test_reupload(instance,mamba_test, ssh_client,False)
+                    re_upload_env_mamba = await self._test_reupload(instance,mamba_test, ssh_conn,False)
                     re_upload_env = re_upload_env or re_upload_env_mamba
                 if dpl_env.get_config('env_pypi') is not None and dpl_env.get_config('env_conda') is None:
                     venv_test = instance.path_join( instance.get_home_dir() , '.' + dpl_env.get_name_with_hash() )
-                    re_upload_env_pip = self._test_reupload(instance,venv_test, ssh_client, False)
+                    re_upload_env_pip = await self._test_reupload(instance,venv_test, ssh_conn, False)
                     re_upload_env = re_upload_env or re_upload_env_pip
                 # TODO: have an aptget install TEST
                 #if dpl_env.get_config('env_aptget') is not None:
@@ -222,17 +220,17 @@ class CloudSendFatProvider(CloudSendProvider,ABC):
                 global_path = instance.get_global_dir() 
 
                 self.debug(2,"creating environment directories ...")
-                stdin0, stdout0, stderr0 = self._exec_command(ssh_client,"mkdir -p "+files_path+" && rm -f "+ready_file)
-                self.debug(2,"STDOUT for mkdir -p ",files_path,"...",stdout0.read())
-                self.debug(2,"STDERR for mkdir -p ",files_path,"...",stderr0.read())
+                stdout0, stderr0 = await self._exec_command(ssh_conn,"mkdir -p "+files_path+" && rm -f "+ready_file)
+                self.debug(2,"STDOUT for mkdir -p ",files_path,"...",await stdout0.read())
+                self.debug(2,"STDERR for mkdir -p ",files_path,"...",await stderr0.read())
                 self.debug(2,"directories created")
 
                 self.debug(1,"uploading files ... ")
 
                 # upload the install file, the env file and the script file
                 # change to env dir
-                ftp_client.chdir(dpl_env.get_path())
-                ftp_client.putfo(io.StringIO(dpl_env.json()),'config.json')
+                await ftp_client.chdir(dpl_env.get_path())
+                await self.sftp_put_string(ftp_client,'config.json',dpl_env.json())
 
                 self.debug(1,"uploaded.")        
 
@@ -251,25 +249,22 @@ class CloudSendFatProvider(CloudSendProvider,ABC):
 
                 bootstrap_command = bootstrap_command + (" ; " if bootstrap_command else "") + instance.path_join( global_path , 'bootstrap.sh' ) + " \"" + dpl_env.get_name_with_hash() + "\" " + ("1" if self._config['dev'] else "0")
 
-                self._run_ssh_commands(instance,ssh_client,commands)
+                await self._run_ssh_commands(instance,ssh_conn,commands)
                 
-                # let bootstrap.sh do it ...
-                #ftp_client.putfo(BytesIO("".encode()), 'ready')
-
         if bootstrap_command:
             gbl_dir = instance.get_global_dir()
-            ftp_client.chdir(gbl_dir)
-            ftp_client.putfo(io.StringIO(bootstrap_command),'generate_envs.sh')
+            await ftp_client.chdir(gbl_dir)
+            await self.sftp_put_string(ftp_client,'generate_envs.sh',bootstrap_command)
             generate_sh = instance.path_join( gbl_dir , 'generate_envs.sh' ) 
             bootstrap_log = instance.path_join( gbl_dir , 'bootstrap.log' )
             commands = [
                 {'cmd': 'chmod +x ' + generate_sh , 'out':True}, # import to wait for this to be done !
                 {'cmd': generate_sh , 'out':print_deploy, 'output': bootstrap_log }
             ]
-            self._run_ssh_commands(instance,ssh_client,commands)
+            await self._run_ssh_commands(instance,ssh_conn,commands)
         
 
-    def _deploy_jobs(self,instance,deploy_states,ssh_client,ftp_client):
+    async def _deploy_jobs(self,instance,deploy_states,ssh_conn,ftp_client):
 
         file_uploaded = dict()
 
@@ -298,21 +293,21 @@ class CloudSendFatProvider(CloudSendProvider,ABC):
                     mkdir_cmd = mkdir_cmd + (" && " if mkdir_cmd else "") + "mkdir -p " + dirname 
 
             self.debug(2,"creating job directories ...")
-            stdin0, stdout0, stderr0 = self._exec_command(ssh_client,"mkdir -p "+dpl_job.get_path())
+            stdout0, stderr0 = await self._exec_command(ssh_conn,"mkdir -p "+dpl_job.get_path())
             if mkdir_cmd != "":
-                stdin0, stdout0, stderr0 = self._exec_command(ssh_client,mkdir_cmd)
+                stdout0, stderr0 = await self._exec_command(ssh_conn,mkdir_cmd)
             self.debug(2,"directories created")
 
             re_upload_env = deploy_states[instance.get_name()][env.get_name_with_hash()]['upload']
 
             ready_file = instance.path_join( dpl_job.get_path() , 'ready' )
-            re_upload = self._test_reupload(instance,ready_file, ssh_client)
+            re_upload = await self._test_reupload(instance,ready_file, ssh_conn)
 
             self.debug(2,"re_upload_env",re_upload_env,"re_upload",re_upload)
 
             if re_upload: #or re_upload_env:
 
-                stdin0, stdout0, stderr0 = self._exec_command(ssh_client,"rm -f "+ready_file)
+                stdout0, stderr0 = await self._exec_command(ssh_conn,"rm -f "+ready_file)
 
                 self.debug(1,"uploading job files ... ",dpl_job.get_hash())
 
@@ -320,20 +315,20 @@ class CloudSendFatProvider(CloudSendProvider,ABC):
                 files_dir = instance.path_join( global_path , 'files' )
 
                 # change to job hash dir
-                ftp_client.chdir(dpl_job.get_path())
+                await ftp_client.chdir(dpl_job.get_path())
                 if job.get_config('run_script'):
                     script_args = job.get_config('run_script').split()
                     script_file = script_args[0]
                     filename = os.path.basename(script_file)
                     try:
-                        ftp_client.put(os.path.abspath(script_file),filename)
+                        await ftp_client.put(os.path.abspath(script_file),filename)
                     except:
                         self.debug(1,"You defined a script that is not available",job.get_config('run_script'))
 
                 # NEW ! WE now go to 
                 # COMMENT THIS IF YOU WANT TO PUT FILES in relation to the jobs' dir
                 if self._mutualize_uploads:
-                    ftp_client.chdir(files_dir)
+                    await ftp_client.chdir(files_dir)
 
                 if job.get_config('upload_files'):
                     files = job.get_config('upload_files')
@@ -350,7 +345,7 @@ class CloudSendFatProvider(CloudSendProvider,ABC):
                         
                         try:
                             try:
-                                ftp_client.put(local_path,rel_remote_path) #os.path.basename(upfile))
+                                await ftp_client.put(local_path,rel_remote_path) #os.path.basename(upfile))
                             except Exception as e:
                                 self.debug(1,"You defined an upload file that is not available",upfile)
                                 self.debug(1,e)
@@ -367,17 +362,17 @@ class CloudSendFatProvider(CloudSendProvider,ABC):
                         file_uploaded[abs_path] = True
                         #filename = os.path.basename(job.get_config('input_file'))
                         try:
-                            ftp_client.put(local_path,rel_remote_path) #job.get_config('input_file')) #filename)
+                            await ftp_client.put(local_path,rel_remote_path) #job.get_config('input_file')) #filename)
                         except:
                             self.debug(1,"You defined an input file that is not available:",job.get_config('input_file'))
                 
                 # used to check if everything is uploaded
-                ftp_client.chdir(dpl_job.get_path())
-                ftp_client.putfo(BytesIO("".encode()), 'ready')
+                await ftp_client.chdir(dpl_job.get_path())
+                await self.sftp_put_string(ftp_client, 'ready', "")
 
                 self.debug(1,"uploaded.",dpl_job.get_hash())
 
-    def _deploy_all(self,instance):
+    async def _deploy_all(self,instance):
 
         deploy_states = dict()
 
@@ -393,9 +388,9 @@ class CloudSendFatProvider(CloudSendProvider,ABC):
             if attempts!=0:
                 self.debug(1,"Trying again ...")
 
-            instanceid , ssh_client , ftp_client = self._wait_and_connect(instance)
+            instanceid , ssh_conn , ftp_client = await self._wait_and_connect(instance)
 
-            if ssh_client is None:
+            if ssh_conn is None:
                 self.debug(1,"ERROR: could not deploy instance",instance,color=bcolors.FAIL)
                 return
 
@@ -403,24 +398,24 @@ class CloudSendFatProvider(CloudSendProvider,ABC):
 
                 self.debug(1,"-- deploy instances --")
 
-                self._deploy_instance(instance,deploy_states,ssh_client,ftp_client)
+                await self._deploy_instance(instance,deploy_states,ssh_conn,ftp_client)
 
                 self.debug(1,"-- deploy environments --")
 
-                self._deploy_environments(instance,deploy_states,ssh_client,ftp_client)
+                await self._deploy_environments(instance,deploy_states,ssh_conn,ftp_client)
 
                 self.debug(1,"-- deploy jobs --")
 
-                self._deploy_jobs(instance,deploy_states,ssh_client,ftp_client) 
+                await self._deploy_jobs(instance,deploy_states,ssh_conn,ftp_client) 
 
-                ftp_client.close()
-                ssh_client.close()
+                #ftp_client.close()
+                ssh_conn.close()
 
                 break
 
             except FileNotFoundError as fne:
-                self.debug(1,e)
-                self.debug(1,"Filename = ",e.filename)
+                self.debug(1,fne)
+                self.debug(1,"Filename = ",fne.filename)
                 self.debug(1,"Error while deploying")
                 #sys.exit() # this only kills the thread
                 #os.kill(os.getpid(), signal.SIGINT)
@@ -439,43 +434,49 @@ class CloudSendFatProvider(CloudSendProvider,ABC):
 
     # use this to make sure we're not blocking in the generator loop below ...
     # (allow full multithreading)
-    def _start_and_update_and_reset_instance(self,instance,reset):
+    async def _start_and_update_and_reset_instance(self,instance,reset):
         self._start_and_update_instance(instance)
         if reset:
-           self.reset_instance(instance)
+           await self.reset_instance(instance)
 
-    def start(self,reset=False):
+    
+
+    async def start(self,reset=False):
+
         self._instances_states = dict() 
         self.debug(3,"Starting ...")
-        with concurrent.futures.ThreadPoolExecutor(max_workers=self._get_num_workers()) as pool:
-            future_to_instance = { pool.submit(self._start_and_update_and_reset_instance,instance,reset) : instance for instance in self._instances }
-            for future in concurrent.futures.as_completed(future_to_instance):
-                inst = future_to_instance[future]
-                #if reset:
-                #    self.reset_instance(inst)
-                if inst.is_invalid():
-                    self.debug(1,"ERROR: Your configuration is causing an instance to not be created. Please fix.",inst.get_config_DIRTY(),color=bcolors.FAIL)
-                    sys.exit()
+        jobs_wait = [ ] 
+        for instance in self._instances:
+            jobs_wait.append( self._start_and_update_and_reset_instance(instance,reset) )
+        await asyncio.gather( * jobs_wait )
+
+        for instance in self._instances:
+            if instance.is_invalid():
+                self.debug(1,"ERROR: Your configuration is causing an instance to not be created. Please fix.",inst.get_config_DIRTY(),color=bcolors.FAIL)
+                sys.exit()
+
         self._state = CloudSendProviderState.STARTED
 
-    def reset_instance(self,instance):
+    async def reset_instance(self,instance):
         self.debug(1,'RESETTING instance',instance.get_name())
-        instanceid, ssh_client , ftp_client = self._wait_and_connect(instance)
-        if ssh_client is not None:
-            ftp_client.putfo(self._get_remote_file('reset.sh'),'reset.sh') 
+        instanceid, ssh_conn , ftp_client = await self._wait_and_connect(instance)
+        if ssh_conn is not None:
+            ofile = await ftp_client.open('reset.sh','w')
+            await ofile.write(self._get_remote_file('reset.sh'))
+            await ofile.close()
             reset_file = instance.path_join( instance.get_home_dir() , 'reset.sh' )
             commands = [
                 { 'cmd' : 'chmod +x '+reset_file+' && ' + reset_file , 'out' : True }
             ]
-            self._run_ssh_commands(instance,ssh_client,commands)
-            ftp_client.close()
-            ssh_client.close()
+            await self._run_ssh_commands(instance,ssh_conn,commands)
+            #ftp_client.close()
+            ssh_conn.close()
         self.debug(1,'RESETTING done')    
 
 
-    def hard_reset_instance(instance):        
-        super().hard_reset_instance(instance)
-        self._deploy_all(instance)
+    async def hard_reset_instance(instance):        
+        await super().hard_reset_instance(instance)
+        await self._deploy_all(instance)
 
     # GREAT summary
     # https://www.integralist.co.uk/posts/python-asyncio/
@@ -484,26 +485,21 @@ class CloudSendFatProvider(CloudSendProvider,ABC):
     # - instances files
     # - environments files
     # - shared script files, uploads, inputs ...
-    def deploy(self):
+    async def deploy(self):
 
         clients = {} 
 
         for job in self._jobs:
             self.debug(3,"PROCESS in deploy",job.get_last_process())
+        
+        jobs = []
+        for instance in self._instances:
+            jobs.append( self._deploy_all(instance) )
+        await asyncio.gather( *jobs )
 
-        # https://docs.python.org/3/library/concurrent.futures.html cf. ThreadPoolExecutor Example¶
-        with concurrent.futures.ThreadPoolExecutor(max_workers=self._get_num_workers()) as pool:
-            future_to_instance = { pool.submit(self._deploy_all,
-                                                instance) : instance for instance in self._instances
-                                                }
-            for future in concurrent.futures.as_completed(future_to_instance):
-                inst = future_to_instance[future]
-                instanceid = inst.get_id()
-                #future.result()
-            #pool.shutdown()
         self._state = CloudSendProviderState.DEPLOYED    
 
-    def revive(self,instance,rerun=False):
+    async def revive(self,instance,rerun=False):
         self.debug(1,"REVIVING instance",instance)
 
         jobs_can_be_saved = False
@@ -511,7 +507,7 @@ class CloudSendFatProvider(CloudSendProvider,ABC):
             self.debug(1,"Instance is stopping|stopped, we just have to re-start the instance",instance,color=bcolors.OKCYAN)
             jobs_can_be_saved = True
             #self.start_instance(instance)
-            self._wait_for_instance(instance)
+            await self._wait_for_instance(instance)
         else:
             # try restarting it
             self._start_and_update_instance(instance)
@@ -519,7 +515,7 @@ class CloudSendFatProvider(CloudSendProvider,ABC):
             #no need - deploy is doing this already
             #self._wait_for_instance(instance)
             # re-deploy it
-            self._deploy_all(instance)
+            await self._deploy_all(instance)
         if rerun:
             processes = self.run(instance,jobs_can_be_saved) #will run the jobs for this instance
             return processes #instance_processes, jobsinfo 
@@ -532,7 +528,7 @@ class CloudSendFatProvider(CloudSendProvider,ABC):
             if process.get_state() & state_mask:
                 process.set_state(CloudSendProcessState.ABORTED)
 
-    def get_log(self,process,ssh_client):
+    async def get_log(self,process,ssh_conn):
         uid   = process.get_uid()
         job   = process.get_job() # dpl job
         env   = job.get_env() # dpl env
@@ -543,7 +539,7 @@ class CloudSendFatProvider(CloudSendProvider,ABC):
             run_path = instance.path_join( path , jhash , uid )
             run_log1 = instance.path_join( run_path , 'run-'+uid+'.log' )
             run_log2 = instance.path_join( run_path , 'run.log' )
-            stdin , stdout , stderr = self._exec_command(ssh_client,"cat "+run_log1+' '+run_log2)
+            stdout , stderr = await self._exec_command(ssh_conn,"cat "+run_log1+' '+run_log2)
             return stdout.read()
         except:
             return None
@@ -557,7 +553,7 @@ class CloudSendFatProvider(CloudSendProvider,ABC):
         # ...
         # 4) basically the state is > old state ...?
 
-    def _check_run_state(self,runinfo):
+    async def _check_run_state(self,runinfo):
         instance = runinfo.get('instance')
         if instance.get_name() in self._instances_states and self._instances_states[instance.get_name()]['changed']==True:
            self.debug(1,"Instance has changed! States of old jobs should return UNKNOWN and a new batch of jobs will be started",color=bcolors.WARNING)
@@ -578,7 +574,7 @@ class CloudSendFatProvider(CloudSendProvider,ABC):
         do_run = True
         if instance.get_name() in instances_processes:
             processes_infos = instances_processes[instance.get_name()]
-            last_processes_new = self.__get_jobs_states_internal(processes_infos,CloudSendProviderStateWaitMode.NO_WAIT|CloudSendProviderStateWaitMode.WATCH,CloudSendProcessState.ANY,False,True) # Programmatic >> no print, no serialize
+            last_processes_new = await self.__get_jobs_states_internal(processes_infos,CloudSendProviderStateWaitMode.NO_WAIT|CloudSendProviderStateWaitMode.WATCH,CloudSendProcessState.ANY,False,True) # Programmatic >> no print, no serialize
             do_run = False
             all_done = True
             for process_old in last_processes_old:
@@ -618,9 +614,9 @@ class CloudSendFatProvider(CloudSendProvider,ABC):
         else:
             return True , None , False
 
-    def _run_jobs_for_instance(self,instance,runinfo,batch_uid,dpl_jobs) :
+    async def _run_jobs_for_instance(self,instance,runinfo,batch_uid,dpl_jobs,new_processes) :
         if self._recovery:
-            do_run , processes , all_done = self._check_run_state(runinfo)
+            do_run , processes , all_done = await self._check_run_state(runinfo)
             if not do_run:
                 instance = runinfo.get('instance')
                 if all_done:
@@ -643,16 +639,16 @@ class CloudSendFatProvider(CloudSendProvider,ABC):
             cmd_pid  = runinfo.get('cmd_pid')
             batch_run_file = instance.path_join( global_path , 'batch_run-'+batch_uid+'.sh')
             batch_pid_file = instance.path_join( global_path , 'batch_pid-'+batch_uid+'.sh')
-            ssh_client = self._connect_to_instance(instance)
-            if ssh_client is None:
-                ssh_client , processes = self._handle_instance_disconnect(instance,CloudSendProviderStateWaitMode.WATCH,"could not run jobs for instance")
-                if ssh_client is None:
+            ssh_conn = await self._connect_to_instance(instance)
+            if ssh_conn is None:
+                ssh_conn , processes = await self._handle_instance_disconnect(instance,CloudSendProviderStateWaitMode.WATCH,"could not run jobs for instance")
+                if ssh_conn is None:
                     return []
 
-            ftp_client = ssh_client.open_sftp()
-            ftp_client.chdir(global_path)
-            ftp_client.putfo(BytesIO(cmd_run_pre.encode()+cmd_run.encode()), batch_run_file)
-            ftp_client.putfo(BytesIO(cmd_pid.encode()), batch_pid_file)
+            ftp_client = await ssh_conn.start_sftp_client()
+            await ftp_client.chdir(global_path)
+            await self.sftp_put_string(ftp_client,batch_run_file,cmd_run_pre+cmd_run)
+            await self.sftp_put_string(ftp_client, batch_pid_file,cmd_pid)
             # run
             commands = [ 
                 { 'cmd': "chmod +x "+batch_run_file+" "+batch_pid_file, 'out' : True } ,  # important to wait for it >> True !!!
@@ -661,13 +657,13 @@ class CloudSendFatProvider(CloudSendProvider,ABC):
             ]
             
             try:
-                self._run_ssh_commands(instance,ssh_client,commands)
+                await self._run_ssh_commands(instance,ssh_conn,commands)
                 tryagain = False
             except Exception as e:
                 self.debug(1,e)
                 self.debug(1,"ERROR: the instance is unreachable while sending batch",instance,color=bcolors.FAIL)
-                ssh_client , processes = self._handle_instance_disconnect(instance,CloudSendProviderStateWaitMode.WATCH,"could not run jobs for instance")
-                if ssh_client is None:
+                ssh_conn , processes = await self._handle_instance_disconnect(instance,CloudSendProviderStateWaitMode.WATCH,"could not run jobs for instance")
+                if ssh_conn is None:
                     return []
                 tryagain = True
 
@@ -679,13 +675,15 @@ class CloudSendFatProvider(CloudSendProvider,ABC):
                 self.debug(2,process) 
                 processes.append(process)
 
-            ssh_client.close()
+            ssh_conn.close()
 
         self.serialize_state()
 
-        return processes 
+        for process in processes:
+            new_processes.append( process )        
+        #return processes 
 
-    def run(self,instance_filter=None,except_done=False):
+    async def run(self,instance_filter=None,except_done=False):
 
         # we're not coming from revive but we've recovered a state ...
         if except_done == False and self._recovery == True:
@@ -776,24 +774,11 @@ class CloudSendFatProvider(CloudSendProvider,ABC):
             instances_runs[instance.get_name()]['cmd_run_pre'] = cmd_run_pre
         
         self._current_processes = []
-        
-        with concurrent.futures.ThreadPoolExecutor(max_workers=self._get_num_workers()) as pool:
-            future_to_instance = { pool.submit(self._run_jobs_for_instance,
-                                                instance,runinfo,batch_uid,dpl_jobs) : instance for instance_name , runinfo in instances_runs.items()
-                                                }
-            for future in concurrent.futures.as_completed(future_to_instance):
-                inst = future_to_instance[future]
-                #instanceid = inst.get_id()
-                #future.result()
-                fut_processes = future.result()
-                if fut_processes is None:
-                    self.debug(1,"An error occured while running the jobs. Process will stop.")
-                    return None
-                for process in fut_processes:
-                    # switch to yield when the wait_for_state method is ready ...
-                    #yield process
-                    self._current_processes.append(process)
-            #pool.shutdown()        
+        jobs = []
+        for instance_name , runinfo in instances_runs.items():
+            # will automatically append to self._current_processes
+            jobs.append( self._run_jobs_for_instance(instance,runinfo,batch_uid,dpl_jobs,self._current_processes) ) 
+        await asyncio.gather( *jobs )
 
         self._state = CloudSendProviderState.RUNNING
 
@@ -817,20 +802,20 @@ class CloudSendFatProvider(CloudSendProvider,ABC):
                     for process in dpl_job.get_processes():
                         self.debug(1,"|_",process.str_simple())
 
-    def print_aborted_logs(self,instance=None):
+    async def print_aborted_logs(self,instance=None):
         instances = self._instances if instance is None else [ instance ]
         for _instance in instances:
-            ssh_client = self._connect_to_instance(_instance)
+            ssh_conn = await self._connect_to_instance(_instance)
             for job in _instance.get_jobs():
                 process = job.get_last_process()
                 if process.get_state() == CloudSendProcessState.ABORTED:
                     self.debug(1,"----------------------------------------------------------------------",color=bcolors.WARNING)
                     self.debug(1,"Job #",job.get_rank(),"has ABORTED with errors:",color=bcolors.WARNING)
-                    self.debug(1,self.get_log(process,ssh_client),color=bcolors.WARNING)
+                    self.debug(1,await self.get_log(process,ssh_conn),color=bcolors.WARNING)
                     self.debug(1,process,color=bcolors.WARNING)
-            ssh_client.close()   
+            ssh_conn.close()   
 
-    def fetch_results(self,out_dir,processes=None):
+    async def fetch_results(self,out_dir,processes=None):
 
         if processes is None: 
             processes = self.get_last_processes()
@@ -861,14 +846,14 @@ class CloudSendFatProvider(CloudSendProvider,ABC):
 
             if not instance.get_name() in clients:
                 clients[instance.get_name()] = dict()
-                ssh_client = self._connect_to_instance(instance)
-                if ssh_client is not None:
-                    ftp_client = ssh_client.open_sftp()
-                    clients[instance.get_name()] = { 'ssh': ssh_client , 'ftp' : ftp_client}
+                ssh_conn = await self._connect_to_instance(instance)
+                if ssh_conn is not None:
+                    ftp_client = await ssh_conn.start_sftp_client()
+                    clients[instance.get_name()] = { 'ssh': ssh_conn , 'ftp' : ftp_client}
                 else:
                     self.debug(1,"Skipping instance",instance.get_name(),"(unreachable)",color=bcolors.WARNING)
             else:
-                ssh_client = clients[instance.get_name()]['ssh']
+                ssh_conn = clients[instance.get_name()]['ssh']
                 ftp_client = clients[instance.get_name()]['ftp']
             
             out_file = dpl_job.get_config('output_file') # this file is written for the local machine
@@ -936,7 +921,7 @@ class CloudSendFatProvider(CloudSendProvider,ABC):
 
         return lnstr
 
-    def _handle_instance_disconnect(self,instance,wait_mode,msg,processes=None):
+    async def _handle_instance_disconnect(self,instance,wait_mode,msg,processes=None):
 
         if self._instances_watching.get(instance.get_name(),False) == False:
             self.debug(1,"We have stopped watching the instance - We won't try to reconnect",color=bcolors.WARNING)
@@ -954,11 +939,11 @@ class CloudSendFatProvider(CloudSendProvider,ABC):
 
         # this is an Internet error
         if instance.get_state() == CloudSendInstanceState.RUNNING:
-            ssh_client = self._connect_to_instance(instance)
-            if ssh_client is None:
+            ssh_conn = await self._connect_to_instance(instance)
+            if ssh_conn is None:
                 self.debug(1,"FATAL ERROR(0):",msgs,instance,color=bcolors.FAIL)
                 return None , None
-            return ssh_client , None
+            return ssh_conn , None
 
 
         self.debug(1,"ERROR:",msg,instance,color=bcolors.FAIL)
@@ -971,11 +956,11 @@ class CloudSendFatProvider(CloudSendProvider,ABC):
                 self._mark_aborted(processes,CloudSendProcessState.ANY) 
         rerun_jobs = processes is not None
         if wait_mode & CloudSendProviderStateWaitMode.WATCH:
-            processes = self.revive(instance,rerun_jobs)
-        ssh_client = self._connect_to_instance(instance)
-        if ssh_client is None:
+            processes = await self.revive(instance,rerun_jobs)
+        ssh_conn = await self._connect_to_instance(instance)
+        if ssh_conn is None:
             self.debug(1,"FATAL ERROR(1):",msgs,instance,color=bcolors.FAIL)
-        return ssh_client , processes #processes_info , jobsinfo
+        return ssh_conn , processes #processes_info , jobsinfo
 
     def _recompute_jobs_info(self,instance,processes):
         instances_processes = self._organize_instances_processes(processes)
@@ -1005,19 +990,19 @@ class CloudSendFatProvider(CloudSendProvider,ABC):
         
         return jobsinfo , instance
 
-    def __get_jobs_states_internal( self , processes_infos , wait_mode , job_state , daemon = False , programmatic = False):
+    async def __get_jobs_states_internal( self , new_processes , processes_infos , wait_mode , job_state , daemon = False , programmatic = False):
 
         jobsinfo , instance = self._compute_jobs_info(processes_infos)
 
         if not programmatic and wait_mode & CloudSendProviderStateWaitMode.WATCH:
             self._instances_watching[instance.get_name()] = True
         
-        ssh_client = self._connect_to_instance(instance)
+        ssh_conn = await self._connect_to_instance(instance)
 
-        if ssh_client is None:
-            ssh_client , processes = self._handle_instance_disconnect(instance,wait_mode,"could not get jobs states for instance",
+        if ssh_conn is None:
+            ssh_conn , processes = await self._handle_instance_disconnect(instance,wait_mode,"could not get jobs states for instance",
                                             [processes_infos[uid]['process'] for uid in processes_infos])
-            if ssh_client is None:
+            if ssh_conn is None:
                 return 
             
             if processes is not None:
@@ -1033,10 +1018,10 @@ class CloudSendFatProvider(CloudSendProvider,ABC):
                 self.debug(1,"Processes have changed for instance",instance.get_name(),". Replacing 'processes' argument with new processes",color=bcolors.WARNING)
                 processes_infos , jobsinfo = self._recompute_jobs_info(instance,self._current_processes)
 
-            if not ssh_client.get_transport().is_active():
-                ssh_client , processes = self._handle_instance_disconnect(instance,wait_mode,"could not get jobs states for instance. SSH connection lost with",
+            if False: #not ssh_conn.get_transport().is_active():
+                ssh_conn , processes = await self._handle_instance_disconnect(instance,wait_mode,"could not get jobs states for instance. SSH connection lost with",
                                                 [processes_infos[uid]['process'] for uid in processes_infos])
-                if ssh_client is None:
+                if ssh_conn is None:
                     return None
                 
                 if processes is not None:
@@ -1048,25 +1033,26 @@ class CloudSendFatProvider(CloudSendProvider,ABC):
             cmd =  state_sh + " " + jobsinfo
             self.debug(2,"Executing command",cmd)
             try:
-                stdin, stdout, stderr = self._exec_command(ssh_client,cmd)
+                stdout, stderr = await self._exec_command(ssh_conn,cmd)
             except Exception as e:
                 self.debug(1,"SSH connection error while sending state.sh command")
-                ssh_client , processes = self._handle_instance_disconnect(instance,wait_mode,"could not get jobs states for instance. SSH connection lost with",
+                ssh_conn , processes = await self._handle_instance_disconnect(instance,wait_mode,"could not get jobs states for instance. SSH connection lost with",
                                                 [processes_infos[uid]['process'] for uid in processes_infos])
-                if ssh_client is None:
+                if ssh_conn is None:
                     return None
                 if processes is not None: # if processes have changed due to restart
                     processes_infos , jobsinfo = self._recompute_jobs_info(instance,processes)
                     cmd = state_sh + " " + jobsinfo
                 
                 # try one more time to re-run the command ...
-                stdin, stdout, stderr = self._exec_command(ssh_client,cmd)
+                stdout, stderr = await self._exec_command(ssh_conn,cmd)
 
                 processes = []
 
             while True: 
-                lines = stdout.readlines()
-                for line in lines:           
+                async for line in stdout:      
+                    if not line:
+                        break     
                     statestr = line.strip() #line.decode("utf-8").strip()
                     self.debug(2,"State=",statestr,"IP=",instance.get_ip_addr())
                     stateinfo = statestr.split(',')
@@ -1107,9 +1093,6 @@ class CloudSendFatProvider(CloudSendProvider,ABC):
                     else:
                         debug(2,"Received UID info that was not requested")
 
-                if lines is None or len(lines)==0:
-                    break
-
             # print job status summary
             if not programmatic and not daemon:
                 self.print_jobs_summary(instance)
@@ -1130,12 +1113,11 @@ class CloudSendFatProvider(CloudSendProvider,ABC):
                 self.serialize_state()
 
             if wait_mode & CloudSendProviderStateWaitMode.WAIT:
-                #await asyncio.sleep(15)
-                time.sleep(15)
+                await asyncio.sleep(15)
             else:
                 break
 
-        ssh_client.close() 
+        ssh_conn.close() 
 
         if not programmatic:
             # this should not be necessary but it sometimes seems it needs to be there
@@ -1147,7 +1129,7 @@ class CloudSendFatProvider(CloudSendProvider,ABC):
             # this helps with the demo which runs a wait() and a get() sequentially ...
             if not programmatic:
                 if self._auto_stop:
-                    time.sleep(60*1)  
+                    await asyncio.sleep(60*1)  
 
                 self._instances_watching[instance.get_name()] = False            
                 
@@ -1163,7 +1145,9 @@ class CloudSendFatProvider(CloudSendProvider,ABC):
                         self.debug(1,"Stopping the fat client (maestro) because all instances have ran the jobs",color=bcolors.WARNING)
                         os.system("sudo shutdown -h now")
 
-        return processes
+        #return processes
+        for process in processes:
+            new_processes.append( process )
 
     def _get_num_workers(self):
         num_workers = 10
@@ -1217,7 +1201,7 @@ class CloudSendFatProvider(CloudSendProvider,ABC):
         return instances_processes
 
 
-    def __get_or_wait_jobs_state( self, processes , wait_state = CloudSendProviderStateWaitMode.NO_WAIT , job_state = CloudSendProcessState.ANY , daemon = False ):   
+    async def __get_or_wait_jobs_state( self, processes , wait_state = CloudSendProviderStateWaitMode.NO_WAIT , job_state = CloudSendProcessState.ANY , daemon = False ):   
 
         if processes is None: 
             processes = self.get_last_processes()
@@ -1229,61 +1213,47 @@ class CloudSendFatProvider(CloudSendProvider,ABC):
 
         processes = [] 
 
+        jobs = []
+        for instance_name , processes_infos in instances_processes.items():
+            jobs.append( self.__get_jobs_states_internal(processes,processes_infos,wait_state,job_state,daemon) )
+
         if not daemon:
-            with concurrent.futures.ThreadPoolExecutor(max_workers=self._get_num_workers()) as pool:
-                future_to_instance = { pool.submit(self.__get_jobs_states_internal,
-                                                    processes_infos,wait_state,job_state,daemon) : instance_name for instance_name , processes_infos in instances_processes.items()
-                                                    }
-                for future in concurrent.futures.as_completed(future_to_instance):
-                    inst_name = future_to_instance[future]
-                    #instanceid = inst.get_id()
-                    #future.result()
-                    fut_processes = future.result()
-                    if fut_processes is not None:
-                        for p in fut_processes:
-                            processes.append(p)
-                    else:
-                        self.debug(1,"There has been a problem with __get_jobs_states_internal")
+            await asyncio.gather( *jobs )
             return processes
         else:
-            # will daemon the pool ... (non blocking)
-            if self._watch_pool is not None:
-                self._watch_pool.shutdown()
-            self._watch_pool = concurrent.futures.ThreadPoolExecutor(max_workers=self._get_num_workers())
-            for instance_name , processes_infos in instances_processes.items():
-                self._watch_pool.submit(self.__get_jobs_states_internal,processes_infos,wait_state,job_state,daemon)
-            #pool.shutdown()
+            # spawn it ...
+            asyncio.ensure_future( asyncio.gather( *jobs ) )
             if wait_state & CloudSendProviderStateWaitMode.WATCH:
                 self.debug(1,"Watching ...")
 
             return None
         # done
 
-    def wakeup(self):
+    async def wakeup(self):
         # if self._state != CloudSendProviderState.WATCHING:
         #     self.debug(1,"Provider was not watching: cancelling automatic wakeup")
         #     return 
         # else:
         if self._recovery:
             if self._state >= CloudSendProviderState.STARTED:
-                self.start()
+                await self.start()
             if self._state >= CloudSendProviderState.ASSIGNED:
-                self.assign()
+                await self.assign()
             if self._state >= CloudSendProviderState.DEPLOYED:
-                self.deploy()
+                await self.deploy()
             # should we have those here ? Or just let watch do it's thing ? 
             # actually, thanks to state recovery, run_jobs should be smart enough to not run DONE jobs again...
             if self._state >= CloudSendProviderState.RUNNING:
-                self.run()
+                await self.run()
             if self._state >= CloudSendProviderState.WATCHING:
-                self.watch(None,True) # daemon mode
+                await self.watch(None,True) # daemon mode
         else:
             # self.start()
             # self.assign()
             # self.deploy()
             pass
 
-    def watch(self,processes=None,daemon=True):
+    async def watch(self,processes=None,daemon=True):
 
         job_state = CloudSendProcessState.DONE|CloudSendProcessState.ABORTED
         
@@ -1293,22 +1263,22 @@ class CloudSendFatProvider(CloudSendProvider,ABC):
         self._state = CloudSendProviderState.WATCHING
         self.serialize_state()
 
-        return self.__get_or_wait_jobs_state(processes,CloudSendProviderStateWaitMode.WAIT|CloudSendProviderStateWaitMode.WATCH,job_state,daemon)
+        return await self.__get_or_wait_jobs_state(processes,CloudSendProviderStateWaitMode.WAIT|CloudSendProviderStateWaitMode.WATCH,job_state,daemon)
 
 
-    def wait_for_jobs_state(self,job_state,processes=None):
+    async def wait_for_jobs_state(self,job_state,processes=None):
 
         if not processes or len(processes)==0:
             self.debug(2,"No process to wait for")
 
-        return self.__get_or_wait_jobs_state(processes,CloudSendProviderStateWaitMode.WAIT,job_state)
+        return await self.__get_or_wait_jobs_state(processes,CloudSendProviderStateWaitMode.WAIT,job_state)
 
-    def get_jobs_states(self,processes=None):
+    async def get_jobs_states(self,processes=None):
 
         if not processes or len(processes)==0:
             self.debug(2,"No process requested >> getting all jobs' processes")
 
-        return self.__get_or_wait_jobs_state(processes)     
+        return await self.__get_or_wait_jobs_state(processes)     
 
     @abstractmethod
     def get_recommended_cpus(self,inst_cfg):

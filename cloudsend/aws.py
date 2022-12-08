@@ -3,7 +3,7 @@ import os , sys
 from .utils import *
 from cloudsend.core     import CloudSendError , CloudSendInstance , CloudSendInstanceState , CloudSendPlatform
 from cloudsend.core     import cs_keypairName , cs_secGroupName , cs_secGroupNameMaestro , cs_bucketName , cs_vpcName , cs_maestroRoleName , cs_maestroProfileName, cs_maestroPolicyName , init_instance_name
-from cloudsend.provider import debug , bcolors
+from cloudsend.provider import debug
 from cloudsend.providerfat import CloudSendFatProvider
 from cloudsend.providerlight import CloudSendLightProvider
 from botocore.exceptions import ClientError
@@ -89,7 +89,7 @@ def aws_create_keypair(session,region,keypair_name,key_filename,force=False):
                 #    region = my_session.region_name                
                 fpath   = key_filename
                 pemfile = open(fpath, "w")
-                pemfile.write(keypair['KeyMaterial']) # save the private key in the directory (we will use it with paramiko)
+                pemfile.write(keypair['KeyMaterial']) # save the private key in the directory (we will use it with SSH client)
                 pemfile.close()
                 os.chmod(fpath, 0o600) # change permission to use with ssh (for debugging)
                 debug(2,keypair)
