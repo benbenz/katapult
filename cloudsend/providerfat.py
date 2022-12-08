@@ -575,7 +575,8 @@ class CloudSendFatProvider(CloudSendProvider,ABC):
         do_run = True
         if instance.get_name() in instances_processes:
             processes_infos = instances_processes[instance.get_name()]
-            last_processes_new = await self.__get_jobs_states_internal(processes_infos,CloudSendProviderStateWaitMode.NO_WAIT|CloudSendProviderStateWaitMode.WATCH,CloudSendProcessState.ANY,False,True) # Programmatic >> no print, no serialize
+            last_processes_new = []
+            await self.__get_jobs_states_internal(last_processes_new,processes_infos,CloudSendProviderStateWaitMode.NO_WAIT|CloudSendProviderStateWaitMode.WATCH,CloudSendProcessState.ANY,False,True) # Programmatic >> no print, no serialize
             do_run = False
             all_done = True
             for process_old in last_processes_old:
@@ -604,7 +605,8 @@ class CloudSendFatProvider(CloudSendProvider,ABC):
             # (note: an ABORTED state will not switch to UNKNOWN state - in order to keep the most information)
             instances_processes = self._organize_instances_processes(last_processes_old)
             processes_infos = instances_processes[instance.get_name()]
-            self.__get_jobs_states_internal(processes_infos,CloudSendProviderStateWaitMode.NO_WAIT|CloudSendProviderStateWaitMode.WATCH,CloudSendProcessState.ANY,False,True) # Programmatic >> no print, no serialize
+            dummy_new_processes = []
+            self.__get_jobs_states_internal(dummy_new_processes,processes_infos,CloudSendProviderStateWaitMode.NO_WAIT|CloudSendProviderStateWaitMode.WATCH,CloudSendProcessState.ANY,False,True) # Programmatic >> no print, no serialize
 
             if do_run:
                 return True , None, False
