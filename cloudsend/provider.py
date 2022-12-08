@@ -212,7 +212,7 @@ class CloudSendProvider(ABC):
         if not os.path.exists(keypair_filename):
             self.create_keypair(region,True)
         k = asyncssh.read_private_key(keypair_filename)
-        self.debug(1,"connecting to ",instance.get_dns_addr(),"@",instance.get_ip_addr())
+        self.debug(1,"connecting to",instance.get_name(),"@",instance.get_ip_addr())
         retrys = 0 
         while True:
             try:

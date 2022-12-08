@@ -244,7 +244,7 @@ class CloudSendFatProvider(CloudSendProvider,ABC):
                     # setup envs according to current config files state
                     # FIX: mamba is not handling well concurrency
                     # we run the mamba installs sequentially below
-                    #{ 'cmd': instance.path_join( global_path , 'bootstrap.sh' ) + " \"" + dpl_env.get_name_with_hash() + "\" " + ("1" if self._config['dev'] else "0") , 'out': print_deploy , 'output': instance.path_join( dpl_env.get_path() , 'bootstrap.log') },  
+                    #{ 'cmd': instance.path_join( global_path , 'bootstrap.sh' ) + " \"" + dpl_env.get_name_with_hash() + "\" " + ("1" if self._config['dev'] else "0") , 'out': print_deploy , 'output': instance.path_join( dpl_env.get_path() , 'bootstrap._') },  
                 ]
 
                 bootstrap_command = bootstrap_command + (" ; " if bootstrap_command else "") + instance.path_join( global_path , 'bootstrap.sh' ) + " \"" + dpl_env.get_name_with_hash() + "\" " + ("1" if self._config['dev'] else "0")
@@ -805,14 +805,16 @@ class CloudSendFatProvider(CloudSendProvider,ABC):
     async def print_aborted_logs(self,instance=None):
         instances = self._instances if instance is None else [ instance ]
         for _instance in instances:
-            ssh_conn = await self._connect_to_instance(_instance)
+            instanceid , ssh_conn , ftp_client = await self._wait_and_connect(_instance)
             for job in _instance.get_jobs():
                 process = job.get_last_process()
                 if process.get_state() == CloudSendProcessState.ABORTED:
+                    log = await self.get_log(process,ssh_conn)
                     self.debug(1,"----------------------------------------------------------------------",color=bcolors.WARNING)
                     self.debug(1,"Job #",job.get_rank(),"has ABORTED with errors:",color=bcolors.WARNING)
-                    self.debug(1,await self.get_log(process,ssh_conn),color=bcolors.WARNING)
+                    self.debug(1,log,color=bcolors.WARNING)
                     self.debug(1,process,color=bcolors.WARNING)
+            # ftp_client.close()
             ssh_conn.close()   
 
     async def fetch_results(self,out_dir,processes=None):
@@ -846,9 +848,9 @@ class CloudSendFatProvider(CloudSendProvider,ABC):
 
             if not instance.get_name() in clients:
                 clients[instance.get_name()] = dict()
-                ssh_conn = await self._connect_to_instance(instance)
+                instanceid , ssh_conn , ftp_client = await self._wait_and_connect(instance)
                 if ssh_conn is not None:
-                    ftp_client = await ssh_conn.start_sftp_client()
+                    #ftp_client = await ssh_conn.start_sftp_client()
                     clients[instance.get_name()] = { 'ssh': ssh_conn , 'ftp' : ftp_client}
                 else:
                     self.debug(1,"Skipping instance",instance.get_name(),"(unreachable)",color=bcolors.WARNING)
@@ -865,11 +867,11 @@ class CloudSendFatProvider(CloudSendProvider,ABC):
             file_name = file_name.replace(os.sep,'_')
             #ftp_client.chdir(directory)
             with open(os.path.join(out_dir,'job_'+str(rank).zfill(3)+'_'+file_name+file_extension),'wb') as outfile:
-                ftp_client.chdir( directory )
-                ftp_client.getfo( filename , outfile )   
+                await ftp_client.chdir( directory )
+                await ftp_client.get( filename , outfile )   
         
         for client in clients.values():
-            client['ftp'].close()
+            #client['ftp'].close()
             client['ssh'].close()
 
     def get_results_files_list(self,processes=None):

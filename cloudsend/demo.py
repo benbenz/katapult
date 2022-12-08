@@ -72,11 +72,11 @@ async def waitloop(cs_client):
 
     print("\n== START ==\n")
 
-    cs_client.start()
+    await cs_client.start()
 
     print("\n== WAIT ==\n")
     
-    cs_client.wait_for_jobs_state(CloudSendProcessState.DONE|CloudSendProcessState.ABORTED)
+    await cs_client.wait_for_jobs_state(CloudSendProcessState.DONE|CloudSendProcessState.ABORTED)
 
     #rint("Waiting for DONE or ABORTED ...")
     #processes = cs_client.wait_for_jobs_state(CloudSendProcessState.DONE|CloudSendProcessState.ABORTED)
@@ -84,12 +84,12 @@ async def waitloop(cs_client):
     print("\n== SUMMARY ==\n")
 
     # just to show the API ...
-    cs_client.get_jobs_states()
-    cs_client.print_aborted_logs()
+    await cs_client.get_jobs_states()
+    await cs_client.print_aborted_logs()
 
     print("\n== FETCH RESULTS ==\n")
 
-    cs_client.fetch_results(os.path.join(os.getcwd(),'tmp'))
+    await cs_client.fetch_results(os.path.join(os.getcwd(),'tmp'))
 
     print("\n== DONE ==\n")        
 
