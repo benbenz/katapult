@@ -1034,6 +1034,7 @@ class CloudSendFatProvider(CloudSendProvider,ABC):
             self.debug(2,"Executing command",cmd)
             try:
                 stdout, stderr = await self._exec_command(ssh_conn,cmd)
+                
             except Exception as e:
                 self.debug(1,"SSH connection error while sending state.sh command")
                 ssh_conn , processes = await self._handle_instance_disconnect(instance,wait_mode,"could not get jobs states for instance. SSH connection lost with",
@@ -1049,49 +1050,49 @@ class CloudSendFatProvider(CloudSendProvider,ABC):
 
                 processes = []
 
-            while True: 
-                async for line in stdout:      
-                    if not line:
-                        break     
-                    statestr = line.strip() #line.decode("utf-8").strip()
-                    self.debug(2,"State=",statestr,"IP=",instance.get_ip_addr())
-                    stateinfo = statestr.split(',')
-                    statestr  = re.sub(r'\([0-9]+\)','',stateinfo[2])
-                    uid       = stateinfo[0]
-                    pid       = stateinfo[1]
+            data = await stdout.read()
+            for line in data.splitlines():      
+                if not line or line.strip()=="":
+                    break     
+                statestr = line.strip() #line.decode("utf-8").strip()
+                self.debug(2,"State=",statestr,"IP=",instance.get_ip_addr())
+                stateinfo = statestr.split(',')
+                statestr  = re.sub(r'\([0-9]+\)','',stateinfo[2])
+                uid       = stateinfo[0]
+                pid       = stateinfo[1]
 
-                    if uid in processes_infos:
-                        process = processes_infos[uid]['process']
+                if uid in processes_infos:
+                    process = processes_infos[uid]['process']
 
-                        # we don't have PIDs with batches
-                        # let's take the opportunity to update it here...
-                        if process.get_pid() is None and pid != "None":
-                            process.set_pid( int(pid) )
-                        try:
-                            state = CloudSendProcessState[statestr.upper()]
-                            # let's keep as much history as we know 
-                            # ABORTED state has more info than UNKNOWN ...
-                            # on a new state recovery, the newly created instance is returining UNKNOWN
-                            # but if the maestro witnessed an ABORTED state
-                            # we prefer to keep this ...
-                            if not (process.get_state() == CloudSendProcessState.ABORTED and state == CloudSendProcessState.UNKNOWN):
-                                process.set_state(state)
-                            self.debug(2,process)
-                            processes_infos[uid]['retrieved'] = True
-                            # SUPER IMPORTANT TO TEST with retrieved (remote) state !
-                            # if we tested with curernt state we could test against all ABORTED jobs and the wait() function would cancel...
-                            # this could potentially happen though
-                            # instead, the retrieved state is actually UNKNOWN
-                            processes_infos[uid]['test']      = job_state & state 
-                        except Exception as e:
-                            debug(1,"\nUnhandled state received by state.sh!!!",statestr,"\n")
-                            debug(2,e)
-                            state = CloudSendProcessState.UNKNOWN
+                    # we don't have PIDs with batches
+                    # let's take the opportunity to update it here...
+                    if process.get_pid() is None and pid != "None":
+                        process.set_pid( int(pid) )
+                    try:
+                        state = CloudSendProcessState[statestr.upper()]
+                        # let's keep as much history as we know 
+                        # ABORTED state has more info than UNKNOWN ...
+                        # on a new state recovery, the newly created instance is returining UNKNOWN
+                        # but if the maestro witnessed an ABORTED state
+                        # we prefer to keep this ...
+                        if not (process.get_state() == CloudSendProcessState.ABORTED and state == CloudSendProcessState.UNKNOWN):
+                            process.set_state(state)
+                        self.debug(2,process)
+                        processes_infos[uid]['retrieved'] = True
+                        # SUPER IMPORTANT TO TEST with retrieved (remote) state !
+                        # if we tested with curernt state we could test against all ABORTED jobs and the wait() function would cancel...
+                        # this could potentially happen though
+                        # instead, the retrieved state is actually UNKNOWN
+                        processes_infos[uid]['test']      = job_state & state 
+                    except Exception as e:
+                        debug(1,"\nUnhandled state received by state.sh!!!",statestr,"\n")
+                        debug(2,e)
+                        state = CloudSendProcessState.UNKNOWN
 
-                        processes.append(process)
+                    processes.append(process)
 
-                    else:
-                        debug(2,"Received UID info that was not requested")
+                else:
+                    debug(2,"Received UID info that was not requested")
 
             # print job status summary
             if not programmatic and not daemon:
@@ -1225,6 +1226,7 @@ class CloudSendFatProvider(CloudSendProvider,ABC):
             asyncio.ensure_future( asyncio.gather( *jobs ) )
             if wait_state & CloudSendProviderStateWaitMode.WATCH:
                 self.debug(1,"Watching ...")
+            await asyncio.sleep(1) # let it go to the loop
 
             return None
         # done
