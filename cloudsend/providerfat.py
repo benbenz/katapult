@@ -1019,10 +1019,6 @@ class CloudSendFatProvider(CloudSendProvider,ABC):
 
         while True:
 
-            if self._processes_have_changed(instance,processes_infos):
-                self.debug(1,"Processes have changed for instance",instance.get_name(),". Replacing 'processes' argument with new processes",color=bcolors.WARNING)
-                processes_infos , jobsinfo = self._recompute_jobs_info(instance,self._current_processes)
-
             if False: #not ssh_conn.get_transport().is_active():
                 ssh_conn , processes = await self._handle_instance_disconnect(instance,wait_mode,"could not get jobs states for instance. SSH connection lost with",
                                                 [processes_infos[uid]['process'] for uid in processes_infos])
@@ -1123,6 +1119,13 @@ class CloudSendFatProvider(CloudSendProvider,ABC):
             else:
                 break
 
+            # wait functions should update their process list in case the watch function re-run them
+            # we leave this test after the wait so that returning functions (get_state) only look
+            # at the processes passed as argument (if any)
+            if self._processes_have_changed(instance,processes_infos):
+                self.debug(1,"Processes have changed for instance",instance.get_name(),". Replacing 'processes' argument with new processes",color=bcolors.WARNING)
+                processes_infos , jobsinfo = self._recompute_jobs_info(instance,self._current_processes)
+
         ssh_conn.close() 
 
         if not programmatic:
@@ -1209,31 +1212,33 @@ class CloudSendFatProvider(CloudSendProvider,ABC):
 
     async def __get_or_wait_jobs_state( self, processes , wait_state = CloudSendProviderStateWaitMode.NO_WAIT , job_state = CloudSendProcessState.ANY , daemon = False ):   
 
-        if processes is None: 
+        if processes is None or len(processes)==0: 
             processes = self.get_last_processes()
 
         if processes and not isinstance(processes,list):
             processes = [ processes ]
 
+        if len(processes) == 0:
+            self.debug(2,"No processes to get/wait. Returning")
+            return None
+
         instances_processes = self._organize_instances_processes(processes)
 
-        processes = [] 
-
+        new_processes = [] 
         jobs = []
         for instance_name , processes_infos in instances_processes.items():
-            jobs.append( self.__get_jobs_states_internal(processes,processes_infos,wait_state,job_state,daemon) )
+            jobs.append( self.__get_jobs_states_internal(new_processes,processes_infos,wait_state,job_state,daemon) )
 
         if not daemon:
             await asyncio.gather( *jobs )
-            return processes
+            return new_processes # we return the new processes because we waited for them to be filled up
         else:
             # spawn it ...
             asyncio.ensure_future( asyncio.gather( *jobs ) )
             if wait_state & CloudSendProviderStateWaitMode.WATCH:
                 self.debug(1,"Watching ...")
             await asyncio.sleep(2) # let it go to the loop
-
-            return None
+            return processes # we return the normal processes because we have no processing done yet
         # done
 
     async def wakeup(self):
