@@ -110,7 +110,7 @@
   - [x] debug:  An error occurred (InvalidParameterValue) when calling the AssociateIamInstanceProfile operation: Value (arn:aws:iam::870777542080:instance-profile/cloudsend-maestro-profile) for parameter iamInstanceProfile.arn is invalid. Invalid IAM Instance Profile ARN
   - [x] debug 'local' why when terminating an instance, the watch() AS daemon + wait() method are not stopping ... ISSUE WITH PROCESSES LIST?
   - [x] auto-stop function
-  - [ ] clean API / simplify issue of passed parameters ? fix bug
+  - [x] clean API / simplify issue of passed parameters ? fix bug
   - [ ] maestro multiple projects handling
   - [ ] maestro multiple clients handling (right now there is a sys.stdout redirection issue)
   - [x] switch back to asyncio

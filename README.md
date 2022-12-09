@@ -329,17 +329,11 @@ class CloudSendFatProvider(ABC):
     # if reset = True, CloudSend forces a process cleanup as well as more re-uploads
     def start(self,reset):
 
-    # assign jobs to instances
-    def assign(self):
-
     # deploy all materials (environments, files, scripts etc.)
     def deploy(self):
 
     # run the jobs
     def run(self,wait=False):
-
-    # activate the watcher function
-    def watch(self):
 
     # wait for the processes to reach a state
     def wait(self,job_state,processes=None):
