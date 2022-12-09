@@ -176,14 +176,11 @@ class ServerContext:
             
             elif command == 'watch':
 
-                daemon = True
-                if args:
-                    daemon = args[0].strip().lower() == "true"
-                await self.cs_client.watch(None,daemon)
+                await self.cs_client.watch()
 
             elif command == 'wait':
 
-                await self.cs_client.wait_for_jobs_state(CloudSendProcessState.DONE|CloudSendProcessState.ABORTED)
+                await self.cs_client.wait(CloudSendProcessState.DONE|CloudSendProcessState.ABORTED)
 
             elif command == 'get_states':
 

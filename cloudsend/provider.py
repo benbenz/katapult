@@ -497,11 +497,11 @@ class CloudSendProvider(ABC):
         pass
 
     @abstractmethod
-    async def watch(self,processes=None,daemon=True):
+    async def watch(self):
         pass
 
     @abstractmethod
-    async def wait_for_jobs_state(self,job_state,processes=None):
+    async def wait(self,job_state,processes=None):
         pass
 
     @abstractmethod

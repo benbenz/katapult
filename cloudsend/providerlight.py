@@ -452,16 +452,16 @@ class CloudSendLightProvider(CloudSendProvider,ABC):
         # triggers maestro::run
         await self._exec_maestro_command("run")
 
-    async def watch(self,processes=None,daemon=True):
-        # triggers maestro::wait_for_jobs_state
-        await self._exec_maestro_command("watch:"+str(daemon))
+    async def watch(self):
+        # triggers maestro::watch
+        await self._exec_maestro_command("watch")
 
     async def wakeup(self):
         # triggers maestro::wakeup
         await self._exec_maestro_command("wakeup")
 
-    async def wait_for_jobs_state(self,job_state,processes=None):
-        # triggers maestro::wait_for_jobs_state
+    async def wait(self,job_state,processes=None):
+        # triggers maestro::wait
         await self._exec_maestro_command("wait")
 
     async def get_jobs_states(self,processes=None):

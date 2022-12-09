@@ -788,7 +788,17 @@ class CloudSendFatProvider(CloudSendProvider,ABC):
             instances_runs[instance.get_name()]['cmd_pid'] = cmd_pid
             instances_runs[instance.get_name()]['cmd_run_pre'] = cmd_run_pre
         
-        self._current_processes = []
+        # lets reset the current_processes according to the instance filter
+        # we want to keep intact the processes that are not part of the re-run
+        if self._current_processes is None:
+            self._current_processes = []
+        elif instance_filter is not None:
+            new_current_processes0 = [ ]
+            for cur_p in self._current_processes:
+                if cur_p.get_job().get_instance() != instance_filter:
+                    new_current_processes0.append(cur_p)
+            self._current_processes = new_current_processes0 
+
         jobs = []
         for instance_name , runinfo in instances_runs.items():
             # will automatically append to self._current_processes
@@ -1020,7 +1030,7 @@ class CloudSendFatProvider(CloudSendProvider,ABC):
             ssh_conn , processes = await self._handle_instance_disconnect(instance,wait_mode,"could not get jobs states for instance",
                                             [processes_infos[uid]['process'] for uid in processes_infos])
             if ssh_conn is None:
-                return 
+                return None
             
             if processes is not None:
                 processes_infos , jobsinfo = self._recompute_jobs_info(instance,processes)
@@ -1153,7 +1163,15 @@ class CloudSendFatProvider(CloudSendProvider,ABC):
                     await asyncio.sleep(60*1)  
 
                 self._instances_watching[instance.get_name()] = False            
-                
+                any_watching = any( self._instances_watching.values() )
+
+                if not any_watching:
+                    self.debug(2,"WATCHING has ended")
+                    self._current_processes = None
+                    self.debug(2,"entering IDLE state")
+                    self._state = CloudSendProviderState.IDLE
+                    self.serialize_state()
+
                 if self._auto_stop:
                     try:
                         self.debug(1,"Stopping instance",instance.get_name(),color=bcolors.WARNING)
@@ -1161,12 +1179,9 @@ class CloudSendFatProvider(CloudSendProvider,ABC):
                     except:
                         pass
                     debug(2,self._instances_watching)
-                    any_watching = any( self._instances_watching.values() )
                     if not any_watching:
                         self.debug(1,"Stopping the fat client (maestro) because all instances have ran the jobs",color=bcolors.WARNING)
                         os.system("sudo shutdown -h now")
-
-                self._current_processes = None
 
         #return processes
         for process in processes:
@@ -1191,11 +1206,29 @@ class CloudSendFatProvider(CloudSendProvider,ABC):
         #     return True
         processes = processes_infos.values()
         if self._current_processes is None or processes is None:
+            self.debug(2,"_processes_have_changed: No current processes or processes: returning False")
             return False
         processes_comp = []
         for process in self._current_processes:
             if process.get_job().get_instance() == instance:
                 processes_comp.append( process )
+        
+        # debugging the processes array results vs args vs watch vs wait vs getstate
+        if self.DBG_LVL>=2:
+            str_pc = "" 
+            for p in processes_comp:
+                str_pc = str_pc + p.get_uid() + " "
+            str_p = "" 
+            for p in processes:
+                str_p = str_p + p['process'].get_uid() + " "
+            str_cp = "" 
+            for p in self._current_processes:
+                if p.get_job().get_instance() == instance:
+                    str_cp = str_cp + p.get_uid() + " "
+            self.debug(2,"processes_comp",str_pc)
+            self.debug(2,"processes     ",str_p )
+            #self.debug(2,"curr_processes",str_cp)
+
         if len(processes_comp) != len(processes):
             return True
         for i,process_info in enumerate(processes):
@@ -1227,6 +1260,7 @@ class CloudSendFatProvider(CloudSendProvider,ABC):
     async def __get_or_wait_jobs_state( self, processes , wait_state = CloudSendProviderStateWaitMode.NO_WAIT , job_state = CloudSendProcessState.ANY , daemon = False ):   
 
         if processes is None or len(processes)==0: 
+            self.debug(2,"Using last processes because no processes argument has been passed")
             processes = self.get_last_processes()
 
         if processes and not isinstance(processes,list):
@@ -1279,7 +1313,7 @@ class CloudSendFatProvider(CloudSendProvider,ABC):
             # self.deploy()
             pass
 
-    async def watch(self,processes=None,daemon=True):
+    async def watch(self):
 
         job_state = CloudSendProcessState.DONE|CloudSendProcessState.ABORTED
         
@@ -1289,10 +1323,10 @@ class CloudSendFatProvider(CloudSendProvider,ABC):
         self._state = CloudSendProviderState.WATCHING
         self.serialize_state()
 
-        return await self.__get_or_wait_jobs_state(processes,CloudSendProviderStateWaitMode.WAIT|CloudSendProviderStateWaitMode.WATCH,job_state,daemon)
+        await self.__get_or_wait_jobs_state(None,CloudSendProviderStateWaitMode.WAIT|CloudSendProviderStateWaitMode.WATCH,job_state,True)
 
 
-    async def wait_for_jobs_state(self,job_state,processes=None):
+    async def wait(self,job_state,processes=None):
 
         if not processes or len(processes)==0:
             self.debug(2,"No process to wait for")
@@ -1300,6 +1334,8 @@ class CloudSendFatProvider(CloudSendProvider,ABC):
         return await self.__get_or_wait_jobs_state(processes,CloudSendProviderStateWaitMode.WAIT,job_state)
 
     async def get_jobs_states(self,processes=None):
+
+        self.debug(2,'Getting Jobs States ...')
 
         if not processes or len(processes)==0:
             self.debug(2,"No process requested >> getting all jobs' processes")

@@ -34,21 +34,18 @@ async def mainloop(cs_client,reset=False):
     print("\n== RUN ==\n")
 
     # run the scripts and get a process back
-    # process1  = await cs_client.run_job(cs_client.get_job(0)) 
-    # process2  = await cs_client.run_job(cs_client.get_job(1)) 
-    # processes = [ process1 , process2 ]
     processes = await cs_client.run()
 
     print("\n== WATCH ==\n")
 
-    processes = await cs_client.watch(processes,True) #daemon = True >> no wait
+    await cs_client.watch() 
 
     print("\n== WAIT ==\n")
 
     print("Waiting for DONE or ABORTED ...")
     # now that we have 'watch' before 'wait' , this will exit instantaneously
     # because watch includes 'wait' mode intrinsiquely
-    processes = await cs_client.wait_for_jobs_state(CloudSendProcessState.DONE|CloudSendProcessState.ABORTED,processes)
+    processes = await cs_client.wait(CloudSendProcessState.DONE|CloudSendProcessState.ABORTED,processes)
 
     print("\n== SUMMARY ==\n")
 
@@ -57,9 +54,6 @@ async def mainloop(cs_client,reset=False):
 
     # print("\n== WAIT and TAIL ==\n")
 
-    # task1 = asyncio.create_task(cs_client.wait_for_script_state(CloudSendProcessState.DONE|CloudSendProcessState.ABORTED,script_hash,uid))
-    # task2 = asyncio.create_task(tail_loop(script_hash,uid))
-    # await asyncio.gather(task1,task2)
     await cs_client.print_aborted_logs()
 
     print("\n== FETCH RESULTS ==\n")
@@ -76,10 +70,7 @@ async def waitloop(cs_client):
 
     print("\n== WAIT ==\n")
     
-    await cs_client.wait_for_jobs_state(CloudSendProcessState.DONE|CloudSendProcessState.ABORTED)
-
-    #rint("Waiting for DONE or ABORTED ...")
-    #processes = cs_client.wait_for_jobs_state(CloudSendProcessState.DONE|CloudSendProcessState.ABORTED)
+    await cs_client.wait(CloudSendProcessState.DONE|CloudSendProcessState.ABORTED)
 
     print("\n== SUMMARY ==\n")
 

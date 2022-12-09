@@ -338,13 +338,11 @@ class CloudSendFatProvider(ABC):
     # run the jobs
     def run(self,wait=False):
 
-    # watch the processes (= wait + revive instances when terminated)
-    # with daemon (=True), the call is non blocking and will execute in the background
-    # without daemon (=False), the call is blocking and will display the processes/states
-    def watch(self,processes=None,daemon=True):
+    # activate the watcher function
+    def watch(self):
 
     # wait for the processes to reach a state
-    def wait_for_jobs_state(self,job_state,processes=None):
+    def wait(self,job_state,processes=None):
 
     # get the states of the processes
     def get_jobs_states(self,processes=None):
@@ -410,32 +408,33 @@ config = __import__(config).config
 provider = cloudsend.get_client(config)
 
 # start the provider: this attempts to create the instances
-provider.start()
+await provider.start()
 
 # assign the jobs onto the instances
-provider.assign()
+await provider.assign()
 
 # deploy the necessary stuff onto the instances
-provider.deploy()
+await provider.deploy()
 
 # run the jobs and get active processes objects back
-processes = provider.run()
+processes = await provider.run()
 
-# watch mode: revive instances (started as daemon here)
-processes = provider.watch(processes)
-# wait for the active proccesses to be done:
-processes = provider.wait_for_jobs_state(CloudSendProcessState.DONE|CloudSendProcessState.ABORTED,processes)
+# watch mode: revive instances (daemon)
+await provider.watch(processes)
+
+# wait for the active proccesses to be done or aborted:
+processes = await provider.wait(CloudSendProcessState.DONE|CloudSendProcessState.ABORTED,processes)
 
 # you can get the state of all jobs this way:
-processes = provider.get_jobs_states()
+processes = await provider.get_jobs_states()
 # or get the state for a specific list of processes:
-processes = provider.get_jobs_states(processes)
+processes = await provider.get_jobs_states(processes)
 
 # you can print processes summary with:
-provider.print_jobs_summary()
+await provider.print_jobs_summary()
 
 # get the results file locally
-provider.fetch_results('./tmp')
+await provider.fetch_results('./tmp')
 
 ```
 
