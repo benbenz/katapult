@@ -112,7 +112,7 @@
   - [x] auto-stop function
   - [ ] maestro multiple projects handling
   - [x] switch back to asyncio
-  - [ ] add CLI: add_jobs , add_instances , add_environments , clear (done jobs) , etc
+  - [ ] add CLI: shutdown , add_jobs , add_instances , add_environments , clear (done jobs) , etc
 
 4) local mode:
   - [x] handle new config 

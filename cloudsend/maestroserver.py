@@ -12,17 +12,18 @@ PORT = 5000
 
 async def mainloop(ctxt):
 
-    # may be we've just restarted a crashed maestro server process
-    # let's test for WATCH state and reach it back again if thats needed
-    await ctxt.wakeup()
-
     server = await asyncio.start_server(ctxt.handle_client, HOST, PORT, reuse_address=True, reuse_port=True)
 
     addrs = ', '.join(str(sock.getsockname()) for sock in server.sockets)
     print(f'Serving on {addrs}')
 
-    async with server:
-        await server.serve_forever()   
+    try:
+        async with server:
+            await server.serve_forever()   
+    except asyncio.CancelledError:
+        ctxt.restore_stdio()
+        print("Shutting down ...")
+
 
 class ByteStreamWriter():
 
@@ -47,14 +48,15 @@ class ByteStreamWriter():
         asyncio.ensure_future( self.writer.drain() )
 
 class ServerContext:
-    def __init__(self,config):
-        self.cs_client = cr.get_client(config)
+    def __init__(self):
+        self.cs_client  = None
+        self.old_stdout = sys.stdout
+        self.old_stderr = sys.stderr
 
     async def wakeup(self):
         await self.cs_client.wakeup()
 
     async def handle_client(self, reader, writer):
-        old_stdout = sys.stdout
         while True:
             try:
                 cmd_line = await reader.readline()
@@ -100,6 +102,11 @@ class ServerContext:
         string_writer = ByteStreamWriter(writer)
         sys.stdout = string_writer
         sys.stderr = string_writer
+
+        if self.cs_client is None:
+            if command != 'start' and command != 'shutdown':
+                print("Server not ready. Run 'start' command first")
+                return 
         try:
 
             if command == 'wakeup':
@@ -107,9 +114,25 @@ class ServerContext:
                 await self.cs_client.wakeup()
 
             elif command == 'start':
-                reset = False
-                if args:
+                if not args:
+                    config = get_default_config()
+                    reset = False
+                elif len(args)==1:
+                    config = get_default_config()
                     reset = args[0].strip().lower() == "true"
+                elif len(args)==2:
+                    config_path = args[0].strip()
+                    config = get_config(config_path)
+                    reset = args[1].strip().lower() == "true"
+                else:
+                    config = get_default_config()
+                    reset = False 
+                self.cs_client  = cr.get_client(config)
+
+                # may be we've just restarted a crashed maestro server process
+                # let's test for WATCH state and reach it back again if thats needed
+                await self.wakeup()
+
                 await self.cs_client.start(reset)
 
             elif command == 'allocate' or command == 'assign':
@@ -153,6 +176,10 @@ class ServerContext:
                     directory = args[0].strip()
                     await self.cs_client.fetch_results(directory)
 
+            elif command == 'shutdown':
+
+                asyncio.get_event_loop().stop()
+
             elif command == 'test':
 
                 print("TEST")
@@ -162,8 +189,11 @@ class ServerContext:
                 print("UNKNOWN COMMAND")
         
         except Exception as e:
-            writer.drain()
+            print(e)
+            await writer.drain()
             #writer.close()
+            self.restore_stdio()
+            print(e)
             raise e
 
         await writer.drain()
@@ -171,28 +201,48 @@ class ServerContext:
         #time.sleep(1)
         #writer.close()  
 
+    def restore_stdio(self):
+        sys.stdout = self.old_stdout
+        sys.stderr = self.old_stderr
 
-# run main loop
-def main():
 
-    if os.path.exists('config.json'):
-        with open('config.json','r') as config_file:
+def get_config(path):
+    config_file = path
+    configdir  = os.path.dirname(config_file)
+    configbase = os.path.basename(config_file)
+    config_name , config_extension = os.path.splitext(configbase)
+
+    if config_extension=='.json' and os.path.exists(config_file):
+        with open(config_file,'r') as config_file:
             config = json.loads(config_file.read())
         print("loaded config from json file")
     else:
         try:
-            sys.path.append(os.path.abspath(os.getcwd()))    
-            configModule = __import__("config",globals(),locals())
+            sys.path.append(os.path.abspath(configdir))
+            #sys.path.append(os.path.abspath(os.getcwd()))    
+            configModule = __import__(config_name,globals(),locals())
             config = configModule.config
         except ModuleNotFoundError as mfe:
             print("\n\033[91mYou need to create a config.py file (see 'example/config.example.py')\033[0m\n")
             print("\n\033[91m(you can also create a config.json file instead)\033[0m\n")
             raise mfe
+    return config
 
-    #cs_client = cr.get_client(config)
-    ctxt = ServerContext(config)
+def get_default_config():
+    if os.path.exists('config.json'):
+        return get_config('config.json')
+    else:
+        return get_config('config.py')    
 
-    asyncio.run( mainloop(ctxt) )
+# run main loop
+def main():
+
+    ctxt = ServerContext()
+
+    try:
+        asyncio.run( mainloop(ctxt) )
+    except RuntimeError:
+        pass
 
 if __name__ == '__main__':
     main()    
