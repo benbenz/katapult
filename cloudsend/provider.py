@@ -163,6 +163,7 @@ class CloudSendProvider(ABC):
             lookForDNS       = instance.get_dns_addr() is None
             lookForIP        = instance.get_ip_addr() is None
             instanceState    = instance.get_state()
+            reachability     = instance.get_reachability()
 
             lookForState = True
             # 'pending'|'running'|'shutting-down'|'terminated'|'stopping'|'stopped'
@@ -183,13 +184,15 @@ class CloudSendProvider(ABC):
                 except:
                     pass
 
-            waitFor = lookForDNS or lookForState  
+            waitFor = lookForDNS or lookForState #or not reachability
             if waitFor:
                 if lookForDNS:
                     debug(1,"waiting for",instance.get_name(),"...",instanceState.name)
                 else:
                     if lookForIP:
                         debug(1,"waiting for",instance.get_name(),"...",instanceState.name)
+                    # elif not reachability:
+                    #     debug(1,"waiting for",instance.get_name(),"...",instanceState.name," IP =",instance.get_ip_addr(),"(waiting to be reachable)")
                     else:
                         debug(1,"waiting for",instance.get_name(),"...",instanceState.name," IP =",instance.get_ip_addr())
                  

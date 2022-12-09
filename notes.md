@@ -111,7 +111,8 @@
   - [x] debug 'local' why when terminating an instance, the watch() AS daemon + wait() method are not stopping ... ISSUE WITH PROCESSES LIST?
   - [x] auto-stop function
   - [ ] maestro multiple projects handling
-  - [ ] switch back to asyncio
+  - [x] switch back to asyncio
+  - [ ] add CLI: add_jobs , add_instances , add_environments , clear (done jobs) , etc
 
 4) local mode:
   - [x] handle new config 

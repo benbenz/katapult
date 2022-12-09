@@ -94,6 +94,7 @@ class CloudSendInstance():
         # invalid
         self._invalid  = False
         self._platform = CloudSendPlatform.LINUX
+        self._reachability = False
 
     def get_region(self):
         return self._region
@@ -118,6 +119,9 @@ class CloudSendInstance():
 
     def get_dns_addr_priv(self):
         return self._dns_addr_priv
+
+    def get_reachability(self):
+        return self._reachability
 
     def get_cpus(self):
         return self._config.get('cpus')
@@ -183,6 +187,9 @@ class CloudSendInstance():
     def set_state(self,value):
         self._state = value 
 
+    def set_reachability(self,value):
+        self._reachability = value
+
     def set_platform(self,value):
         self._platform = value 
 
@@ -232,6 +239,7 @@ class CloudSendInstance():
         self._ip_addr_priv  = instance._ip_addr_priv
         self._dns_addr_priv = instance._dns_addr_priv
         self._state    = instance._state
+        self._reachability    = instance._reachability
         self._platform = instance._platform
         self._config   = copy.deepcopy(instance._config)
         self._data     = copy.deepcopy(instance._data)        

@@ -602,6 +602,14 @@ def aws_update_instance_info(session,instance):
         state = CloudSendInstanceState.TERMINATED
     instance.set_state(state)
     instance.set_data(instance_new_data)
+    instance.set_reachability(False)
+
+    # check further status
+    if state == CloudSendInstanceState.RUNNING:
+        status_res = ec2_client.describe_instance_status( InstanceIds=[instance.get_id()] )
+        status_res = status_res['InstanceStatuses'][0]
+        if status_res['InstanceStatus']['Status'] == 'ok' and status_res['SystemStatus']['Status'] == 'ok':
+            instance.set_reachability(True)
 
     platform_details = instance_new_data.get('PlatformDetails').lower()
     if 'linux' in platform_details:
