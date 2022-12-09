@@ -18,6 +18,8 @@ import asyncio , asyncssh
 
 random.seed()
 
+SLEEP_PERIOD = 15
+
 
 class CloudSendProviderStateWaitMode(IntFlag):
     NO_WAIT       = 0  # provider dont wait for state
@@ -41,7 +43,7 @@ class CloudSendFatProvider(CloudSendProvider,ABC):
         self._instances_watching = dict()
 
         # watch asyncio future
-        self._watch_future = None
+        self._watcher_task = None
 
     def _init(self,conf):
         super()._init(conf)
@@ -950,6 +952,13 @@ class CloudSendFatProvider(CloudSendProvider,ABC):
 
     async def _handle_instance_disconnect(self,instance,wait_mode,msg,processes=None):
 
+        # let the priority to the watcher process
+        # this is really just in case ...
+        # this is especially for the test below: instance.get_state() == CloudSendInstanceState.RUNNING:
+        # we want to make sure that no other process may have re-started (quickly) the instance
+        if not (wait_mode & CloudSendProviderStateWaitMode.WATCH):
+            await asyncio.sleep(SLEEP_PERIOD)
+
         if self._instances_watching.get(instance.get_name(),False) == False:
             self.debug(1,"We have stopped watching the instance - We won't try to reconnect",color=bcolors.WARNING)
             return None , None 
@@ -972,7 +981,6 @@ class CloudSendFatProvider(CloudSendProvider,ABC):
                 return None , None
             self.debug(2,"HANDLE_DISCONNECT: LIKELY INTERNET ERROR?")
             return ssh_conn , None
-
 
         self.debug(1,"ERROR:",msg,instance,color=bcolors.FAIL)
         if processes is not None:
@@ -1144,7 +1152,7 @@ class CloudSendFatProvider(CloudSendProvider,ABC):
                 self.serialize_state()
 
             if wait_mode & CloudSendProviderStateWaitMode.WAIT:
-                await asyncio.sleep(15)
+                await asyncio.sleep(SLEEP_PERIOD)
             else:
                 break
 
@@ -1281,8 +1289,14 @@ class CloudSendFatProvider(CloudSendProvider,ABC):
             await asyncio.gather( *jobs )
             return new_processes # we return the new processes because we waited for them to be filled up
         else:
+            if self._watcher_task is not None:
+                try:
+                    self._watcher_task.cancel()
+                except:
+                    pass
             # spawn it ...
-            asyncio.ensure_future( asyncio.gather( *jobs ) )
+            self._watcher_task = asyncio.ensure_future( asyncio.gather( *jobs ) )
+            self.debug(2,self._watcher_task)
             if wait_state & CloudSendProviderStateWaitMode.WATCH:
                 self.debug(1,"Watching ...")
             await asyncio.sleep(2) # let it go to the loop
