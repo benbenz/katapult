@@ -1290,9 +1290,10 @@ class CloudSendFatProvider(CloudSendProvider,ABC):
             return new_processes # we return the new processes because we waited for them to be filled up
         else:
             if self._watcher_task is not None:
+                self._watcher_task.cancel()
                 try:
-                    self._watcher_task.cancel()
-                except:
+                    await self._watcher_task
+                except asyncio.CancelledError:
                     pass
             # spawn it ...
             self._watcher_task = asyncio.ensure_future( asyncio.gather( *jobs ) )

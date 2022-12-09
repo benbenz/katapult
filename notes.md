@@ -114,6 +114,7 @@
   - [ ] maestro multiple projects handling
   - [ ] maestro multiple clients handling (right now there is a sys.stdout redirection issue)
   - [x] switch back to asyncio
+  - [ ] bugs: 1) not writing aborted 2) when not writing aborted, the UNKNOWN is not being fetch either ...
   - [ ] add CLI:
      - [x] shutdown
      - [ ] add_instances
