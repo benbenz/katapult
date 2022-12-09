@@ -7,7 +7,7 @@ import csv , io
 import pkg_resources
 from cloudsend.core import *
 from enum import IntFlag
-import multiprocessing
+#import multiprocessing
 import asyncio
 import asyncssh
 
@@ -22,9 +22,9 @@ class CloudSendProvider(ABC):
 
         self._init(conf)
 
-        self._instances_locks = dict()
-        self._provider_lock   = multiprocessing.Manager().Lock()
-        self._thread_safe_ultra = True # set to False if you want to try per instance locks
+        #self._instances_locks = dict()
+        #self._provider_lock   = multiprocessing.Manager().Lock()
+        #self._thread_safe_ultra = True # set to False if you want to try per instance locks
 
     def _init(self,conf):
         self.DBG_LVL = conf.get('debug',1)
@@ -83,14 +83,14 @@ class CloudSendProvider(ABC):
 
         # this is important because we can very well have watch() daemon and wait() method run at the same time
         # and both those methods may call '_start_and_update_instance' > '_get_or_create_instance'
-        with self._lock(instance):
+        #with self._lock(instance):
             
-            instance = self.find_instance(inst_cfg)
+        instance = self.find_instance(inst_cfg)
 
-            if instance is None:
-                instance , created = self.create_instance_objects(inst_cfg)
-            else:
-                created = False
+        if instance is None:
+            instance , created = self.create_instance_objects(inst_cfg)
+        else:
+            created = False
 
         return instance , created  
 
@@ -132,13 +132,13 @@ class CloudSendProvider(ABC):
             instance = dpl_job.get_instance()
             return cloudsendutils.resolve_paths(instance,upfile,dpl_job.get_config('run_script'),dpl_job.get_path(),False)
 
-    def _lock(self,instance):
-        if not self._thread_safe_ultra:
-            if not instance.get_name() in self._instances_locks:
-                self._instances_locks[instance.get_name()] = multiprocessing.Manager().Lock()
-            return self._instances_locks[instance.get_name()]
-        else:
-            return self._provider_lock
+    # def _lock(self,instance):
+    #     if not self._thread_safe_ultra:
+    #         if not instance.get_name() in self._instances_locks:
+    #             self._instances_locks[instance.get_name()] = multiprocessing.Manager().Lock()
+    #         return self._instances_locks[instance.get_name()]
+    #     else:
+    #         return self._provider_lock
 
 
     async def _wait_and_connect(self,instance):
@@ -161,8 +161,8 @@ class CloudSendProvider(ABC):
         waitFor = True
         while waitFor:
             # we may be heavily updating the instace already ...
-            with self._lock(instance):
-                self.update_instance_info(instance)
+            # with self._lock(instance):
+            self.update_instance_info(instance)
 
             self.serialize_state()
 
@@ -515,10 +515,41 @@ class CloudSendProvider(ABC):
     def get_suggested_image(self,region):
         pass
 
+def get_config(path):
+    config_file = path
+    configdir   = os.path.dirname(config_file)
+    configbase  = os.path.basename(config_file)
+    config_name , config_extension = os.path.splitext(configbase)
 
-def get_client(config=None):
+    if config_extension=='.json' and os.path.exists(config_file):
+        with open(config_file,'r') as config_file:
+            config = json.loads(config_file.read())
+        print("loaded config from json file")
+    else:
+        try:
+            sys.path.append(os.path.abspath(configdir))
+            #sys.path.append(os.path.abspath(os.getcwd()))    
+            configModule = __import__(config_name,globals(),locals())
+            config = configModule.config
+        except ModuleNotFoundError as mfe:
+            print("\n\033[91mYou need to create a config.py file (see 'example/config.example.py')\033[0m\n")
+            print("\n\033[91m(you can also create a config.json file instead)\033[0m\n")
+            raise mfe
+    return config
 
-    if config is None:
+def get_default_config():
+    if os.path.exists('config.json'):
+        return get_config('config.json')
+    else:
+        return get_config('config.py')        
+
+def get_client(config_=None):
+
+    if isinstance(config_,str): 
+        config = get_config(config_)
+    elif isinstance(config_,dict):
+        config = config_
+    else:
         config = dict()
 
     if config.get('provider','aws') == 'aws':

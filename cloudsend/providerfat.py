@@ -2,7 +2,7 @@ from abc import ABC , abstractmethod
 import cloudsend.utils as cloudsendutils
 import sys , json , os , time
 import re
-import multiprocessing
+#import multiprocessing
 import math , random
 import cloudsend.combopt as combopt
 from io import BytesIO
@@ -36,9 +36,8 @@ class CloudSendFatProvider(CloudSendProvider,ABC):
 
         self._current_processes = None
 
-        self._multiproc_man   = multiprocessing.Manager()
-        self._multiproc_lock  = self._multiproc_man.Lock()
-        self._instances_locks = dict()
+        #self._multiproc_man   = multiprocessing.Manager()
+        #self._multiproc_lock  = self._multiproc_man.Lock()
         self._instances_watching = dict()
 
         # watch asyncio future
@@ -796,16 +795,16 @@ class CloudSendFatProvider(CloudSendProvider,ABC):
         jobs = instance.get_jobs() if instance is not None else self._jobs
         # the lock is to make sure the prints are not scrambled 
         # when coming back from the instance at the same time ...
-        with self._multiproc_lock:
-            self.debug(1,"\n----------------------------------------------------------------------------------------------------------------------------------------------------------")
-            if instance:
-                self.debug(1,instance.get_name(),instance.get_ip_addr())
-            for i,job in enumerate(jobs):
-                self.debug(1,"\nJob",job.get_rank(),"=",job.str_simple() if instance else job)
-                dpl_jobs = job.get_deployed_jobs()
-                for dpl_job in dpl_jobs:
-                    for process in dpl_job.get_processes():
-                        self.debug(1,"|_",process.str_simple())
+        #with self._multiproc_lock:
+        self.debug(1,"\n----------------------------------------------------------------------------------------------------------------------------------------------------------")
+        if instance:
+            self.debug(1,instance.get_name(),instance.get_ip_addr())
+        for i,job in enumerate(jobs):
+            self.debug(1,"\nJob",job.get_rank(),"=",job.str_simple() if instance else job)
+            dpl_jobs = job.get_deployed_jobs()
+            for dpl_job in dpl_jobs:
+                for process in dpl_job.get_processes():
+                    self.debug(1,"|_",process.str_simple())
 
     async def print_aborted_logs(self,instance=None):
         instances = self._instances if instance is None else [ instance ]
