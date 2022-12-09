@@ -337,7 +337,7 @@ class CloudSendLightProvider(CloudSendProvider,ABC):
         waitmaestro_sh = self._get_remote_files_path( 'waitmaestro.sh' )
         venv_python    = self._maestro.path_join( self._get_cloudsend_dir() , '.venv' , 'maestro' , 'bin' , 'python3' )
 
-        cmd = "cd "+self._get_cloudsend_dir()+ " && "+waitmaestro_sh+" && sudo "+venv_python+" -u -m cloudsend.cli " + maestro_command
+        cmd = "cd "+self._get_cloudsend_dir()+ " && "+waitmaestro_sh+" && sudo "+venv_python+" -u -m cloudsend.maestroclient " + maestro_command
 
         stdout , stderr = await self._exec_command(self.ssh_conn,cmd)
 
@@ -466,8 +466,10 @@ class CloudSendLightProvider(CloudSendProvider,ABC):
         # get the tar file of the results
         instanceid , ssh_conn , ftp_client = await self._wait_and_connect(self._maestro)
         stdout,stderr = await self._exec_command(ssh_conn,"cd " + maestro_dir + " && tar -cvf "+maestro_tar_path+" .")      
-        self.debug(1,stdout.read()) #blocks
-        self.debug(2,stderr.read()) #blocks
+        stdout_str = await stdout.read()
+        stderr_str = await stderr.read()
+        self.debug(1,stdout_str) 
+        self.debug(2,stderr_str) 
         local_tar_path = os.path.join(out_dir,maestro_tar_file)
         with open(local_tar_path,'wb') as outfile:
             await ftp_client.chdir( homedir )

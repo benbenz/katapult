@@ -149,6 +149,10 @@ async def client_handler(cs_client,conn):
 
 async def mainloop(cs_client):
 
+    # may be we've just restarted a crashed maestro server process
+    # let's test for WATCH state and reach it back again if thats needed
+    await cs_client.wakeup()
+
     with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
         s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
         s.bind((HOST, PORT))
@@ -184,10 +188,6 @@ def main():
             raise mfe
 
     cs_client = cr.get_client(config)
-
-    # may be we've just restarted a crashed maestro server process
-    # let's test for WATCH state and reach it back again if thats needed
-    cs_client.wakeup()
 
     asyncio.run( mainloop(cs_client) )
 
