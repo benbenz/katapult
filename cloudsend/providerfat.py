@@ -1017,16 +1017,23 @@ class CloudSendFatProvider(CloudSendProvider,ABC):
 
         while True:
 
-            if False: #not ssh_conn.get_transport().is_active():
-                ssh_conn , processes = await self._handle_instance_disconnect(instance,wait_mode,"could not get jobs states for instance. SSH connection lost with",
-                                                [processes_infos[uid]['process'] for uid in processes_infos])
-                if ssh_conn is None:
-                    return None
-                
-                if processes is not None:
-                    processes_infos , jobsinfo = self._recompute_jobs_info(instance,processes)
+            # wait functions should update their processes list in case the watch function re-run them
+            # we leave this test after the wait so that returning functions (get_states) only look
+            # at the processes passed as argument (if any)
+            if self._processes_have_changed(instance,processes_infos):
+                self.debug(1,"Processes have changed for instance",instance.get_name(),". Replacing 'processes' argument with new processes",color=bcolors.WARNING)
+                processes_infos , jobsinfo = self._recompute_jobs_info(instance,self._current_processes)
 
-                processes = []
+            # if False: #not ssh_conn.get_transport().is_active():
+            #     ssh_conn , processes = await self._handle_instance_disconnect(instance,wait_mode,"could not get jobs states for instance. SSH connection lost with",
+            #                                     [processes_infos[uid]['process'] for uid in processes_infos])
+            #     if ssh_conn is None:
+            #         return None
+                
+            #     if processes is not None:
+            #         processes_infos , jobsinfo = self._recompute_jobs_info(instance,processes)
+
+            #     processes = []
 
             state_sh = instance.path_join( global_path , 'state.sh' )
             cmd =  state_sh + " " + jobsinfo
@@ -1117,13 +1124,6 @@ class CloudSendFatProvider(CloudSendProvider,ABC):
             else:
                 break
 
-            # wait functions should update their processes list in case the watch function re-run them
-            # we leave this test after the wait so that returning functions (get_states) only look
-            # at the processes passed as argument (if any)
-            if self._processes_have_changed(instance,processes_infos):
-                self.debug(1,"Processes have changed for instance",instance.get_name(),". Replacing 'processes' argument with new processes",color=bcolors.WARNING)
-                processes_infos , jobsinfo = self._recompute_jobs_info(instance,self._current_processes)
-
         ssh_conn.close() 
 
         if not programmatic:
@@ -1151,6 +1151,8 @@ class CloudSendFatProvider(CloudSendProvider,ABC):
                     if not any_watching:
                         self.debug(1,"Stopping the fat client (maestro) because all instances have ran the jobs",color=bcolors.WARNING)
                         os.system("sudo shutdown -h now")
+
+                self._current_processes = None
 
         #return processes
         for process in processes:
