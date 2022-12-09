@@ -471,9 +471,8 @@ class CloudSendLightProvider(CloudSendProvider,ABC):
         self.debug(1,stdout_str) 
         self.debug(2,stderr_str) 
         local_tar_path = os.path.join(out_dir,maestro_tar_file)
-        with open(local_tar_path,'wb') as outfile:
-            await ftp_client.chdir( homedir )
-            await ftp_client.get( maestro_tar_file , outfile )
+        await ftp_client.chdir( homedir )
+        await ftp_client.get( maestro_tar_file , local_tar_path )
 
         # untar
         os.system("tar -xvf "+local_tar_path+" -C "+out_dir)
