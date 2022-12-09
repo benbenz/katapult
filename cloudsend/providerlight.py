@@ -440,10 +440,6 @@ class CloudSendLightProvider(CloudSendProvider,ABC):
             ssh_conn.close()
         self.debug(1,'RESETTING done')
 
-    async def assign(self):
-        # triggers maestro::assign
-        await self._exec_maestro_command("allocate")
-
     async def deploy(self):
         # triggers maestro::deploy
         await self._exec_maestro_command("deploy") # use output - the deploy part will be skipped depending on option ...
@@ -451,10 +447,6 @@ class CloudSendLightProvider(CloudSendProvider,ABC):
     async def run(self):
         # triggers maestro::run
         await self._exec_maestro_command("run")
-
-    async def watch(self):
-        # triggers maestro::watch
-        await self._exec_maestro_command("watch")
 
     async def wakeup(self):
         # triggers maestro::wakeup

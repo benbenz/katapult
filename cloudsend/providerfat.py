@@ -79,7 +79,7 @@ class CloudSendFatProvider(CloudSendProvider,ABC):
     async def add_instances(self,conf):
         await super().add_instances(conf)
         self._config_manager.load()     
-        if self._state == CloudSendProviderState.STARTED:
+        if self._state & CloudSendProviderState.STARTED:
             self.start()
 
     async def add_environments(self,conf):
@@ -99,7 +99,7 @@ class CloudSendFatProvider(CloudSendProvider,ABC):
 
     #     return self._jobs[index] 
 
-    async def assign(self):
+    async def _assign(self):
 
         if self._recovery == True:
             assign_jobs = False
@@ -133,7 +133,7 @@ class CloudSendFatProvider(CloudSendProvider,ABC):
 
             combopt.multiple_knapsack_assignation(self._jobs,self._instances)   
 
-        self._state = CloudSendProviderState.ASSIGNED            
+        self._state |= CloudSendProviderState.ASSIGNED            
 
         self.serialize_state()         
                
@@ -471,7 +471,7 @@ class CloudSendFatProvider(CloudSendProvider,ABC):
                 self.debug(1,"ERROR: Your configuration is causing an instance to not be created. Please fix.",inst.get_config_DIRTY(),color=bcolors.FAIL)
                 sys.exit()
 
-        self._state = CloudSendProviderState.STARTED
+        self._state |= CloudSendProviderState.STARTED
 
     async def reset_instance(self,instance):
         self.debug(1,'RESETTING instance',instance.get_name())
@@ -501,6 +501,8 @@ class CloudSendFatProvider(CloudSendProvider,ABC):
     # - shared script files, uploads, inputs ...
     async def deploy(self):
 
+        await self._assign()
+
         clients = {} 
 
         for job in self._jobs:
@@ -511,7 +513,7 @@ class CloudSendFatProvider(CloudSendProvider,ABC):
             jobs.append( self._deploy_all(instance) )
         await asyncio.gather( *jobs )
 
-        self._state = CloudSendProviderState.DEPLOYED    
+        self._state |= CloudSendProviderState.DEPLOYED    
 
     async def revive(self,instance,rerun=False):
         self.debug(1,"REVIVING instance",instance)
@@ -700,6 +702,11 @@ class CloudSendFatProvider(CloudSendProvider,ABC):
             new_processes.append( process )        
         #return processes 
 
+    async def _ensure_watch(self):
+        if not self.is_watching():
+            self.debug(1,"Started watching ...")
+            await self._watch()
+
     async def run(self,instance_filter=None,except_done=False):
 
         # we're not coming from revive but we've recovered a state ...
@@ -807,9 +814,13 @@ class CloudSendFatProvider(CloudSendProvider,ABC):
             jobs.append( self._run_jobs_for_instance(instance,runinfo,batch_uid,dpl_jobs,self._current_processes) ) 
         await asyncio.gather( *jobs )
 
-        self._state = CloudSendProviderState.RUNNING
+        self._state |= CloudSendProviderState.RUNNING
 
         self.serialize_state()
+
+        # do not ensure watch at the beginning of run...
+        # not sure why but this causes the GatheringFuture to fail
+        await self._ensure_watch()
 
         return self._current_processes 
 
@@ -895,7 +906,11 @@ class CloudSendFatProvider(CloudSendProvider,ABC):
             #ftp_client.chdir(directory)
             local_path = os.path.join(out_dir,'job_'+str(rank).zfill(3)+'_'+file_name+file_extension)
             await ftp_client.chdir( directory )
-            await ftp_client.get( filename , local_path )   
+            try:
+                await ftp_client.get( filename , local_path )   
+            except asyncssh.sftp.SFTPNoSuchFile:
+                self.debug(1,"No file for process",process.get_uid(),"job#",rank,directory,filename,local_path)
+                pass
         
         for client in clients.values():
             #client['ftp'].close()
@@ -956,6 +971,8 @@ class CloudSendFatProvider(CloudSendProvider,ABC):
         # this is really just in case ...
         # this is especially for the test below: instance.get_state() == CloudSendInstanceState.RUNNING:
         # we want to make sure that no other process may have re-started (quickly) the instance
+        # NOTE: this was relevant when we had *concurrent* and *similar* watch and wait processes
+        # not the case anymore.... wait is now leveraging watch
         if not (wait_mode & CloudSendProviderStateWaitMode.WATCH):
             await asyncio.sleep(SLEEP_PERIOD)
 
@@ -1121,7 +1138,8 @@ class CloudSendFatProvider(CloudSendProvider,ABC):
                         # if we tested with curernt state we could test against all ABORTED jobs and the wait() function would cancel...
                         # this could potentially happen though
                         # instead, the retrieved state is actually UNKNOWN
-                        processes_infos[uid]['test']      = job_state & state 
+                        self.debug(2,'The state is ',uid,state)
+                        processes_infos[uid]['test']      = (job_state & state != 0)
                     except Exception as e:
                         debug(1,"\nUnhandled state received by state.sh!!!",statestr,"\n")
                         debug(2,e)
@@ -1176,8 +1194,8 @@ class CloudSendFatProvider(CloudSendProvider,ABC):
                 if not any_watching:
                     self.debug(2,"WATCHING has ended")
                     self._current_processes = None
-                    self.debug(2,"entering IDLE state")
-                    self._state = CloudSendProviderState.IDLE
+                    self._state = self._state & (CloudSendProviderState.ANY - CloudSendProviderState.WATCHING - CloudSendProviderState.RUNNING) | CloudSendProviderState.IDLE
+                    self.debug(2,"entering IDLE state",self._state)
                     self.serialize_state()
 
                 if self._auto_stop:
@@ -1289,17 +1307,12 @@ class CloudSendFatProvider(CloudSendProvider,ABC):
             await asyncio.gather( *jobs )
             return new_processes # we return the new processes because we waited for them to be filled up
         else:
-            if self._watcher_task is not None:
-                self._watcher_task.cancel()
-                try:
-                    await self._watcher_task
-                except asyncio.CancelledError:
-                    pass
+            await self._cancel_watch()
             # spawn it ...
-            self._watcher_task = asyncio.ensure_future( asyncio.gather( *jobs ) )
+            self._watcher_task = asyncio.ensure_future( asyncio.gather( *jobs ) )            
             self.debug(2,self._watcher_task)
             if wait_state & CloudSendProviderStateWaitMode.WATCH:
-                self.debug(1,"Watching ...")
+                self.debug(2,"Watching ...")
             await asyncio.sleep(2) # let it go to the loop
             return processes # we return the normal processes because we have no processing done yet
         # done
@@ -1310,43 +1323,79 @@ class CloudSendFatProvider(CloudSendProvider,ABC):
         #     return 
         # else:
         if self._recovery:
-            if self._state >= CloudSendProviderState.STARTED:
+            if self._state & CloudSendProviderState.STARTED:
                 await self.start()
-            if self._state >= CloudSendProviderState.ASSIGNED:
-                await self.assign()
-            if self._state >= CloudSendProviderState.DEPLOYED:
+            if self._state & CloudSendProviderState.ASSIGNED:
+                await self._assign()
+            if self._state & CloudSendProviderState.DEPLOYED:
                 await self.deploy()
             # should we have those here ? Or just let watch do it's thing ? 
             # actually, thanks to state recovery, run_jobs should be smart enough to not run DONE jobs again...
-            if self._state >= CloudSendProviderState.RUNNING:
+            if self._state & CloudSendProviderState.RUNNING:
                 await self.run()
-            if self._state >= CloudSendProviderState.WATCHING:
-                await self.watch(None,True) # daemon mode
+            if self._state & CloudSendProviderState.WATCHING:
+                await self._watch() # daemon mode
         else:
             # self.start()
-            # self.assign()
+            # self._assign()
             # self.deploy()
             pass
 
-    async def watch(self):
+    async def _cancel_watch(self):
+        if self._watcher_task is not None:
+            self._watcher_task.cancel()
+            try:
+                await self._watcher_task
+                self._watcher_task = None
+            except asyncio.CancelledError:
+                pass
+
+
+    def is_watching(self):
+        res = self._watcher_task is not None 
+        res = res and not self._watcher_task.cancelled() and not self._watcher_task.done() 
+        res = res and self._state & CloudSendProviderState.WATCHING 
+        return res
+
+    async def _watch(self):
 
         job_state = CloudSendProcessState.DONE|CloudSendProcessState.ABORTED
         
         # switch the state to watch mode ... 
         # this will allow to check if the Provider needs to run all methods until watch, on wakeup
         # (no matter the state recovery)
-        self._state = CloudSendProviderState.WATCHING
+        self._state |= CloudSendProviderState.WATCHING
         self.serialize_state()
 
         await self.__get_or_wait_jobs_state(None,CloudSendProviderStateWaitMode.WAIT|CloudSendProviderStateWaitMode.WATCH,job_state,True)
 
 
     async def wait(self,job_state,processes=None):
+        
+        await self._ensure_watch()
 
-        if not processes or len(processes)==0:
-            self.debug(2,"No process to wait for")
+        # let the watcher fetch the first time states ...
+        await asyncio.sleep(1)
 
-        return await self.__get_or_wait_jobs_state(processes,CloudSendProviderStateWaitMode.WAIT,job_state)
+        # we used to fetch the same way watch was fetching but this is redundant
+        # and it was causing issues between lists of processes etc.
+        #return await self.__get_or_wait_jobs_state(processes,CloudSendProviderStateWaitMode.WAIT,job_state)
+        while True:
+            
+            for instance in self._instances:
+                self.print_jobs_summary(instance)
+
+            if not self._current_processes:
+                break
+            
+            test = True 
+            for process in self._current_processes:
+                test = test and (process.get_state() & job_state )
+            
+            if test:
+                break
+            
+            await asyncio.sleep(SLEEP_PERIOD)
 
     async def get_jobs_states(self,processes=None):
 

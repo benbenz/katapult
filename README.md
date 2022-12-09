@@ -410,20 +410,14 @@ provider = cloudsend.get_client(config)
 # start the provider: this attempts to create the instances
 await provider.start()
 
-# assign the jobs onto the instances
-await provider.assign()
-
 # deploy the necessary stuff onto the instances
 await provider.deploy()
 
 # run the jobs and get active processes objects back
-processes = await provider.run()
-
-# watch mode: revive instances (daemon)
-await provider.watch(processes)
+await provider.run()
 
 # wait for the active proccesses to be done or aborted:
-processes = await provider.wait(CloudSendProcessState.DONE|CloudSendProcessState.ABORTED,processes)
+await provider.wait(CloudSendProcessState.DONE|CloudSendProcessState.ABORTED)
 
 # you can get the state of all jobs this way:
 processes = await provider.get_jobs_states()

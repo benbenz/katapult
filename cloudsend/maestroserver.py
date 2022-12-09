@@ -162,10 +162,6 @@ class ServerContext:
                     return
                 self.cs_client.add_jobs(config)
 
-            elif command == 'allocate' or command == 'assign':
-
-                await self.cs_client.assign()
-
             elif command == 'deploy':
 
                 await self.cs_client.deploy()
@@ -174,10 +170,6 @@ class ServerContext:
 
                 await self.cs_client.run()
             
-            elif command == 'watch':
-
-                await self.cs_client.watch()
-
             elif command == 'wait':
 
                 await self.cs_client.wait(CloudSendProcessState.DONE|CloudSendProcessState.ABORTED)

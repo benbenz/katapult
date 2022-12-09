@@ -18,11 +18,6 @@ async def mainloop(cs_client,reset=False):
     # distribute the jobs on the instances (dummy algo for now)
     await cs_client.start(reset) 
 
-    print("\n== ALLOCATE JOBS ==\n")
-
-    # distribute the jobs on the instances (dummy algo for now)
-    await cs_client.assign()
-
     print("\n== DEPLOY ==\n")
 
     # pre-deploy instance , environments and job files
@@ -35,10 +30,6 @@ async def mainloop(cs_client,reset=False):
 
     # run the scripts and get a process back
     processes = await cs_client.run()
-
-    print("\n== WATCH ==\n")
-
-    await cs_client.watch() 
 
     print("\n== WAIT ==\n")
 

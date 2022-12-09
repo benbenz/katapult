@@ -464,7 +464,16 @@ class CloudSendProvider(ABC):
     async def start(self,reset=False):
         pass
 
-    def add_objects(self,key_name,config):
+    def add_objects(self,key_name,config_list_obj):
+        if isinstance(config_list_obj,list):
+            config = { key_name : config_list_obj }
+        elif isinstance(config_list_obj,dict) and key_name in config_list_obj:
+            config = config_list_obj
+        elif isinstance(config_list_obj,dict):
+            config = { key_name : [ config_list_obj ] }
+        else:
+            config = dict()
+        
         if key_name not in config:
             self.debug(1,"No "+key_name+" specified in config file",config)
             return
@@ -485,19 +494,11 @@ class CloudSendProvider(ABC):
         self.add_objects('jobs',config)
 
     @abstractmethod
-    async def assign(self):
-        pass
-
-    @abstractmethod
     async def deploy(self):
         pass
 
     @abstractmethod
     async def run(self):
-        pass
-
-    @abstractmethod
-    async def watch(self):
         pass
 
     @abstractmethod
