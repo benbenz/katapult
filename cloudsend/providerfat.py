@@ -28,14 +28,11 @@ class CloudSendFatProvider(CloudSendProvider,ABC):
 
     def __init__(self, conf):
 
-        CloudSendProvider.__init__(self,conf)
-
-        # self._load_objects()
-        # self._preprocess_jobs()
-        # self._sanity_checks()
         self._instances = []
         self._environments = []
         self._jobs = []
+
+        CloudSendProvider.__init__(self,conf)
 
         self._current_processes = None
 
@@ -44,15 +41,18 @@ class CloudSendFatProvider(CloudSendProvider,ABC):
         self._instances_locks = dict()
         self._instances_watching = dict()
 
+        # watch asyncio future
+        self._watch_future = None
+
+    def _init(self,conf):
+        super()._init(conf)
+
         # load the config
         self._config_manager = ConfigManager(self,self._config,self._instances,self._environments,self._jobs)
         self._config_manager.load()
 
         # option
         self._mutualize_uploads = conf.get('mutualize_uploads',True)
-
-        # watch thread pool
-        self._watch_pool = None
 
         if self._config.get('recover',False):
             # load the state (if existing) and set the recovery mode accordingly
@@ -73,7 +73,7 @@ class CloudSendFatProvider(CloudSendProvider,ABC):
             else:
                 self._recovery = False
         else:
-            self._recovery = False
+            self._recovery = False        
 
     def serialize_state(self):
         if self._config.get('recover',False):

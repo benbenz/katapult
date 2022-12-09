@@ -7,7 +7,7 @@ CloudSend is a Python package that allows you to run any script on a cloud servi
 - Easily run scripts on AWS by writing a simple configuration file
 - Handles Python and Julia scripts, or any command
 - Handles PyPi , Conda/Mamba, Apt-get and Julia environments
-- Multithreaded instance support
+- Concurrent instance support
 - Handles disconnections from instances, including stopped or terminated instances
 - Handles interruption of CloudSend, with state recovery
 - Runs locally or on a remote instance, with 'watcher' functionality 

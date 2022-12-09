@@ -17,6 +17,13 @@ class CloudSendProvider(ABC):
 
         self._state = CloudSendProviderState.NEW
 
+        self._init(conf)
+
+        self._instances_locks = dict()
+        self._provider_lock   = multiprocessing.Manager().Lock()
+        self._thread_safe_ultra = True # set to False if you want to try per instance locks
+
+    def _init(self,conf):
         self.DBG_LVL = conf.get('debug',1)
         self.DBG_PREFIX = None
         global DBG_LVL
@@ -27,11 +34,7 @@ class CloudSendProvider(ABC):
 
         self._profile_name = self._config.get('profile')
         if self._config.get('profile'):
-            self.set_profile(self._config.get('profile'))
-
-        self._instances_locks = dict()
-        self._provider_lock   = multiprocessing.Manager().Lock()
-        self._thread_safe_ultra = True # set to False if you want to try per instance locks
+            self.set_profile(self._config.get('profile'))        
 
     def debug_set_prefix(self,value):
         self.DBG_PREFIX = value

@@ -22,12 +22,15 @@ class CloudSendLightProvider(CloudSendProvider,ABC):
 
     def __init__(self,conf):
         CloudSendProvider.__init__(self,conf)
-        self._load()
 
         self.ssh_conn = None
         self.ftp_client = None
 
         #self._install_maestro()
+
+    def _init(self,conf):
+        super()._init(conf)
+        self._load()
     
     def _load(self):
         self._maestro = None
