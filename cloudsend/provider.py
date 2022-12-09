@@ -170,7 +170,7 @@ class CloudSendProvider(ABC):
                     # restart the instance
                     self.start_instance(instance)
                 except CloudSendError:
-                    self.hard_reset_instance(instance)
+                    await self.hard_reset_instance(instance)
 
 
             elif instanceState == CloudSendInstanceState.RUNNING:
@@ -196,6 +196,7 @@ class CloudSendProvider(ABC):
 
         self.debug(2,instance)     
 
+    # async because the one of the fat client will be async ...
     async def hard_reset_instance(self,instance):
         self.terminate_instance(instance)
         try :
@@ -311,11 +312,11 @@ class CloudSendProvider(ABC):
         await ofile.write(string)
         await ofile.close()
 
-    async def sftp_put_byteio(self,ftp_client,name,bytes_io):
-        byte_str = bytes_io.read()
+    async def sftp_put_bytes(self,ftp_client,name,bytes_,encoding='utf-8'):
+        #byte_str = bytes_io.read()
         # Convert to a "unicode" object
-        string = byte_str.decode('UTF-8')
-        ofile = await ftp_client.open(name,'w')
+        string = bytes_.decode(encoding)
+        ofile = await ftp_client.open(name,'wb')
         await ofile.write(string)
         await ofile.close()
 

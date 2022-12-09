@@ -130,8 +130,9 @@ class CloudSendLightProvider(CloudSendProvider,ABC):
 
 
     async def _deploy_cloudsend_files(self,ssh_conn,ftp_client):
-        ftp_client.chdir(self._get_cloudsend_dir())
-        await self.sftp_put_byteio(ftp_client,'cloudsend.zip',self._create_cloudsend_zip())
+        await ftp_client.chdir(self._get_cloudsend_dir())
+        # CP437 is IBM zip file encoding
+        await self.sftp_put_bytes(ftp_client,'cloudsend.zip',self._create_cloudsend_zip(),'CP437')
         commands = [
             { 'cmd' : 'cd '+self._get_cloudsend_dir()+' && unzip -o cloudsend.zip && rm cloudsend.zip' , 'out' : True } ,
         ]
@@ -174,7 +175,7 @@ class CloudSendLightProvider(CloudSendProvider,ABC):
         config , mkdir_cmd , files_to_upload_per_dir = self._translate_config_for_maestro()
         # serialize the config and send it to the maestro
         await ftp_client.chdir(self._get_cloudsend_dir())
-        await self.sftp_put_file_string(ftp_client,'config.json',json.dumps(config))
+        await self.sftp_put_string(ftp_client,'config.json',json.dumps(config))
         # execute the mkdir_cmd
         if mkdir_cmd:
             await self._exec_command(ssh_conn,mkdir_cmd)
@@ -293,7 +294,7 @@ class CloudSendLightProvider(CloudSendProvider,ABC):
     def _create_cloudsend_zip(self):
         zip_buffer = io.BytesIO()
         # create a ZipFile object
-        with ZipFile(zip_buffer, 'a') as zipObj:    
+        with ZipFile(zip_buffer, 'w') as zipObj:    
             for otherfilepath in ['pyproject.toml' , 'requirements.txt' ]:
                 with open(otherfilepath,'r') as thefile:
                     data = thefile.read()
@@ -306,7 +307,7 @@ class CloudSendLightProvider(CloudSendProvider,ABC):
         # very important...
         zip_buffer.seek(0)
 
-        return zip_buffer
+        return zip_buffer.getvalue() #.getbuffer()
 
     async def _wait_for_maestro(self,ssh_conn):
         #if self.ssh_conn is None:
@@ -381,13 +382,13 @@ class CloudSendLightProvider(CloudSendProvider,ABC):
         self._instances_states = dict()        
         self._start_and_update_instance(self._maestro)
         if reset:
-            self.reset_instance(self._maestro)
+            await self.reset_instance(self._maestro)
         await self._deploy_maestro(reset) # deploy the maestro now !
         self.debug_set_prefix(None)
 
     async def start(self,reset=False):
         # install maestro materials
-        self._install_maestro(reset)
+        await self._install_maestro(reset)
         # triggers maestro::start
         await self._exec_maestro_command("start:"+str(reset))
 
@@ -395,7 +396,7 @@ class CloudSendLightProvider(CloudSendProvider,ABC):
         self.debug(1,'RESETTING instance',instance.get_name())
         instanceid, ssh_conn , ftp_client = await self._wait_and_connect(instance)
         if ssh_conn is not None:
-            await self.put_remote_file(ftp_client,'resetmaestro.sh')
+            await self.sftp_put_remote_file(ftp_client,'resetmaestro.sh')
             resetmaestro_sh = self._maestro.path_join( self._maestro.get_home_dir() , 'resetmaestro.sh' )
             commands = [
                { 'cmd' : 'chmod +x '+resetmaestro_sh+' && ' + resetmaestro_sh , 'out' : True }

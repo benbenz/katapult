@@ -461,9 +461,7 @@ class CloudSendFatProvider(CloudSendProvider,ABC):
         self.debug(1,'RESETTING instance',instance.get_name())
         instanceid, ssh_conn , ftp_client = await self._wait_and_connect(instance)
         if ssh_conn is not None:
-            ofile = await ftp_client.open('reset.sh','w')
-            await ofile.write(self._get_remote_file('reset.sh'))
-            await ofile.close()
+            await self.sftp_put_remote_file(ftp_client,'reset.sh')
             reset_file = instance.path_join( instance.get_home_dir() , 'reset.sh' )
             commands = [
                 { 'cmd' : 'chmod +x '+reset_file+' && ' + reset_file , 'out' : True }
@@ -1119,8 +1117,8 @@ class CloudSendFatProvider(CloudSendProvider,ABC):
             else:
                 break
 
-            # wait functions should update their process list in case the watch function re-run them
-            # we leave this test after the wait so that returning functions (get_state) only look
+            # wait functions should update their processes list in case the watch function re-run them
+            # we leave this test after the wait so that returning functions (get_states) only look
             # at the processes passed as argument (if any)
             if self._processes_have_changed(instance,processes_infos):
                 self.debug(1,"Processes have changed for instance",instance.get_name(),". Replacing 'processes' argument with new processes",color=bcolors.WARNING)
