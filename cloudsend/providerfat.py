@@ -970,6 +970,7 @@ class CloudSendFatProvider(CloudSendProvider,ABC):
             if ssh_conn is None:
                 self.debug(1,"FATAL ERROR(0):",msgs,instance,color=bcolors.FAIL)
                 return None , None
+            self.debug(2,"HANDLE_DISCONNECT: LIKELY INTERNET ERROR?")
             return ssh_conn , None
 
 
@@ -1064,7 +1065,7 @@ class CloudSendFatProvider(CloudSendProvider,ABC):
             self.debug(2,"Executing command",cmd)
             try:
                 stdout, stderr = await self._exec_command(ssh_conn,cmd)
-                
+                data = await stdout.read()
             except Exception as e:
                 self.debug(1,"SSH connection error while sending state.sh command")
                 ssh_conn , processes = await self._handle_instance_disconnect(instance,wait_mode,"could not get jobs states for instance. SSH connection lost with",
@@ -1080,7 +1081,6 @@ class CloudSendFatProvider(CloudSendProvider,ABC):
 
                 processes = []
 
-            data = await stdout.read()
             for line in data.splitlines():      
                 if not line or line.strip()=="":
                     break     
