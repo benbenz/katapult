@@ -2,6 +2,7 @@ import hashlib , os , subprocess , json
 import jcs , yaml
 import uuid
 import os
+from cloudsend.core import K_COMPUTED
 
 # keys used for hash computation
 # Note: we include market options (SPOT ON|OFF e.g.) for the instance because it defines how the 'hardware' will run 
@@ -69,7 +70,7 @@ def compute_environment_object(env_config):
 
     # the configuration is already computed (usually by the LightProvider)
     # we just have to return this env object for deployment
-    if env_config.get("_computed_") == True:
+    if env_config.get(K_COMPUTED) == True:
         return env_config
 
     environment_obj = {

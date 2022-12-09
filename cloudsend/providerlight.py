@@ -20,7 +20,8 @@ random.seed()
 
 class CloudSendLightProvider(CloudSendProvider,ABC):
 
-    def __init__(self,conf):
+    def __init__(self,conf=None):
+
         CloudSendProvider.__init__(self,conf)
 
         self.ssh_conn = None
@@ -211,7 +212,7 @@ class CloudSendLightProvider(CloudSendProvider,ABC):
             # through the CloudSendEnvironment::json() method
             env = CloudSendEnvironment(self._config.get('project'),env_cfg)
             config['environments'][i] = env.get_env_obj()
-            config['environments'][i]['_computed_'] = True
+            config['environments'][i][K_COMPUTED] = True
 
         files_to_upload = dict()
 

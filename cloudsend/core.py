@@ -17,6 +17,9 @@ cs_maestroProfileName  = 'cloudsend-maestro-profile'
 cs_maestroRoleName     = 'cloudsend-maestro-role'
 cs_maestroPolicyName   = 'cloudsend-maestro-policy'
 
+K_LOADED   = '_loaded_'
+K_COMPUTED = '_computed_'
+
 class CloudSendProviderState(IntFlag):
     NEW           = 0  # provider created
     STARTED       = 1  # provider started

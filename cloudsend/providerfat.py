@@ -26,7 +26,7 @@ class CloudSendProviderStateWaitMode(IntFlag):
 
 class CloudSendFatProvider(CloudSendProvider,ABC):
 
-    def __init__(self, conf):
+    def __init__(self, conf=None):
 
         self._instances = []
         self._environments = []
@@ -74,6 +74,10 @@ class CloudSendFatProvider(CloudSendProvider,ABC):
                 self._recovery = False
         else:
             self._recovery = False        
+
+    def add_instances(self,conf):
+        super().add_instances(conf)
+        self._config_manager.load()        
 
     def serialize_state(self):
         if self._config.get('recover',False):

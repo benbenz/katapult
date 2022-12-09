@@ -13,7 +13,10 @@ import asyncssh
 
 class CloudSendProvider(ABC):
 
-    def __init__(self, conf):
+    def __init__(self, conf=None):
+
+        if conf is None:
+            conf = dict()
 
         self._state = CloudSendProviderState.NEW
 
@@ -34,7 +37,7 @@ class CloudSendProvider(ABC):
 
         self._profile_name = self._config.get('profile')
         if self._config.get('profile'):
-            self.set_profile(self._config.get('profile'))        
+            self.set_profile(self._config.get('profile'))   
 
     def debug_set_prefix(self,value):
         self.DBG_PREFIX = value
@@ -461,6 +464,17 @@ class CloudSendProvider(ABC):
     async def start(self,reset=False):
         pass
 
+    def add_instances(self,config):
+        if 'instances' not in config:
+            self.debug(1,"No instances specified in config file",config)
+            return
+        
+        if 'instances' not in self._config:
+            self._config['instances'] = []
+
+        for inst_cfg in config['instances']:
+            self._config['instances'].append( inst_cfg )
+
     @abstractmethod
     async def assign(self):
         pass
@@ -502,7 +516,10 @@ class CloudSendProvider(ABC):
         pass
 
 
-def get_client(config):
+def get_client(config=None):
+
+    if config is None:
+        config = dict()
 
     if config.get('provider','aws') == 'aws':
 

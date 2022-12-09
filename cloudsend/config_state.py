@@ -33,6 +33,9 @@ class ConfigManager():
         #self._instances = [ ]
         if inst_cfgs:
             for inst_cfg in inst_cfgs:
+                if inst_cfg.get(K_LOADED) == True:
+                    continue 
+
                 # virtually demultiply according to 'number' and 'explode'
                 for i in range(inst_cfg.get('number',1)):
                     rec_cpus = self._provider.get_recommended_cpus(inst_cfg)
@@ -108,25 +111,37 @@ class ConfigManager():
                             self._instances.append( instance )
 
                             cpus_created = cpus_created + inst_cpus
+
+                    inst_cfg[K_LOADED] = True
         
         self._provider.debug(3,self._instances)
 
         #self._environments = [ ] 
         if env_cfgs:
             for env_cfg in env_cfgs:
+                if env_cfg.get(K_LOADED) == True:
+                    continue
+
                 # copy the dev global paramter to the environment configuration (will be used for names)
                 env_cfg['dev']  = self._config.get('dev',False)
                 env = CloudSendEnvironment(projectName,env_cfg)
                 self._environments.append(env)
 
+                env_cfg[K_LOADED] = True
+
         #self._jobs = [ ] 
         if job_cfgs:
             rank=0
             for i,job_cfg in enumerate(job_cfgs):
+                if job_cfg.get(K_LOADED) == True:
+                    continue 
+
                 for j in range(job_cfg.get('repeat',1)):
                     job = CloudSendJob(job_cfg,rank)
                     self._jobs.append(job)
                     rank = rank + 1
+                
+                job_cfg[K_LOADED] = True
 
     def _load_other_instance_info(self,real_inst_cfg):
         # [!important!] also copy global information that are used for the name generation ...
