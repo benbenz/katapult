@@ -106,6 +106,7 @@ class ServerContext:
         if self.cs_client is None:
             if command != 'start' and command != 'shutdown':
                 print("Server not ready. Run 'start' command first")
+                await writer.drain()
                 return 
         try:
 
@@ -133,6 +134,33 @@ class ServerContext:
                 await self.wakeup()
 
                 await self.cs_client.start(reset)
+
+            elif command == 'add_instances':
+                if len(args)==1:
+                    config = json.loads( args[0] )
+                else:
+                    print("Error: you need to send a JSON stream for config")
+                    await writer.drain()
+                    return
+                self.cs_client.add_instances(config)
+
+            elif command == 'add_environments':
+                if len(args)==1:
+                    config = json.loads( args[0] )
+                else:
+                    print("Error: you need to send a JSON stream for config")
+                    await writer.drain()
+                    return
+                self.cs_client.add_environments(config)
+
+            elif command == 'add_jobs':
+                if len(args)==1:
+                    config = json.loads( args[0] )
+                else:
+                    print("Error: you need to send a JSON stream for config")
+                    await writer.drain()
+                    return
+                self.cs_client.add_jobs(config)
 
             elif command == 'allocate' or command == 'assign':
 

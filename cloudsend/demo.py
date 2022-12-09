@@ -53,7 +53,7 @@ async def mainloop(cs_client,reset=False):
     print("\n== SUMMARY ==\n")
 
     # just to show the API ...
-    await cs_client.get_jobs_states()
+    await cs_client.get_jobs_states(processes)
 
     # print("\n== WAIT and TAIL ==\n")
 

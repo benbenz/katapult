@@ -388,13 +388,43 @@ class CloudSendLightProvider(CloudSendProvider,ABC):
         if reset:
             await self.reset_instance(self._maestro)
         await self._deploy_maestro(reset) # deploy the maestro now !
-        self.debug_set_prefix(None)
+        self.debug_set_prefix(None)       
 
     async def start(self,reset=False):
         # install maestro materials
         await self._install_maestro(reset)
         # triggers maestro::start
         await self._exec_maestro_command("start:"+str(reset))
+
+    async def add_instances(self,conf):
+        # complement self._config
+        await super().add_instances(conf)
+        # wait for maestro to be ready
+        instanceid , ssh_conn , ftp_client = await self._wait_and_connect(self._maestro)
+        # deploy the new config to the maestro (every time) (including dependent files)
+        await self._deploy_config(ssh_conn,ftp_client)
+        # triggers maestro::start
+        await self._exec_maestro_command("add_instances:"+json.dumps(conf))
+
+    async def add_environments(self,conf):
+        # complement self._config
+        await super().add_environments(conf)
+        # wait for maestro to be ready
+        instanceid , ssh_conn , ftp_client = await self._wait_and_connect(self._maestro)
+        # deploy the new config to the maestro (every time) (including dependent files)
+        await self._deploy_config(ssh_conn,ftp_client)
+        # triggers maestro::start
+        await self._exec_maestro_command("add_environments:"+json.dumps(conf))
+
+    async def add_jobs(self,conf):
+        # complement self._config
+        await super().add_jobs(conf)
+        # wait for maestro to be ready
+        instanceid , ssh_conn , ftp_client = await self._wait_and_connect(self._maestro)
+        # deploy the new config to the maestro (every time) (including dependent files)
+        await self._deploy_config(ssh_conn,ftp_client)
+        # triggers maestro::start
+        await self._exec_maestro_command("add_jobs:"+json.dumps(conf))
 
     async def reset_instance(self,instance):
         self.debug(1,'RESETTING instance',instance.get_name())

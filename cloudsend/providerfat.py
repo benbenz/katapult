@@ -74,8 +74,18 @@ class CloudSendFatProvider(CloudSendProvider,ABC):
         else:
             self._recovery = False        
 
-    def add_instances(self,conf):
-        super().add_instances(conf)
+    async def add_instances(self,conf):
+        await super().add_instances(conf)
+        self._config_manager.load()     
+        if self._state == CloudSendProviderState.STARTED:
+            self.start()
+
+    async def add_environments(self,conf):
+        await super().add_environments(conf)
+        self._config_manager.load()        
+
+    async def add_jobs(self,conf):
+        await super().add_jobs(conf)
         self._config_manager.load()        
 
     def serialize_state(self):
@@ -108,6 +118,7 @@ class CloudSendFatProvider(CloudSendProvider,ABC):
         if assignation=='random':
             for job in self._jobs:
                 if job.get_instance():
+                    self.debug(2,"Job already has an instance",job)
                     continue
                 
                 instance = random.choice( self._instances )

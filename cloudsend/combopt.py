@@ -10,6 +10,10 @@ def multiple_knapsack_assignation(jobs,instances,method='mip'):
 
     assigned = [False]*len(jobs)
 
+    for i,job in enumerate(jobs):
+        if job.get_instance() is not None:
+            assigned[i] = True
+
     while True:
 
         if method == 'mip':

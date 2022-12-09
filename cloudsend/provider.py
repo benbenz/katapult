@@ -464,16 +464,25 @@ class CloudSendProvider(ABC):
     async def start(self,reset=False):
         pass
 
-    def add_instances(self,config):
-        if 'instances' not in config:
-            self.debug(1,"No instances specified in config file",config)
+    def add_objects(self,key_name,config):
+        if key_name not in config:
+            self.debug(1,"No "+key_name+" specified in config file",config)
             return
         
-        if 'instances' not in self._config:
-            self._config['instances'] = []
+        if key_name not in self._config:
+            self._config[key_name] = []
 
-        for inst_cfg in config['instances']:
-            self._config['instances'].append( inst_cfg )
+        for cfg in config[key_name]:
+            self._config[key_name].append( cfg )
+
+    async def add_instances(self,config):
+        self.add_objects('instances',config)
+
+    async def add_environments(self,config):
+        self.add_objects('environments',config)
+
+    async def add_jobs(self,config):
+        self.add_objects('jobs',config)
 
     @abstractmethod
     async def assign(self):
