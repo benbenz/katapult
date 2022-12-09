@@ -316,7 +316,7 @@ class CloudSendProvider(ABC):
         #byte_str = bytes_io.read()
         # Convert to a "unicode" object
         string = bytes_.decode(encoding)
-        ofile = await ftp_client.open(name,'wb')
+        ofile = await ftp_client.open(name,'w',encoding=encoding)
         await ofile.write(string)
         await ofile.close()
 

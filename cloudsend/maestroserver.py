@@ -12,7 +12,7 @@ import asyncio
 HOST = 'localhost' #'0.0.0.0' #127.0.0.1' 
 PORT = 5000
 
-def process_command(cs_client,command,args,conn):
+async def process_command(cs_client,command,args,conn):
 
     io_pipe    = conn.makefile('rw',buffering=1) 
     #io_pipe    = TextIOWrapper(conn.makefile('rw',buffering=1), write_through=True)
@@ -89,7 +89,7 @@ def process_command(cs_client,command,args,conn):
     time.sleep(1)
     io_pipe.close()
 
-def client_handler(cs_client,conn):
+async def client_handler(cs_client,conn):
     kill_thread = True
     with conn:
         old_stdout = sys.stdout
@@ -110,7 +110,7 @@ def client_handler(cs_client,conn):
 
                 if cmd == 'watch': # we want to start running the command for ever
                     kill_thread = False
-                process_command(cs_client,cmd,args,conn)
+                await process_command(cs_client,cmd,args,conn)
                 break # one-shot command
             except ConnectionResetError as cre:
                 try:
@@ -156,8 +156,9 @@ async def mainloop(cs_client):
         print("listening to port",PORT)
         while True:
             conn, addr = s.accept()
-            t = Thread(target=client_handler, args=(cs_client,conn,))
-            t.start()  
+            await client_handler(cs_client,conn)
+            #t = Thread(target=client_handler, args=(cs_client,conn,))
+            #t.start()  
             #t.join()      
 
             # p = Process(target=client_handler, args=(cs_client,conn,))
