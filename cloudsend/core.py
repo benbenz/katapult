@@ -581,6 +581,9 @@ class CloudSendRunSession():
                 processes_res.append(p)
         return processes_res
 
+    def get_number(self):
+        return self._number
+
     # return the processes that have been run for each job
     # (kinda last_processes but through a different view point)
     def get_ran_processes(self):

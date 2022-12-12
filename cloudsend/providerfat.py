@@ -583,7 +583,9 @@ class CloudSendFatProvider(CloudSendProvider,ABC):
         
         # we're gonna compare the processes' states of the current 'run_session'
         active_processes_old = run_session.get_active_processes(instance)
-        active_processes_new = copy.copy(active_processes_old)
+        active_processes_new = []
+        for p in active_processes_old:
+            active_processes_new.append(copy.copy(p))
         do_run = True
         
         # fetch the states for active_processes_new list 
