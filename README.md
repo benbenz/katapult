@@ -409,15 +409,15 @@ await provider.start()
 await provider.deploy()
 
 # run the jobs and get active processes objects back
-await provider.run()
+run_session = await provider.run()
 
 # wait for the active proccesses to be done or aborted:
 await provider.wait(CloudSendProcessState.DONE|CloudSendProcessState.ABORTED)
 
 # you can get the state of all jobs this way:
-processes = await provider.get_jobs_states()
-# or get the state for a specific list of processes:
-processes = await provider.get_jobs_states(processes)
+await provider.get_jobs_states()
+# or get the state for a specific run session:
+await provider.get_jobs_states(run_session)
 
 # you can print processes summary with:
 await provider.print_jobs_summary()
