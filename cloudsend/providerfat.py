@@ -516,8 +516,8 @@ class CloudSendFatProvider(CloudSendProvider,ABC):
 
         self._state |= CloudSendProviderState.DEPLOYED    
 
-    async def revive(self,run_session,instance,rerun=False):
-        self.debug(1,"REVIVING instance",instance)
+    async def _revive(self,run_session,instance):
+        self.debug(1,"REVIVING instance",instance,color=bcolors.OKCYAN)
 
         jobs_can_be_saved = False
         if instance.get_state()==CloudSendInstanceState.STOPPED or instance.get_state()==CloudSendInstanceState.STOPPING:
@@ -533,7 +533,7 @@ class CloudSendFatProvider(CloudSendProvider,ABC):
             #self._wait_for_instance(instance)
             # re-deploy it
             await self._deploy_all(instance)
-        if rerun:
+        if run_session: 
             await self._run(run_session,instance,jobs_can_be_saved) #will run the jobs for this instance
 
     def _mark_aborted(self,run_session,instance,state_mask):
@@ -578,7 +578,7 @@ class CloudSendFatProvider(CloudSendProvider,ABC):
         do_run = True
         
         # fetch the states for active_processes_new list 
-        await self.__fetch_states_internal(run_session,instance,active_processes_new,ssh_conn)
+        await self.__fetch_states_internal(run_session,instance,active_processes_new,True,ssh_conn)
         do_run = False
         all_done = True
         for process_old in active_processes_old:
@@ -614,7 +614,7 @@ class CloudSendFatProvider(CloudSendProvider,ABC):
         # we've retrieved what we needed and we want to new state to be corrected for future prints
         # this should likely set the states to UNKNOWN if this is a new instance
         # (note: an ABORTED state will not switch to UNKNOWN state - in order to keep the most information)
-        await self.__fetch_states_internal(run_session,instance,active_processes_old,ssh_conn)
+        await self.__fetch_states_internal(run_session,instance,active_processes_old,True,ssh_conn)
 
         if do_run:
             return True , False
@@ -639,7 +639,7 @@ class CloudSendFatProvider(CloudSendProvider,ABC):
 
         instanceid , ssh_conn , ftp_client = await self._wait_and_connect(instance)
         if ssh_conn is None:
-            ssh_conn = await self._handle_instance_disconnect(run_session,instance,CloudSendProviderStateWaitMode.WATCH,"could not run jobs for instance")
+            ssh_conn = await self._handle_instance_disconnect(run_session,instance,True,"could not run jobs for instance")
             if ssh_conn is None:
                 self.debug(1,"Could not run jobs for instance",instance,color=bcolors.FAIL)
                 return 
@@ -722,11 +722,6 @@ class CloudSendFatProvider(CloudSendProvider,ABC):
             batch_run_file = instance.path_join( global_path , 'batch_run-'+batch.get_uid()+'.sh')
             batch_pid_file = instance.path_join( global_path , 'batch_pid-'+batch.get_uid()+'.sh')
             try:
-                # ssh_conn = await self._connect_to_instance(instance)
-                # if ssh_conn is None:
-                #     ssh_conn = await self._handle_instance_disconnect(instance,CloudSendProviderStateWaitMode.WATCH,"could not run jobs for instance")
-                #     if ssh_conn is None:
-                #         return 
                 ftp_client = await ssh_conn.start_sftp_client()
                 await ftp_client.chdir(global_path)
                 await self.sftp_put_string(ftp_client,batch_run_file,cmd_run_pre+cmd_run)
@@ -743,7 +738,7 @@ class CloudSendFatProvider(CloudSendProvider,ABC):
             except Exception as e:
                 self.debug(1,e)
                 self.debug(1,"ERROR: the instance is unreachable while sending batch",instance,color=bcolors.FAIL)
-                ssh_conn , processes = await self._handle_instance_disconnect(run_session,instance,CloudSendProviderStateWaitMode.WATCH,"could not run jobs for instance")
+                ssh_conn , processes = await self._handle_instance_disconnect(run_session,instance,True,"could not run jobs for instance")
                 if ssh_conn is None:
                     return 
                 tryagain = True
@@ -937,15 +932,15 @@ class CloudSendFatProvider(CloudSendProvider,ABC):
 
         return lnstr
 
-    async def _handle_instance_disconnect(self,run_session,instance,wait_mode,msg):
+    async def _handle_instance_disconnect(self,run_session,instance,do_revive,msg):
 
-        # let the priority to the watcher process
+        # let the priority to the watching/reviving process (should only be one)
         # this is really just in case ...
         # this is especially for the test below: instance.get_state() == CloudSendInstanceState.RUNNING:
         # we want to make sure that no other process may have re-started (quickly) the instance
         # NOTE: this was relevant when we had *concurrent* and *similar* watch and wait processes
         # not the case anymore.... wait is now leveraging watch
-        if not (wait_mode & CloudSendProviderStateWaitMode.WATCH):
+        if not do_revive:
             await asyncio.sleep(SLEEP_PERIOD)
 
         if self._instances_watching.get(instance.get_name(),False) == False:
@@ -979,8 +974,8 @@ class CloudSendFatProvider(CloudSendProvider,ABC):
             elif instance.get_state() & (CloudSendInstanceState.TERMINATING | CloudSendInstanceState.TERMINATED):
                 # mark any type of process as aborted
                 self._mark_aborted(run_session,instance,CloudSendProcessState.ANY) 
-            if wait_mode & CloudSendProviderStateWaitMode.WATCH:
-                await self.revive(run_session,instance,rerun_jobs)
+            if do_revive:
+                await self._revive(run_session,instance)
         ssh_conn = await self._connect_to_instance(instance)
         if ssh_conn is None:
             self.debug(1,"FATAL ERROR(1):",msgs,instance,color=bcolors.FAIL)
@@ -1002,7 +997,7 @@ class CloudSendFatProvider(CloudSendProvider,ABC):
             
         return jobsinfo 
     
-    async def __fetch_states_internal( self, run_session, instance , processes , ssh_conn ):
+    async def __fetch_states_internal( self, run_session, instance , processes , do_revive , ssh_conn ):
 
         fetched     = dict()
 
@@ -1010,9 +1005,9 @@ class CloudSendFatProvider(CloudSendProvider,ABC):
         if not processes or len(processes)==0:
             return fetched
     
-        jobsinfo    = self._compute_jobs_info(processes)
         global_path = instance.get_global_dir()
         state_sh    = instance.path_join( global_path , 'state.sh' )
+        jobsinfo    = self._compute_jobs_info(processes)
         cmd         =  state_sh + " " + jobsinfo
         
         self.debug(2,"PROCESSES sent for state.sh",processes)
@@ -1024,15 +1019,18 @@ class CloudSendFatProvider(CloudSendProvider,ABC):
                 stdout, stderr = await self._exec_command(ssh_conn,cmd)
                 data = await stdout.read()
                 break
-            except Exception as e:
+            except (OSError, asyncssh.Error):
                 self.debug(1,"SSH connection error while sending state.sh command")
-                ssh_conn = await self._handle_instance_disconnect(run_session,instance,wait_mode,"could not get jobs states for instance. SSH connection lost with")
+                ssh_conn = await self._handle_instance_disconnect(run_session,instance,do_revive,"could not get jobs states for instance. SSH connection lost with")
                 if ssh_conn is None:
                     return None
                 # this is part of a run session we're looking at...
-                # lets update the processes after the error
+                # lets update the processes and subsequent variables after the error
                 if run_session:
-                    processes = run_session.get_activate_processes(instance)
+                    processes = run_session.get_active_processes(instance)
+                    jobsinfo  = self._compute_jobs_info(processes)
+                    cmd       =  state_sh + " " + jobsinfo
+
                 attempts += 1
             if attempts > 5:
                 self.debug(1,"TOO MANY ATTEMPTS",color=bcolors.FAIL)
@@ -1090,8 +1088,10 @@ class CloudSendFatProvider(CloudSendProvider,ABC):
         
         ssh_conn = await self._connect_to_instance(instance)
 
+        do_revive = (wait_mode & CloudSendProviderStateWaitMode.WATCH)!=0
+
         if ssh_conn is None:
-            ssh_conn = await self._handle_instance_disconnect(run_session,instance,wait_mode,"could not get jobs states for instance")
+            ssh_conn = await self._handle_instance_disconnect(run_session,instance,do_revive,"could not get jobs states for instance")
             if ssh_conn is None:
                 return None
 
@@ -1102,7 +1102,7 @@ class CloudSendFatProvider(CloudSendProvider,ABC):
             # update before
             processes = run_session.get_active_processes(instance)
 
-            fetched = await self.__fetch_states_internal(run_session,instance,processes,ssh_conn)
+            fetched = await self.__fetch_states_internal(run_session,instance,processes,do_revive,ssh_conn)
 
             # always update the activate processes in case something happened
             processes = run_session.get_active_processes(instance)
@@ -1282,7 +1282,7 @@ class CloudSendFatProvider(CloudSendProvider,ABC):
         # let's update the active processes
         processes = run_session.get_active_processes(instance)
         # first argument: run_session = None, so this won't trigger re-runs etc....
-        await self.__fetch_states_internal(None,instance,processes,ssh_conn)
+        await self.__fetch_states_internal(None,instance,processes,False,ssh_conn)
 
         # print
         self.print_jobs_summary(run_session,instance)

@@ -197,6 +197,8 @@ class CloudSendProvider(ABC):
                 else:
                     if lookForIP:
                         debug(1,"waiting for",instance.get_name(),"...",instanceState.name)
+                    elif lookForState:
+                        debug(1,"waiting for",instance.get_name(),"...",instanceState.name," IP =",instance.get_ip_addr())
                     elif not reachability:
                         debug(1,"waiting for",instance.get_name(),"...",instanceState.name," IP =",instance.get_ip_addr(),"(waiting to be reachable)")
                     else:
@@ -277,10 +279,10 @@ class CloudSendProvider(ABC):
             proc = await ssh_conn.create_process(command)
             return proc.stdout , proc.stderr 
         except (OSError, asyncssh.Error) as sshe:
-            self.debug(1,'SSH connection failed: ' + str(sshe))
-            self.debug(1,"The SSH Client has been disconnected!")
-            self.debug(1,sshe)
-            raise CloudSendError()  
+            self.debug(1,'SSH connection failed: ' + str(sshe),color=bcolors.FAIL)
+            #self.debug(1,"The SSH Client has been disconnected!")
+            self.debug(2,sshe)
+            raise sshe
             
     async def _run_ssh_commands(self,instance,ssh_conn,commands):
         for command in commands:
@@ -307,10 +309,10 @@ class CloudSendProvider(ABC):
                         output = command['output']
                     await ssh_conn.create_process(command['cmd'] + " 1>"+output+" 2>&1 &")
             except (OSError, asyncssh.Error) as sshe:
-                self.debug(1,'SSH connection failed: ' + str(sshe))
-                self.debug(1,"The SSH Client has been disconnected!")
-                self.debug(1,sshe)
-                raise CloudSendError()  
+                self.debug(1,'SSH connection failed: ' + str(sshe),color=bcolors.FAIL)
+                #self.debug(1,"The SSH Client has been disconnected!")
+                self.debug(2,sshe)
+                raise sshe
 
     async def sftp_put_remote_file(self,ftp_client,name):
         ofile = await ftp_client.open(name,'w')

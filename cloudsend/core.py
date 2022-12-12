@@ -237,10 +237,10 @@ class CloudSendInstance():
     def get_jobs(self):
         return self._jobs
 
-    def get_activate_processes(self):
+    def get_active_processes(self):
         processes_res = []
         for job in self._jobs:
-            for p in job.get_activate_processes():
+            for p in job.get_active_processes():
                 processes_res.append(p)
         return processes_res
 
@@ -389,10 +389,10 @@ class CloudSendJob():
                 return dpl_job
         return None
 
-    def get_activate_processes(self):
+    def get_active_processes(self):
         processes_res = []
         for dpl_job in self._deployed:
-            for p in dpl_job.get_activate_processes():
+            for p in dpl_job.get_active_processes():
                 processes_res.append(p)
         return processes_res
 
@@ -655,7 +655,7 @@ class CloudSendBatch():
 
     # mark the currently active process as ABORTED
     def mark_aborted(self,instance,state_mask):
-        for process in self.get_activate_process(instance):
+        for process in self.get_active_processes(instance):
             process.set_state(CloudSendProcessState.ABORTED)
 
 def init_instance_name(instance_config):
