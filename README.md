@@ -333,19 +333,20 @@ class CloudSendFatProvider(ABC):
     def deploy(self):
 
     # run the jobs
+    # returns a CloudSendRunSession
     def run(self,wait=False):
 
     # wait for the processes to reach a state
-    def wait(self,job_state,processes=None):
+    def wait(self,job_state,run_session=None):
 
     # get the states of the processes
-    def get_jobs_states(self,processes=None):
+    def get_jobs_states(self,run_session=None):
 
-    def print_jobs_summary(self,instance=None):
+    def print_jobs_summary(self,run_session=None,instance=None):
 
-    def print_aborted_logs(self,instance=None):
+    def print_aborted_logs(self,run_session=None,instance=None):
 
-    def fetch_results(self,out_directory,processes=None):
+    def fetch_results(self,out_directory,run_session=None):
 
     # wakeup = start + assign + deploy + run + watch
     def wakeup(self)

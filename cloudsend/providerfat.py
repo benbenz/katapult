@@ -801,7 +801,7 @@ class CloudSendFatProvider(CloudSendProvider,ABC):
         await self._ensure_watch()
 
 
-    def print_jobs_summary(self,instance=None):
+    def print_jobs_summary(self,run_session=None,instance=None):
         jobs = instance.get_jobs() if instance is not None else self._jobs
         # the lock is to make sure the prints are not scrambled 
         # when coming back from the instance at the same time ...
@@ -814,9 +814,13 @@ class CloudSendFatProvider(CloudSendProvider,ABC):
             dpl_jobs = job.get_deployed_jobs()
             for dpl_job in dpl_jobs:
                 for process in dpl_job.get_processes():
+                    if run_session:
+                        session = process.get_batch().get_session()
+                        if run_session != session:
+                            continue
                     self.debug(1,"|_",process.str_simple())
 
-    async def print_aborted_logs(self,instance=None):
+    async def print_aborted_logs(self,run_session=None,instance=None):
         instances = self._instances if instance is None else [ instance ]
         for _instance in instances:
             ssh_conn   = None
@@ -824,6 +828,10 @@ class CloudSendFatProvider(CloudSendProvider,ABC):
             for job in _instance.get_jobs():
                 process = job.get_last_process()
                 if process.get_state() == CloudSendProcessState.ABORTED:
+                    if run_session:
+                        session = process.get_batch().get_session()
+                        if run_session != session:
+                            continue
                     if not ssh_conn:
                         instanceid , ssh_conn , ftp_client = await self._wait_and_connect(_instance)
                     log = await self.get_log(process,ssh_conn)
@@ -839,6 +847,10 @@ class CloudSendFatProvider(CloudSendProvider,ABC):
 
         if not run_session:
             run_session = self._current_session
+
+        if not run_session:
+            self.debug(1,"No result to fetch",color=bcolors.WARNING)
+            return 
 
         #processes = self.get_last_processes()
         processes = run_session.get_ran_processes()
@@ -1097,7 +1109,7 @@ class CloudSendFatProvider(CloudSendProvider,ABC):
 
             # print job status summary
             if not daemon:
-                self.print_jobs_summary(instance)
+                self.print_jobs_summary(run_session,instance)
 
             # all retrived attributes need to be true
             arr_retrieved = [ fetched.get(process.get_uid(),False) for process in processes]
@@ -1229,12 +1241,15 @@ class CloudSendFatProvider(CloudSendProvider,ABC):
         await self.__wait_jobs_state(self._current_session , CloudSendProviderStateWaitMode.WAIT|CloudSendProviderStateWaitMode.WATCH,job_state,True)
 
 
-    async def wait(self,job_state):
+    async def wait(self,job_state,run_session=None):
         
         await self._ensure_watch()
 
         # let the watcher fetch the first time states ...
         await asyncio.sleep(1)
+
+        if run_session is None:
+            run_session = self._current_session
 
         # we used to fetch the same way watch was fetching but this is redundant
         # and it was causing issues between lists of processes etc.
@@ -1242,13 +1257,13 @@ class CloudSendFatProvider(CloudSendProvider,ABC):
         while True:
             
             for instance in self._instances:
-                self.print_jobs_summary(instance)
+                self.print_jobs_summary(run_session,instance)
 
-            if not self._current_session:
+            if not run_session:
                 break
             
             test = True 
-            for process in self._current_session.get_active_processes():
+            for process in run_session.get_active_processes():
                 test = test and (process.get_state() & job_state )
             
             if test:
@@ -1256,7 +1271,7 @@ class CloudSendFatProvider(CloudSendProvider,ABC):
             
             await asyncio.sleep(SLEEP_PERIOD)
 
-    async def __get_jobs_states_internal(self,instance):
+    async def __get_jobs_states_internal(self,run_session,instance):
         instanceid , ssh_conn , ftp_client = await self._wait_and_connect(instance)
 
         # no recovery here , this is an observation call ... we just fail ...
@@ -1265,23 +1280,26 @@ class CloudSendFatProvider(CloudSendProvider,ABC):
             return
 
         # let's update the active processes
-        processes = instance.get_active_processes()
+        processes = run_session.get_active_processes(instance)
         # first argument: run_session = None, so this won't trigger re-runs etc....
         await self.__fetch_states_internal(None,instance,processes,ssh_conn)
 
         # print
-        self.print_jobs_summary(instance)
+        self.print_jobs_summary(run_session,instance)
 
         ssh_conn.close()
 
 
-    async def get_jobs_states(self):
+    async def get_jobs_states(self,run_session=None):
 
         self.debug(2,'Getting Jobs States ...')
 
+        if not run_session:
+            run_session = self._current_session
+
         jobs = []
         for instance in self._instances:
-            jobs.append( self.__get_jobs_states_internal(instance) )
+            jobs.append( self.__get_jobs_states_internal(run_session,instance) )
         
         await asyncio.gather( *jobs )
 

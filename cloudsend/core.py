@@ -526,6 +526,9 @@ class CloudSendProcess():
     def get_pid(self):
         return self._pid
 
+    def get_batch(self):
+        return self._batch 
+
     def deactivate(self):
         self._active = False
 
@@ -611,6 +614,9 @@ class CloudSendBatch():
 
     def get_uid(self):
         return self._uid
+
+    def get_session(self):
+        return self._session
 
     def create_process(self,dpl_job):
         process   = CloudSendProcess( dpl_job , self )
