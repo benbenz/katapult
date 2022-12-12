@@ -1180,7 +1180,7 @@ class CloudSendFatProvider(CloudSendProvider,ABC):
             if not any_watching:
                 self.debug(2,"WATCHING has ended")
                 run_session.deactivate()
-                self._state = self._state & (CloudSendProviderState.ANY - CloudSendProviderState.WATCHING - CloudSendProviderState.RUNNING) | CloudSendProviderState.IDLE
+                self._state = self._state & (CloudSendProviderState.ANY - CloudSendProviderState.WATCHING - CloudSendProviderState.RUNNING)
                 self.debug(2,"entering IDLE state",self._state)
                 self.serialize_state()
 
