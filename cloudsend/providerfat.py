@@ -103,6 +103,8 @@ class CloudSendFatProvider(CloudSendProvider,ABC):
 
     async def _assign(self):
 
+        self._state = self._state & (CloudSendProviderState.ANY - CloudSendProviderState.ASSIGNED)
+
         if self._recovery == True:
             assign_jobs = False
             for job in self._jobs:
@@ -461,6 +463,8 @@ class CloudSendFatProvider(CloudSendProvider,ABC):
 
     async def start(self,reset=False):
 
+        self._state = self._state & (CloudSendProviderState.ANY - CloudSendProviderState.STARTED)
+
         self._instances_states = dict() 
         self.debug(3,"Starting ...")
         jobs_wait = [ ] 
@@ -503,6 +507,8 @@ class CloudSendFatProvider(CloudSendProvider,ABC):
     # - shared script files, uploads, inputs ...
     async def deploy(self):
 
+        self._state = self._state & (CloudSendProviderState.ANY - CloudSendProviderState.DEPLOYED)
+
         await self._assign()
 
         clients = {} 
@@ -515,7 +521,9 @@ class CloudSendFatProvider(CloudSendProvider,ABC):
             jobs.append( self._deploy_all(instance) )
         await asyncio.gather( *jobs )
 
-        self._state |= CloudSendProviderState.DEPLOYED    
+        self._state |= CloudSendProviderState.DEPLOYED   
+
+        self.serialize_state() 
 
     async def _revive(self,run_session,instance):
         self.debug(1,"REVIVING instance",instance,color=bcolors.OKCYAN)
@@ -754,7 +762,7 @@ class CloudSendFatProvider(CloudSendProvider,ABC):
         # we were actually still running processes
         # >> let's use the current session that has been loaded
         if self._recovery and self._state & CloudSendProviderState.RUNNING:
-            pass # loaded already
+            await self._run(self._current_session,None,True,False)
         else:
             # we're gonna create a new run session ... deativate entirely the old one
             if self._current_session:
@@ -765,20 +773,24 @@ class CloudSendFatProvider(CloudSendProvider,ABC):
             self._current_session = CloudSendRunSession(number)
             self._run_sessions.append(self._current_session)
 
-        # run the new session
-        await self._run(self._current_session)
+            # run the new session
+            await self._run(self._current_session)
 
-    async def _run(self,run_session,instance_filter=None,except_done=False):
+    async def _run(self,run_session,instance_filter=None,except_done=False,do_init=True):
+
+        # update the Provider state
+        self._state = self._state & (CloudSendProviderState.ANY - CloudSendProviderState.RUNNING)
 
         if instance_filter:
             instances = [ instance_filter ] 
         else:
             instances = self._instances
 
-        # we're about the re-run the processes for 'instances'
-        # we need to de-activate the processes of the batch on those instances...
-        for instance in instances:
-            run_session.deactivate(instance)
+        if do_init:
+            # we're about the re-run the processes for 'instances'
+            # we need to de-activate the processes of the batch on those instances...
+            for instance in instances:
+                run_session.deactivate(instance)
 
         # a batch is accross instances, create it now
         # IMPORTANT: create it after de-activation !
