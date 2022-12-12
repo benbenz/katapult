@@ -1255,7 +1255,30 @@ class CloudSendFatProvider(CloudSendProvider,ABC):
 
         await self.__wait_jobs_state(self._current_session , CloudSendProviderStateWaitMode.WAIT|CloudSendProviderStateWaitMode.WATCH,job_state,True)
 
+    async def _wait(self,job_state,run_session,instance):
+        while True:
 
+            # with this new in-memory test, we can't run the test while the instance is reviving
+            # because the activate processes are being changed ...
+            while self._instances_reviving[instance.get_name()]:
+                self.debug(1,"waiting for reviving instance (1)",instance)
+                await asyncio.sleep(SLEEP_PERIOD)
+
+            self.print_jobs_summary(run_session,instance)
+
+            if not run_session:
+                break
+            
+            test = True 
+            for process in run_session.get_active_processes(instance):
+                test = test and (process.get_state() & job_state )
+            
+            if test:
+                break
+            
+            await asyncio.sleep(SLEEP_PERIOD)
+
+    
     async def wait(self,job_state,run_session=None):
         
         await self._ensure_watch()
@@ -1266,31 +1289,16 @@ class CloudSendFatProvider(CloudSendProvider,ABC):
         if run_session is None:
             run_session = self._current_session
 
+        # OLD METHOD
         # we used to fetch the same way watch was fetching but this is redundant
         # and it was causing issues between lists of processes etc.
         #return await self.__get_or_wait_jobs_state(CloudSendProviderStateWaitMode.WAIT,job_state)
-        while True:
-
-            for instance in self._instances:
-                # with this new in-memory test, we can't run the test while the instance is reviving
-                # because the activate processes are being changed ...
-                while self._instances_reviving[instance.get_name()]:
-                    self.debug(1,"waiting for reviving instance (1)",instance)
-                    await asyncio.sleep(SLEEP_PERIOD)
-
-                self.print_jobs_summary(run_session,instance)
-
-            if not run_session:
-                break
-            
-            test = True 
-            for process in run_session.get_active_processes():
-                test = test and (process.get_state() & job_state )
-            
-            if test:
-                break
-            
-            await asyncio.sleep(SLEEP_PERIOD)
+        
+        # NEW METHOD
+        jobs = []
+        for instance in self._instances:
+            jobs.append( self._wait(job_state,run_session,instance) )
+        await asyncio.gather( *jobs )
 
     async def __get_jobs_states_internal(self,run_session,instance):
         instanceid , ssh_conn , ftp_client = await self._wait_and_connect(instance)
