@@ -29,19 +29,19 @@ async def mainloop(cs_client,reset=False):
     print("\n== RUN ==\n")
 
     # run the scripts and get a process back
-    processes = await cs_client.run()
+    await cs_client.run()
 
     print("\n== WAIT ==\n")
 
     print("Waiting for DONE or ABORTED ...")
     # now that we have 'watch' before 'wait' , this will exit instantaneously
     # because watch includes 'wait' mode intrinsiquely
-    processes = await cs_client.wait(CloudSendProcessState.DONE|CloudSendProcessState.ABORTED,processes)
+    await cs_client.wait(CloudSendProcessState.DONE|CloudSendProcessState.ABORTED)
 
     print("\n== SUMMARY ==\n")
 
     # just to show the API ...
-    await cs_client.get_jobs_states(processes)
+    await cs_client.get_jobs_states()
 
     # print("\n== WAIT and TAIL ==\n")
 

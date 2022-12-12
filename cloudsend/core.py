@@ -136,6 +136,16 @@ class CloudSendInstance():
     def get_platform(self):
         return self._platform
 
+    def get_active_processes(self):
+        processes_res = []
+        for job in self._jobs:
+            dpl_jobs = job.get_deployed_jobs()
+            for dpl_job in dpl_jobs:
+                for process in dpl_job.get_processes():
+                    if process.is_active():
+                        processes_res.append(process)
+        return processes_res
+
     def get_home_dir(self,absolute=True):
         if self._platform == CloudSendPlatform.LINUX or self._platform == CloudSendPlatform.WINDOWS_WSL:
             return '/home/' + self.get_config('img_username') if absolute else '%HOME'
@@ -226,6 +236,13 @@ class CloudSendInstance():
 
     def get_jobs(self):
         return self._jobs
+
+    def get_activate_processes(self):
+        processes_res = []
+        for job in self._jobs:
+            for p in job.get_activate_processes():
+                processes_res.append(p)
+        return processes_res
 
     def get_config_DIRTY(self):
         return self._config
@@ -366,8 +383,25 @@ class CloudSendJob():
     def get_deployed_jobs(self):
         return self._deployed
 
+    def get_deployed_job(self,instance):
+        for dpl_job in self._deployed:
+            if dpl_job.get_instance() == instance:
+                return dpl_job
+        return None
+
+    def get_activate_processes(self):
+        processes_res = []
+        for dpl_job in self._deployed:
+            for p in dpl_job.get_activate_processes():
+                processes_res.append(p)
+        return processes_res
+
     def deploy(self,dpl_env,add_permanently=True):
-        dpl_job = CloudSendDeployedJob(self,dpl_env)
+        # instance = dpl_env.get_instance()
+        # dpl_job  = self.get_deployed_job(instance)
+        # if dpl_job:
+        #     return dpl_job
+        dpl_job  = CloudSendDeployedJob(self,dpl_env)
         if add_permanently:
             self._deployed.append(dpl_job)
         return dpl_job
@@ -461,6 +495,13 @@ class CloudSendDeployedJob(CloudSendJob):
     def get_processes(self):
         return self._processes
 
+    def get_active_processes(self):
+        processes_res = []
+        for p in self._processes:
+            if p.is_active():
+                processes_res.append(p)
+        return processes_res
+
     def deploy(self,dpl_env):
         raise CloudSendError('Can not deploy a deployed job')
 
@@ -470,12 +511,13 @@ class CloudSendDeployedJob(CloudSendJob):
 
 class CloudSendProcess():
 
-    def __init__(self,dpl_job,uid,pid=None,batch_uid=None):
-        self._job    = dpl_job
-        self._uid   = uid
+    def __init__(self,dpl_job,batch,pid=None):
+        self._job   = dpl_job
+        self._uid   = cloudsendutils.generate_unique_id() 
         self._pid   = pid
-        self._batch_uid = batch_uid
+        self._batch = batch
         self._state = CloudSendProcessState.UNKNOWN
+        self._active = True
         self._job.attach_process(self)
      
     def get_uid(self):
@@ -483,6 +525,12 @@ class CloudSendProcess():
 
     def get_pid(self):
         return self._pid
+
+    def deactivate(self):
+        self._active = False
+
+    def is_active(self):
+        return self._active 
 
     def get_path(self):
         instance = self._job.get_instance()
@@ -500,12 +548,9 @@ class CloudSendProcess():
     def get_job(self):
         return self._job 
 
-    def get_batch_uid(self):
-        return self._batch_uid
-
     def str_simple(self):
-        if self._batch_uid:
-            return "CloudSendProcess: UID = {0} , PID = {1} , BATCH = {2} , STATE = {3}".format(self._uid,str(self._pid).rjust(5),self._batch_uid,self._state.name)
+        if self._batch:
+            return "CloudSendProcess: UID = {0} , PID = {1} , BATCH = {2} , STATE = {3}".format(self._uid,str(self._pid).rjust(5),self._batch.get_uid(),self._state.name)
         else:
             return "CloudSendProcess: UID = {0} , PID = {1} , STATE = {2}".format(self._uid,str(self._pid).rjust(5),self._state.name)
 
@@ -516,6 +561,96 @@ class CloudSendProcess():
         return "CloudSendProcess: job = {0} , UID = {1} , PID = {2} , STATE = {3}".format(self._job,self._uid,str(self._pid).rjust(5),self._state.name)
 
 
+class CloudSendRunSession():
+
+    def __init__(self,number):
+        self._number  = number 
+        self._batches = []
+
+    def create_batch(self):
+        batch = CloudSendBatch(self)
+        self._batches.append(batch)
+        return batch
+
+    def get_active_processes(self,instance=None):
+        processes_res = []
+        for batch in self._batches:
+            for p in batch.get_active_processes(instance):
+                processes_res.append(p)
+        return processes_res
+
+    # return the processes that have been run for each job
+    # (kinda last_processes but through a different view point)
+    def get_ran_processes(self):
+        processes = dict()
+        # scan all the processes in order of the batches ...
+        for batch in self._batches:
+            for process in batch.get_processes():
+                dpl_job = process.get_job()
+                rank    = dpl_job.get_rank()
+                processes[rank] = process # this will keep the last process ran for this job rank
+        
+        return processes.values()
+
+
+    def deactivate(self,instance=None):
+        for batch in self._batches:
+            batch.deactivate_processes(instance)
+
+    def mark_aborted(self,instance,state_mask):
+        for batch in self._batches:
+            batch.mark_aborted(instance,state_mask)
+
+
+class CloudSendBatch():
+
+    def __init__(self,run_session):
+        self._uid      = cloudsendutils.generate_unique_id()
+        self._session  = run_session
+        self._instances_processes = dict()
+
+    def get_uid(self):
+        return self._uid
+
+    def create_process(self,dpl_job):
+        process   = CloudSendProcess( dpl_job , self )
+        instance  = dpl_job.get_instance()
+        inst_name = instance.get_name()
+        if not inst_name in self._instances_processes:
+            self._instances_processes[inst_name] = []
+        self._instances_processes[inst_name].append(process)
+        return process
+
+    def get_processes(self):
+        processes_res = []
+        for instance_name , processes in self._instances_processes.items():
+            for process in processes:
+                processes_res.append(process)
+        return processes_res
+
+    def get_active_processes(self,instance=None):
+        processes_res = []
+        if instance:
+            for process in self._instances_processes.get(instance.get_name()):
+                if process.is_active():
+                    processes_res.append(process)
+        else:
+            for instance_name , processes in self._instances_processes.items():
+                for process in processes:
+                    if process.is_active():
+                        processes_res.append(process)
+        return processes_res
+
+    def deactivate_processes(self,instance=None):
+        for instance_name , processes in self._instances_processes.items():
+            if not instance or self._instance.get_name() == instance_name:
+                for process in processes:
+                    process.deactivate()
+
+    # mark the currently active process as ABORTED
+    def mark_aborted(self,instance,state_mask):
+        for process in self.get_activate_process(instance):
+            process.set_state(CloudSendProcessState.ABORTED)
 
 def init_instance_name(instance_config):
     

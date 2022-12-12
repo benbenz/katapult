@@ -246,7 +246,7 @@ def compute_job_hash(job_config):
     hash = hashlib.md5(string_to_hash.encode()).hexdigest()
     return hash[0:12]
 
-def generate_unique_filename():
+def generate_unique_id():
     return str(uuid.uuid4())
 
 def compute_job_command(instance,script_dir,job_config):

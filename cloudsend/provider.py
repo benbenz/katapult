@@ -502,11 +502,11 @@ class CloudSendProvider(ABC):
         pass
 
     @abstractmethod
-    async def wait(self,job_state,processes=None):
+    async def wait(self,job_state):
         pass
 
     @abstractmethod
-    async def get_jobs_states(self,processes=None):
+    async def get_jobs_states(self):
         pass
 
     @abstractmethod
@@ -518,7 +518,7 @@ class CloudSendProvider(ABC):
         pass
 
     @abstractmethod
-    async def fetch_results(self,directory,processes=None):
+    async def fetch_results(self,directory):
         pass
           
     @abstractmethod

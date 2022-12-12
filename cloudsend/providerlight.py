@@ -452,11 +452,11 @@ class CloudSendLightProvider(CloudSendProvider,ABC):
         # triggers maestro::wakeup
         await self._exec_maestro_command("wakeup")
 
-    async def wait(self,job_state,processes=None):
+    async def wait(self,job_state):
         # triggers maestro::wait
         await self._exec_maestro_command("wait")
 
-    async def get_jobs_states(self,processes=None):
+    async def get_jobs_states(self):
         # triggers maestro::get_jobs_states
         await self._exec_maestro_command("get_states")
 
@@ -468,7 +468,7 @@ class CloudSendLightProvider(CloudSendProvider,ABC):
         # triggers maestro::print_aborted_logs
         await self._exec_maestro_command("print_aborted")
 
-    async def fetch_results(self,out_dir,processes=None):
+    async def fetch_results(self,out_dir):
 
         try:
             #os.rmdir(out_dir)

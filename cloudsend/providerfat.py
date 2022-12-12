@@ -33,10 +33,11 @@ class CloudSendFatProvider(CloudSendProvider,ABC):
         self._instances = []
         self._environments = []
         self._jobs = []
+        self._run_sessions = []
 
         CloudSendProvider.__init__(self,conf)
 
-        self._current_processes = None
+        self._current_session = None
 
         #self._multiproc_man   = multiprocessing.Manager()
         #self._multiproc_lock  = self._multiproc_man.Lock()
@@ -515,7 +516,7 @@ class CloudSendFatProvider(CloudSendProvider,ABC):
 
         self._state |= CloudSendProviderState.DEPLOYED    
 
-    async def revive(self,instance,rerun=False):
+    async def revive(self,run_session,instance,rerun=False):
         self.debug(1,"REVIVING instance",instance)
 
         jobs_can_be_saved = False
@@ -533,16 +534,11 @@ class CloudSendFatProvider(CloudSendProvider,ABC):
             # re-deploy it
             await self._deploy_all(instance)
         if rerun:
-            processes = await self.run(instance,jobs_can_be_saved) #will run the jobs for this instance
-            return processes #instance_processes, jobsinfo 
-        else :
-            return None 
+            await self._run(run_session,instance,jobs_can_be_saved) #will run the jobs for this instance
 
-    def _mark_aborted(self,processes,state_mask):
-
-        for process in processes:
-            if process.get_state() & state_mask:
-                process.set_state(CloudSendProcessState.ABORTED)
+    def _mark_aborted(self,run_session,instance,state_mask):
+        if run_session:
+            run_session.mark_aborted(instance,state_mask) # mark ABORTED + deactivate()
 
     async def get_log(self,process,ssh_conn):
         uid   = process.get_uid()
@@ -570,183 +566,109 @@ class CloudSendFatProvider(CloudSendProvider,ABC):
         # ...
         # 4) basically the state is > old state ...?
 
-    async def _check_run_state(self,runinfo):
-        instance = runinfo.get('instance')
+    async def _check_run_state(self,run_session,instance,ssh_conn):
         if instance.get_name() in self._instances_states and self._instances_states[instance.get_name()]['changed']==True:
            self.debug(1,"Instance has changed! States of old jobs should return UNKNOWN and a new batch of jobs will be started",color=bcolors.WARNING)
            #let's just let the following logic do its job ... JOB CENTRIC 
-           #return True , None , False
-        last_processes_old = [] 
-        last_processes_new = []
-        do_run = False
-        for job in instance.get_jobs():
-            last_process = job.get_last_process()
-            if not last_process:
-                self.debug(2,"Found a job without process, we should run")
-                return True , None , False
-            last_processes_new.append(copy.copy(last_process))
-            last_processes_old.append(last_process)
-       
-        instances_processes = self._organize_instances_processes(last_processes_new)
+           #return True , False
+        
+        # we're gonna compare the processes' states of the current 'run_session'
+        active_processes_old = run_session.get_active_processes(instance)
+        active_processes_new = copy.copy(active_processes_old)
         do_run = True
-        if instance.get_name() in instances_processes:
-            processes_infos = instances_processes[instance.get_name()]
-            last_processes_new = []
-            await self.__get_jobs_states_internal(last_processes_new,processes_infos,CloudSendProviderStateWaitMode.NO_WAIT|CloudSendProviderStateWaitMode.WATCH,CloudSendProcessState.ANY,False,True) # Programmatic >> no print, no serialize
+        
+        # fetch the states for active_processes_new list 
+        await self.__fetch_states_internal(run_session,instance,active_processes_new,ssh_conn)
+        do_run = False
+        all_done = True
+        for process_old in active_processes_old:
+            uid = process_old.get_uid()
+            process_new = None
+            # find the new process equivalent
+            for p in active_processes_new:
+                if p.get_uid() == uid:
+                    process_new = p
+                    break
+            if process_new is None:
+                self.debug(1,"Internal ERROR: process_new is NONE! Should not happen!",color=bcolors.FAIL)
+                sys.exit(2)
+
+            state_new = process_new.get_state()
+            state_old = process_old.get_state()
+
+            # we found one process that hasn't advanced ...
+            # let's just run the jobs ...
+            #TODO: improve precision of recovery
+            self.debug(2,state_old.name,"vs",state_new.name)
+            if state_new!=CloudSendProcessState.DONE and (state_new < state_old or (state_new == CloudSendProcessState.ABORTED or state_old == CloudSendProcessState.ABORTED or state_new == CloudSendProcessState.UNKNOWN or state_old == CloudSendProcessState.UNKNOWN)):
+                self.debug(1,"We will run the following job because of an unsatisfying state. Job#",process_new.get_job().get_rank(),"=",process_new.get_state())
+                do_run = True
+                # do not break cause we want to check all_done properly!
+                #break
+            all_done = all_done and state_new == CloudSendProcessState.DONE
+
+        if all_done:
             do_run = False
-            all_done = True
-            for process_old in last_processes_old:
-                uid = process_old.get_uid()
-                process_new = processes_infos[uid]['process']
-                state_new = process_new.get_state()
-                state_old = process_old.get_state()
 
-                # we found one process that hasn't advanced ...
-                # let's just run the jobs ...
-                #TODO: improve precision of recovery
-                self.debug(2,state_old.name,"vs",state_new.name)
-                if state_new!=CloudSendProcessState.DONE and (state_new < state_old or (state_new == CloudSendProcessState.ABORTED or state_old == CloudSendProcessState.ABORTED or state_new == CloudSendProcessState.UNKNOWN or state_old == CloudSendProcessState.UNKNOWN)):
-                    self.debug(1,"We will run the following job because of an unsatisfying state. Job#",process_new.get_job().get_rank(),"=",process_new.get_state())
-                    do_run = True
-                    # do not break cause we want to check all_done properly!
-                    #break
-                all_done = all_done and state_new == CloudSendProcessState.DONE
+        # it is now time to update the old (memory connected) processes 
+        # we've retrieved what we needed and we want to new state to be corrected for future prints
+        # this should likely set the states to UNKNOWN if this is a new instance
+        # (note: an ABORTED state will not switch to UNKNOWN state - in order to keep the most information)
+        await self.__fetch_states_internal(run_session,instance,active_processes_old,ssh_conn)
 
-            if all_done:
-                do_run = False
-
-            # it is now time to update the old (memory connected) processes 
-            # we've retrieved what we needed and we want to new state to be corrected for future prints
-            # this should likely set the states to UNKNOWN if this is a new instance
-            # (note: an ABORTED state will not switch to UNKNOWN state - in order to keep the most information)
-            instances_processes = self._organize_instances_processes(last_processes_old)
-            processes_infos = instances_processes[instance.get_name()]
-            dummy_new_processes = []
-            self.__get_jobs_states_internal(dummy_new_processes,processes_infos,CloudSendProviderStateWaitMode.NO_WAIT|CloudSendProviderStateWaitMode.WATCH,CloudSendProcessState.ANY,False,True) # Programmatic >> no print, no serialize
-
-            if do_run:
-                return True , None, False
-            else:
-                # we return the old ones because those are the ones linked with the memory 
-                # the other ones have been separated with copy.copy ...
-                return False , last_processes_old , all_done
+        if do_run:
+            return True , False
         else:
-            return True , None , False
-
-    async def _run_jobs_for_instance(self,instance,runinfo,batch_uid,dpl_jobs,new_processes) :
-        if self._recovery:
-            do_run , processes , all_done = await self._check_run_state(runinfo)
-            if not do_run:
-                instance = runinfo.get('instance')
-                if all_done:
-                    self.debug(1,"Skipping run_jobs because the jobs have completed since we left them :)",instance,color=bcolors.WARNING)
-                else:
-                    self.debug(1,"Skipping run_jobs because the jobs have advanced as we left them :)",instance,color=bcolors.WARNING)
-                return processes
-
-        global_path = instance.get_global_dir()
-
-        tryagain = True
-
-        while tryagain:
-
-            processes = []
-
-            instance = runinfo.get('instance')
-            cmd_run  = runinfo.get('cmd_run')
-            cmd_run_pre = runinfo.get('cmd_run_pre')
-            cmd_pid  = runinfo.get('cmd_pid')
-            batch_run_file = instance.path_join( global_path , 'batch_run-'+batch_uid+'.sh')
-            batch_pid_file = instance.path_join( global_path , 'batch_pid-'+batch_uid+'.sh')
-            ssh_conn = await self._connect_to_instance(instance)
-            if ssh_conn is None:
-                ssh_conn , processes = await self._handle_instance_disconnect(instance,CloudSendProviderStateWaitMode.WATCH,"could not run jobs for instance")
-                if ssh_conn is None:
-                    return []
-
-            ftp_client = await ssh_conn.start_sftp_client()
-            await ftp_client.chdir(global_path)
-            await self.sftp_put_string(ftp_client,batch_run_file,cmd_run_pre+cmd_run)
-            await self.sftp_put_string(ftp_client, batch_pid_file,cmd_pid)
-            # run
-            commands = [ 
-                { 'cmd': "chmod +x "+batch_run_file+" "+batch_pid_file, 'out' : True } ,  # important to wait for it >> True !!!
-                # execute main script (spawn) (this will wait for bootstraping)
-                { 'cmd': batch_run_file , 'out' : False } 
-            ]
-            
-            try:
-                await self._run_ssh_commands(instance,ssh_conn,commands)
-                tryagain = False
-            except Exception as e:
-                self.debug(1,e)
-                self.debug(1,"ERROR: the instance is unreachable while sending batch",instance,color=bcolors.FAIL)
-                ssh_conn , processes = await self._handle_instance_disconnect(instance,CloudSendProviderStateWaitMode.WATCH,"could not run jobs for instance")
-                if ssh_conn is None:
-                    return []
-                tryagain = True
-
-            for uid in runinfo.get('jobs'):
-                # we dont have the pid of everybody yet because its sequential
-                # lets leave it blank. it can work with the uid ...
-                job = dpl_jobs[uid]
-                process = CloudSendProcess( job , uid , None , batch_uid) 
-                self.debug(2,process) 
-                processes.append(process)
-
-            ssh_conn.close()
-
-        self.serialize_state()
-
-        for process in processes:
-            new_processes.append( process )        
-        #return processes 
+            # we return the old ones because those are the ones linked with the memory 
+            # the other ones have been separated with copy.copy ...
+            return False , all_done
 
     async def _ensure_watch(self):
         if not self.is_watching():
             self.debug(1,"Started watching ...")
             await self._watch()
 
-    async def run(self,instance_filter=None,except_done=False):
+
+
+    async def _run_jobs_for_instance(self,run_session,batch,instance,except_done) :
 
         # we're not coming from revive but we've recovered a state ...
         if except_done == False and self._recovery == True:
             self.debug(1,"INFO: found serialized state: we will not restart jobs that have completed",color=bcolors.OKCYAN)
             except_done = True
 
-        instances_runs = dict()
+        instanceid , ssh_conn , ftp_client = await self._wait_and_connect(instance)
+        if ssh_conn is None:
+            ssh_conn = await self._handle_instance_disconnect(run_session,instance,CloudSendProviderStateWaitMode.WATCH,"could not run jobs for instance")
+            if ssh_conn is None:
+                self.debug(1,"Could not run jobs for instance",instance,color=bcolors.FAIL)
+                return 
+        
+        if self._recovery:
+            do_run , all_done = await self._check_run_state(run_session,instance,ssh_conn)
+            if not do_run:
+                if all_done:
+                    self.debug(1,"Skipping run_jobs because the jobs have completed since we left them :)",instance,color=bcolors.WARNING)
+                else:
+                    self.debug(1,"Skipping run_jobs because the jobs have advanced as we left them :)",instance,color=bcolors.WARNING)
+                return
 
-        dpl_jobs = dict()
+        global_path = instance.get_global_dir()
 
-        jobs = self._jobs if not instance_filter else instance_filter.get_jobs()
+        cmd_run     = ""
+        cmd_run_pre = "" 
+        cmd_pid     = ""
 
-        # batch uid is shared accross instances
-        batch_uid = cloudsendutils.generate_unique_filename()
+        for job in instance.get_jobs():
 
-        for job in jobs:
-
-            if not job.get_instance():
-                debug(1,"The job",job,"has not been assigned to an instance!")
-                return None
-
-            instance = job.get_instance()
-
-            #if instance_filter is not None:
-            #    if instance is not instance_filter:
-            #        continue 
             if except_done and job.has_completed():
                 continue
 
-            # CHECK EVERY TIME !
-            if not instances_runs.get(instance.get_name()):
-                # if wait:
-                #     await self._wait_for_instance(instance)
-                instances_runs[instance.get_name()] = { 'cmd_run':  "", 'cmd_pid': "" , 'cmd_run_pre':  "", 'instance': instance , 'jobs' : [] }
-
-            cmd_run = instances_runs[instance.get_name()]['cmd_run']
-            cmd_pid = instances_runs[instance.get_name()]['cmd_pid']
-            cmd_run_pre = instances_runs[instance.get_name()]['cmd_run_pre']
-
+            # should literally never happen
+            if not job.get_instance():
+                debug(1,"The job",job,"has not been assigned to an instance!",color=bcolors.FAIL)
+                continue
+            
             # FOR NOW
             env      = job.get_env()        # get its environment
             # "deploy" the environment to the instance and get a DeployedEnvironment 
@@ -755,24 +677,23 @@ class CloudSendFatProvider(CloudSendProvider,ABC):
             # NOTE: this could change and we store every thing in memory
             #       but this makes it less robust to states changes (especially remote....)
             dpl_env  = env.deploy(instance)
+            # deploy the job (adds)
             dpl_job  = job.deploy(dpl_env)
-            global_path = instance.get_global_dir()
+            # the batch creates the process
+            process  = batch.create_process(dpl_job)
+
+            if process is None:
+                sys.exit(1)
+            
+            self.debug(2,process) 
 
             files_path  = dpl_env.get_path()
 
-            # generate unique PID file
-            uid = cloudsendutils.generate_unique_filename() 
-
-            dpl_jobs[uid] = dpl_job
-            instances_runs[instance.get_name()]['jobs'].append(uid)
-            
-            run_path    = instance.path_join( dpl_job.get_path() , uid )
-            # retrieve PID (this will wait for PID file)
-            pid_file   = instance.path_join( run_path , 'pid' )
-            state_file = instance.path_join( run_path , 'state' )
+            run_path    = instance.path_join( dpl_job.get_path() , process.get_uid() )
+            pid_file    = instance.path_join( run_path , 'pid' )
+            state_file  = instance.path_join( run_path , 'state' )
 
             is_first = (cmd_run_pre=="")
-
             cmd_run_pre = cmd_run_pre + "rm -f " + pid_file + " && "
             cmd_run_pre = cmd_run_pre + "mkdir -p " + run_path + " && "
             if is_first: # first sequential script is waiting for bootstrap to be done by default
@@ -780,12 +701,13 @@ class CloudSendFatProvider(CloudSendProvider,ABC):
             else: # all other scripts will be queued
                 cmd_run_pre = cmd_run_pre + "echo 'queue' > " + state_file + "\n"
 
+            uid = process.get_uid()
+
             ln_command = self._get_ln_command(dpl_job,uid)
             self.debug(2,ln_command)
             if ln_command != "":
                 cmd_run_pre = cmd_run_pre + ln_command + "\n"
 
-            #cmd_run = cmd_run + "mkdir -p "+run_path + " && "
             run_sh  = instance.path_join( global_path , 'run.sh' )
             run_log = instance.path_join( run_path , 'run-'+uid+'.log' )
             pid_sh  = instance.path_join( global_path , 'getpid.sh' )
@@ -793,36 +715,90 @@ class CloudSendFatProvider(CloudSendProvider,ABC):
             cmd_run = cmd_run + "\n"
             cmd_pid = cmd_pid + pid_sh + " \"" + pid_file + "\"\n"
 
-            instances_runs[instance.get_name()]['cmd_run'] = cmd_run
-            instances_runs[instance.get_name()]['cmd_pid'] = cmd_pid
-            instances_runs[instance.get_name()]['cmd_run_pre'] = cmd_run_pre
-        
-        # lets reset the current_processes according to the instance filter
-        # we want to keep intact the processes that are not part of the re-run
-        if self._current_processes is None:
-            self._current_processes = []
-        elif instance_filter is not None:
-            new_current_processes0 = [ ]
-            for cur_p in self._current_processes:
-                if cur_p.get_job().get_instance() != instance_filter:
-                    new_current_processes0.append(cur_p)
-            self._current_processes = new_current_processes0 
+        tryagain = True
 
-        jobs = []
-        for instance_name , runinfo in instances_runs.items():
-            # will automatically append to self._current_processes
-            jobs.append( self._run_jobs_for_instance(instance,runinfo,batch_uid,dpl_jobs,self._current_processes) ) 
-        await asyncio.gather( *jobs )
+        while tryagain:
 
-        self._state |= CloudSendProviderState.RUNNING
+            batch_run_file = instance.path_join( global_path , 'batch_run-'+batch.get_uid()+'.sh')
+            batch_pid_file = instance.path_join( global_path , 'batch_pid-'+batch.get_uid()+'.sh')
+            try:
+                # ssh_conn = await self._connect_to_instance(instance)
+                # if ssh_conn is None:
+                #     ssh_conn = await self._handle_instance_disconnect(instance,CloudSendProviderStateWaitMode.WATCH,"could not run jobs for instance")
+                #     if ssh_conn is None:
+                #         return 
+                ftp_client = await ssh_conn.start_sftp_client()
+                await ftp_client.chdir(global_path)
+                await self.sftp_put_string(ftp_client,batch_run_file,cmd_run_pre+cmd_run)
+                await self.sftp_put_string(ftp_client, batch_pid_file,cmd_pid)
+                # run
+                commands = [ 
+                    { 'cmd': "chmod +x "+batch_run_file+" "+batch_pid_file, 'out' : True } ,  # important to wait for it >> True !!!
+                    # execute main script (spawn) (this will wait for bootstraping)
+                    { 'cmd': batch_run_file , 'out' : False } 
+                ]
+                
+                await self._run_ssh_commands(instance,ssh_conn,commands)
+                tryagain = False
+            except Exception as e:
+                self.debug(1,e)
+                self.debug(1,"ERROR: the instance is unreachable while sending batch",instance,color=bcolors.FAIL)
+                ssh_conn , processes = await self._handle_instance_disconnect(run_session,instance,CloudSendProviderStateWaitMode.WATCH,"could not run jobs for instance")
+                if ssh_conn is None:
+                    return 
+                tryagain = True
+
+        ssh_conn.close()
 
         self.serialize_state()
 
-        # do not ensure watch at the beginning of run...
-        # not sure why but this causes the GatheringFuture to fail
-        await self._ensure_watch()
+    # entry point ...
+    async def run(self):
 
-        return self._current_processes 
+        # we're gonna create a new run session ... deativate entirely the old one
+        if self._current_session:
+            self._current_session.deactivate() 
+
+        # create the new session
+        number = len(self._run_sessions)
+        self._current_session = CloudSendRunSession(number)
+        self._run_sessions.append(self._current_session)
+
+        # run the new session
+        await self._run(self._current_session)
+
+    async def _run(self,run_session,instance_filter=None,except_done=False):
+
+        if instance_filter:
+            instances = [ instance_filter ] 
+        else:
+            instances = self._instances
+
+        # we're about the re-run the processes for 'instances'
+        # we need to de-activate the processes of the batch on those instances...
+        for instance in instances:
+            run_session.deactivate(instance)
+
+        # a batch is accross instances, create it now
+        # IMPORTANT: create it after de-activation !
+        batch = run_session.create_batch()
+
+        # run the jobs on each instances
+        jobs = []
+        for instance in instances:
+            jobs.append( self._run_jobs_for_instance(run_session,batch,instance,except_done) ) 
+        await asyncio.gather( *jobs )
+
+        # update the Provider state
+        self._state |= CloudSendProviderState.RUNNING
+
+        # serialize
+        self.serialize_state()
+
+        # Now we can start wathing !
+        # NOTE: do not ensure watch at the beginning of run...
+        #       not sure why but this causes the GatheringFuture to fail
+        await self._ensure_watch()
 
 
     def print_jobs_summary(self,instance=None):
@@ -843,30 +819,33 @@ class CloudSendFatProvider(CloudSendProvider,ABC):
     async def print_aborted_logs(self,instance=None):
         instances = self._instances if instance is None else [ instance ]
         for _instance in instances:
-            instanceid , ssh_conn , ftp_client = await self._wait_and_connect(_instance)
+            ssh_conn   = None
+            ftp_client = None
             for job in _instance.get_jobs():
                 process = job.get_last_process()
                 if process.get_state() == CloudSendProcessState.ABORTED:
+                    if not ssh_conn:
+                        instanceid , ssh_conn , ftp_client = await self._wait_and_connect(_instance)
                     log = await self.get_log(process,ssh_conn)
                     self.debug(1,"----------------------------------------------------------------------",color=bcolors.WARNING)
                     self.debug(1,"Job #",job.get_rank(),"has ABORTED with errors:",color=bcolors.WARNING)
                     self.debug(1,log,color=bcolors.WARNING)
                     self.debug(1,process,color=bcolors.WARNING)
-            # ftp_client.close()
-            ssh_conn.close()   
+            if ssh_conn:
+                # ftp_client.close()
+                ssh_conn.close()   
 
-    async def fetch_results(self,out_dir,processes=None):
+    async def fetch_results(self,out_dir,run_session=None):
 
-        if processes is None: 
-            processes = self.get_last_processes()
+        if not run_session:
+            run_session = self._current_session
 
-        if processes and not isinstance(processes,list):
-            processes = [ processes ]
-        
+        #processes = self.get_last_processes()
+        processes = run_session.get_ran_processes()
+
         clients   = dict()
 
         try:
-            #os.rmdir(out_dir)
             shutil.rmtree(out_dir, ignore_errors=True)
         except:
             pass
@@ -916,25 +895,6 @@ class CloudSendFatProvider(CloudSendProvider,ABC):
             #client['ftp'].close()
             client['ssh'].close()
 
-    def get_results_files_list(self,processes=None):
-
-        if processes is None: 
-            processes = self.get_last_processes()
-
-        if processes and not isinstance(processes,list):
-            processes = [ processes ]
-        
-        files_list = "" 
-
-        for process in processes:
-
-            if process.get_state() != CloudSendProcessState.DONE:
-                self.debug(2,"Skipping process import",process.get_uid(),process.get_state())
-            
-            dpl_job  = process.get_job()
-            rank     = dpl_job.get_rank()
-            instance = dpl_job.get_instance()
-
     def _get_ln_command(self,dpl_job,uid):
         files_to_ln = []
         upload_files = dpl_job.get_config('upload_files')
@@ -965,7 +925,7 @@ class CloudSendFatProvider(CloudSendProvider,ABC):
 
         return lnstr
 
-    async def _handle_instance_disconnect(self,instance,wait_mode,msg,processes=None):
+    async def _handle_instance_disconnect(self,run_session,instance,wait_mode,msg):
 
         # let the priority to the watcher process
         # this is really just in case ...
@@ -978,7 +938,7 @@ class CloudSendFatProvider(CloudSendProvider,ABC):
 
         if self._instances_watching.get(instance.get_name(),False) == False:
             self.debug(1,"We have stopped watching the instance - We won't try to reconnect",color=bcolors.WARNING)
-            return None , None 
+            return None 
             
         try:
             # check the status on the instance with AWS
@@ -988,47 +948,36 @@ class CloudSendFatProvider(CloudSendProvider,ABC):
             # we likely have an Internet connection problem ...
             # let's just ignore the situation and continue
             self.debug(1,"INTERNET connection error. The process will stop.")
-            return None , None
+            return None 
 
         # this is an Internet error
         if instance.get_state() == CloudSendInstanceState.RUNNING:
             ssh_conn = await self._connect_to_instance(instance)
             if ssh_conn is None:
                 self.debug(1,"FATAL ERROR(0):",msgs,instance,color=bcolors.FAIL)
-                return None , None
+                return None 
             self.debug(2,"HANDLE_DISCONNECT: LIKELY INTERNET ERROR?")
-            return ssh_conn , None
+            return ssh_conn
 
         self.debug(1,"ERROR:",msg,instance,color=bcolors.FAIL)
-        if processes is not None:
+        if run_session:
             if instance.get_state() & (CloudSendInstanceState.STOPPING | CloudSendInstanceState.STOPPED) :
                 # mark any type of process as aborted, but DONE
-                self._mark_aborted(processes,CloudSendProcessState.ANY - CloudSendProcessState.DONE) 
+                self._mark_aborted(run_session,instance,CloudSendProcessState.ANY - CloudSendProcessState.DONE) 
             elif instance.get_state() & (CloudSendInstanceState.TERMINATING | CloudSendInstanceState.TERMINATED):
                 # mark any type of process as aborted
-                self._mark_aborted(processes,CloudSendProcessState.ANY) 
-        rerun_jobs = processes is not None
-        if wait_mode & CloudSendProviderStateWaitMode.WATCH:
-            processes = await self.revive(instance,rerun_jobs)
+                self._mark_aborted(run_session,instance,CloudSendProcessState.ANY) 
+            if wait_mode & CloudSendProviderStateWaitMode.WATCH:
+                await self.revive(run_session,instance,rerun_jobs)
         ssh_conn = await self._connect_to_instance(instance)
         if ssh_conn is None:
             self.debug(1,"FATAL ERROR(1):",msgs,instance,color=bcolors.FAIL)
-        return ssh_conn , processes #processes_info , jobsinfo
+        return ssh_conn 
 
-    def _recompute_jobs_info(self,instance,processes):
-        instances_processes = self._organize_instances_processes(processes)
-        if not instance.get_name() in instances_processes:
-            return dict() , ""
-        instance_processes  = instances_processes[instance.get_name()]
-        jobsinfo , instance = self._compute_jobs_info(instance_processes)
-        return instance_processes , jobsinfo 
-
-
-    def _compute_jobs_info(self,processes_infos):
+    def _compute_jobs_info(self,processes):
         jobsinfo = ""
 
-        for uid , process_info in processes_infos.items():
-            process     = process_info['process']
+        for process in processes:
             job         = process.get_job()    # deployed job
             dpl_env     = job.get_env()        # deployed job has a deployed environment
             shash       = job.get_hash()
@@ -1039,124 +988,120 @@ class CloudSendFatProvider(CloudSendProvider,ABC):
             else:
                 jobsinfo = dpl_env.get_name_with_hash() + " " + str(shash) + " " + str(uid) + " " + str(pid) + " \"" + str(job.get_config('output_file')) + "\""
             
-            instance    = job.get_instance() # should be the same for all jobs
+        return jobsinfo 
+    
+    async def __fetch_states_internal( self, run_session, instance , processes , ssh_conn ):
+
+        fetched     = dict()
+
+        # nothing to fetch
+        if not processes or len(processes)==0:
+            return fetched
+    
+        jobsinfo    = self._compute_jobs_info(processes)
+        global_path = instance.get_global_dir()
+        state_sh    = instance.path_join( global_path , 'state.sh' )
+        cmd         =  state_sh + " " + jobsinfo
         
-        return jobsinfo , instance
+        self.debug(2,"PROCESSES sent for state.sh",processes)
+        self.debug(2,"Executing command",cmd)
+        
+        attempts = 0 
+        while True:
+            try:
+                stdout, stderr = await self._exec_command(ssh_conn,cmd)
+                data = await stdout.read()
+                break
+            except Exception as e:
+                self.debug(1,"SSH connection error while sending state.sh command")
+                ssh_conn = await self._handle_instance_disconnect(run_session,instance,wait_mode,"could not get jobs states for instance. SSH connection lost with")
+                if ssh_conn is None:
+                    return None
+                # this is part of a run session we're looking at...
+                # lets update the processes after the error
+                if run_session:
+                    processes = run_session.get_activate_processes(instance)
+                attempts += 1
+            if attempts > 5:
+                self.debug(1,"TOO MANY ATTEMPTS",color=bcolors.FAIL)
+                return None                
 
-    async def __get_jobs_states_internal( self , new_processes , processes_infos , wait_mode , job_state , daemon = False , programmatic = False):
+        for line in data.splitlines():      
+            if not line or line.strip()=="":
+                break     
+            statestr = line.strip() 
+            self.debug(2,"State=",statestr,"IP=",instance.get_ip_addr())
+            stateinfo = statestr.split(',')
+            statestr  = re.sub(r'\([0-9]+\)','',stateinfo[2])
+            uid       = stateinfo[0]
+            pid       = stateinfo[1]
 
-        jobsinfo , instance = self._compute_jobs_info(processes_infos)
+            process = None
+            for p in processes:
+                if p.get_uid() == uid:
+                    process = p
+                    break
+            if process is not None:
+                fetched[uid] = True
+                # we don't have PIDs with batches
+                # let's take the opportunity to update it here...
+                if process.get_pid() is None and pid != "None":
+                    process.set_pid( int(pid) )
+                try:
+                    state = CloudSendProcessState[statestr.upper()]
+                    # let's keep as much history as we know 
+                    # ABORTED state has more info than UNKNOWN ...
+                    # on a new state recovery, the newly created instance is returining UNKNOWN
+                    # but if the maestro witnessed an ABORTED state
+                    # we prefer to keep this ...
+                    if not (process.get_state() == CloudSendProcessState.ABORTED and state == CloudSendProcessState.UNKNOWN):
+                        process.set_state(state)
+                    self.debug(2,process)
+                    # SUPER IMPORTANT TO TEST with retrieved (remote) state !
+                    # if we tested with curernt state we could test against all ABORTED jobs and the wait() function would cancel...
+                    # this could potentially happen though
+                    # instead, the retrieved state is actually UNKNOWN
+                    self.debug(2,'The state is ',uid,state)
+                except Exception as e:
+                    debug(1,"\nUnhandled state received by state.sh!!!",statestr,"\n")
+                    debug(2,e)
+                    state = CloudSendProcessState.UNKNOWN
+            else:
+                debug(2,"Received UID info that was not requested")
 
-        if not programmatic and wait_mode & CloudSendProviderStateWaitMode.WATCH:
+        return fetched
+
+    async def __wait_for_state_internal( self , run_session , instance , job_state , wait_mode , daemon ):
+
+        if wait_mode & CloudSendProviderStateWaitMode.WATCH:
             self._instances_watching[instance.get_name()] = True
         
         ssh_conn = await self._connect_to_instance(instance)
 
         if ssh_conn is None:
-            ssh_conn , processes = await self._handle_instance_disconnect(instance,wait_mode,"could not get jobs states for instance",
-                                            [processes_infos[uid]['process'] for uid in processes_infos])
+            ssh_conn = await self._handle_instance_disconnect(run_session,instance,wait_mode,"could not get jobs states for instance")
             if ssh_conn is None:
                 return None
-            
-            if processes is not None:
-                processes_infos , jobsinfo = self._recompute_jobs_info(instance,processes)
 
         global_path = instance.get_global_dir() 
 
-        processes = []
-
         while True:
 
-            # wait functions should update their processes list in case the watch function re-run them
-            # we leave this test after the wait so that returning functions (get_states) only look
-            # at the processes passed as argument (if any)
-            if self._processes_have_changed(instance,processes_infos):
-                self.debug(1,"Processes have changed for instance",instance.get_name(),". Replacing 'processes' argument with new processes",color=bcolors.WARNING)
-                processes_infos , jobsinfo = self._recompute_jobs_info(instance,self._current_processes)
+            # update before
+            processes = run_session.get_active_processes(instance)
 
-            # if False: #not ssh_conn.get_transport().is_active():
-            #     ssh_conn , processes = await self._handle_instance_disconnect(instance,wait_mode,"could not get jobs states for instance. SSH connection lost with",
-            #                                     [processes_infos[uid]['process'] for uid in processes_infos])
-            #     if ssh_conn is None:
-            #         return None
-                
-            #     if processes is not None:
-            #         processes_infos , jobsinfo = self._recompute_jobs_info(instance,processes)
+            fetched = await self.__fetch_states_internal(run_session,instance,processes,ssh_conn)
 
-            #     processes = []
-
-            state_sh = instance.path_join( global_path , 'state.sh' )
-            cmd =  state_sh + " " + jobsinfo
-            self.debug(2,"Executing command",cmd)
-            try:
-                stdout, stderr = await self._exec_command(ssh_conn,cmd)
-                data = await stdout.read()
-            except Exception as e:
-                self.debug(1,"SSH connection error while sending state.sh command")
-                ssh_conn , processes = await self._handle_instance_disconnect(instance,wait_mode,"could not get jobs states for instance. SSH connection lost with",
-                                                [processes_infos[uid]['process'] for uid in processes_infos])
-                if ssh_conn is None:
-                    return None
-                if processes is not None: # if processes have changed due to restart
-                    processes_infos , jobsinfo = self._recompute_jobs_info(instance,processes)
-                    cmd = state_sh + " " + jobsinfo
-                
-                # try one more time to re-run the command ...
-                stdout, stderr = await self._exec_command(ssh_conn,cmd)
-
-                processes = []
-
-            for line in data.splitlines():      
-                if not line or line.strip()=="":
-                    break     
-                statestr = line.strip() #line.decode("utf-8").strip()
-                self.debug(2,"State=",statestr,"IP=",instance.get_ip_addr())
-                stateinfo = statestr.split(',')
-                statestr  = re.sub(r'\([0-9]+\)','',stateinfo[2])
-                uid       = stateinfo[0]
-                pid       = stateinfo[1]
-
-                if uid in processes_infos:
-                    process = processes_infos[uid]['process']
-
-                    # we don't have PIDs with batches
-                    # let's take the opportunity to update it here...
-                    if process.get_pid() is None and pid != "None":
-                        process.set_pid( int(pid) )
-                    try:
-                        state = CloudSendProcessState[statestr.upper()]
-                        # let's keep as much history as we know 
-                        # ABORTED state has more info than UNKNOWN ...
-                        # on a new state recovery, the newly created instance is returining UNKNOWN
-                        # but if the maestro witnessed an ABORTED state
-                        # we prefer to keep this ...
-                        if not (process.get_state() == CloudSendProcessState.ABORTED and state == CloudSendProcessState.UNKNOWN):
-                            process.set_state(state)
-                        self.debug(2,process)
-                        processes_infos[uid]['retrieved'] = True
-                        # SUPER IMPORTANT TO TEST with retrieved (remote) state !
-                        # if we tested with curernt state we could test against all ABORTED jobs and the wait() function would cancel...
-                        # this could potentially happen though
-                        # instead, the retrieved state is actually UNKNOWN
-                        self.debug(2,'The state is ',uid,state)
-                        processes_infos[uid]['test']      = (job_state & state != 0)
-                    except Exception as e:
-                        debug(1,"\nUnhandled state received by state.sh!!!",statestr,"\n")
-                        debug(2,e)
-                        state = CloudSendProcessState.UNKNOWN
-
-                    processes.append(process)
-
-                else:
-                    debug(2,"Received UID info that was not requested")
+            # always update the activate processes in case something happened
+            processes = run_session.get_active_processes(instance)
 
             # print job status summary
-            if not programmatic and not daemon:
+            if not daemon:
                 self.print_jobs_summary(instance)
 
             # all retrived attributes need to be true
-            arr_retrieved = [ pinfo['retrieved'] for pinfo in processes_infos.values()]
-            arr_test      = [ pinfo['test'] for pinfo in processes_infos.values()]
+            arr_retrieved = [ fetched.get(process.get_uid(),False) for process in processes]
+            arr_test      = [ (process.get_state() & job_state)!=0 for process in processes]
             retrieved = all( arr_retrieved )
             tested    = all( arr_test )
 
@@ -1166,8 +1111,7 @@ class CloudSendFatProvider(CloudSendProvider,ABC):
             if retrieved and tested :
                 break
 
-            if not programmatic:
-                self.serialize_state()
+            self.serialize_state()
 
             if wait_mode & CloudSendProviderStateWaitMode.WAIT:
                 await asyncio.sleep(SLEEP_PERIOD)
@@ -1176,42 +1120,34 @@ class CloudSendFatProvider(CloudSendProvider,ABC):
 
         ssh_conn.close() 
 
-        if not programmatic:
-            # this should not be necessary but it sometimes seems it needs to be there
-            # TODO: debug why ...
-            self.serialize_state()
+        self.serialize_state()
 
         if wait_mode & CloudSendProviderStateWaitMode.WATCH:
             # lets wait 1 minutes before stopping
             # this helps with the demo which runs a wait() and a get() sequentially ...
-            if not programmatic:
-                if self._auto_stop:
-                    await asyncio.sleep(60*1)  
+            if self._auto_stop:
+                await asyncio.sleep(60*1)  
 
-                self._instances_watching[instance.get_name()] = False            
-                any_watching = any( self._instances_watching.values() )
+            self._instances_watching[instance.get_name()] = False            
+            any_watching = any( self._instances_watching.values() )
 
+            if not any_watching:
+                self.debug(2,"WATCHING has ended")
+                run_session.deactivate()
+                self._state = self._state & (CloudSendProviderState.ANY - CloudSendProviderState.WATCHING - CloudSendProviderState.RUNNING) | CloudSendProviderState.IDLE
+                self.debug(2,"entering IDLE state",self._state)
+                self.serialize_state()
+
+            if self._auto_stop:
+                try:
+                    self.debug(1,"Stopping instance",instance.get_name(),color=bcolors.WARNING)
+                    self.stop_instance(instance)
+                except:
+                    pass
+                debug(2,self._instances_watching)
                 if not any_watching:
-                    self.debug(2,"WATCHING has ended")
-                    self._current_processes = None
-                    self._state = self._state & (CloudSendProviderState.ANY - CloudSendProviderState.WATCHING - CloudSendProviderState.RUNNING) | CloudSendProviderState.IDLE
-                    self.debug(2,"entering IDLE state",self._state)
-                    self.serialize_state()
-
-                if self._auto_stop:
-                    try:
-                        self.debug(1,"Stopping instance",instance.get_name(),color=bcolors.WARNING)
-                        self.stop_instance(instance)
-                    except:
-                        pass
-                    debug(2,self._instances_watching)
-                    if not any_watching:
-                        self.debug(1,"Stopping the fat client (maestro) because all instances have ran the jobs",color=bcolors.WARNING)
-                        os.system("sudo shutdown -h now")
-
-        #return processes
-        for process in processes:
-            new_processes.append( process )
+                    self.debug(1,"Stopping the fat client (maestro) because all instances have ran the jobs",color=bcolors.WARNING)
+                    os.system("sudo shutdown -h now")
 
     def _get_num_workers(self):
         num_workers = 10
@@ -1219,93 +1155,17 @@ class CloudSendFatProvider(CloudSendProvider,ABC):
             num_workers = len(self._instances)
         return num_workers
 
-    def get_last_processes(self):
-        processes = []
-        for job in self._jobs:
-            processes.append( job.get_last_process())
-        return processes
+    async def __wait_jobs_state( self, run_session , wait_state = CloudSendProviderStateWaitMode.NO_WAIT , job_state = CloudSendProcessState.ANY , daemon = False ):   
 
-    def _processes_have_changed(self,instance,processes_infos):
-        # if functools.reduce(lambda x, y : x and y, map(lambda p, q: x.get_uid() == y.get_uid(),self._current_process,processes), True):
-        #     return False
-        # else:
-        #     return True
-        processes = processes_infos.values()
-        if self._current_processes is None or processes is None:
-            self.debug(2,"_processes_have_changed: No current processes or processes: returning False")
-            return False
-        processes_comp = []
-        for process in self._current_processes:
-            if process.get_job().get_instance() == instance:
-                processes_comp.append( process )
-        
-        # debugging the processes array results vs args vs watch vs wait vs getstate
-        if self.DBG_LVL>=2:
-            str_pc = "" 
-            for p in processes_comp:
-                str_pc = str_pc + p.get_uid() + " "
-            str_p = "" 
-            for p in processes:
-                str_p = str_p + p['process'].get_uid() + " "
-            str_cp = "" 
-            for p in self._current_processes:
-                if p.get_job().get_instance() == instance:
-                    str_cp = str_cp + p.get_uid() + " "
-            self.debug(2,"processes_comp",str_pc)
-            self.debug(2,"processes     ",str_p )
-            #self.debug(2,"curr_processes",str_cp)
-
-        if len(processes_comp) != len(processes):
-            return True
-        for i,process_info in enumerate(processes):
-            cur_process = processes_comp[i]
-            if cur_process.get_uid() != process_info['process'].get_uid():
-                return True
-        return False
-
-    def _organize_instances_processes( self , processes ):
-        instances_processes = dict()
-        #instances_list      = dict()
-        for process in processes:
-            if process is None:
-                continue
-            job         = process.get_job()   # deployed job
-            instance    = job.get_instance()
-            if instance is None:
-                print("wait_for_job_state: instance is not available!")
-                return 
-            # initialize the collection dict
-            if instance.get_name() not in instances_processes:
-                instances_processes[instance.get_name()] = dict()
-                #instances_list[instance.get_name()]      = instance
-            if process.get_uid() not in instances_processes[instance.get_name()]:
-                instances_processes[instance.get_name()][process.get_uid()] = { 'process' : process , 'retrieved' : False  , 'test' : False }
-        return instances_processes
-
-
-    async def __get_or_wait_jobs_state( self, processes , wait_state = CloudSendProviderStateWaitMode.NO_WAIT , job_state = CloudSendProcessState.ANY , daemon = False ):   
-
-        if processes is None or len(processes)==0: 
-            self.debug(2,"Using last processes because no processes argument has been passed")
-            processes = self.get_last_processes()
-
-        if processes and not isinstance(processes,list):
-            processes = [ processes ]
-
-        if len(processes) == 0:
-            self.debug(2,"No processes to get/wait. Returning")
+        if not run_session:
             return None
 
-        instances_processes = self._organize_instances_processes(processes)
-
-        new_processes = [] 
         jobs = []
-        for instance_name , processes_infos in instances_processes.items():
-            jobs.append( self.__get_jobs_states_internal(new_processes,processes_infos,wait_state,job_state,daemon) )
+        for instance in self._instances:
+            jobs.append( self.__wait_for_state_internal(run_session,instance,job_state,wait_state,daemon) )
 
         if not daemon:
             await asyncio.gather( *jobs )
-            return new_processes # we return the new processes because we waited for them to be filled up
         else:
             await self._cancel_watch()
             # spawn it ...
@@ -1314,7 +1174,6 @@ class CloudSendFatProvider(CloudSendProvider,ABC):
             if wait_state & CloudSendProviderStateWaitMode.WATCH:
                 self.debug(2,"Watching ...")
             await asyncio.sleep(2) # let it go to the loop
-            return processes # we return the normal processes because we have no processing done yet
         # done
 
     async def wakeup(self):
@@ -1367,10 +1226,10 @@ class CloudSendFatProvider(CloudSendProvider,ABC):
         self._state |= CloudSendProviderState.WATCHING
         self.serialize_state()
 
-        await self.__get_or_wait_jobs_state(None,CloudSendProviderStateWaitMode.WAIT|CloudSendProviderStateWaitMode.WATCH,job_state,True)
+        await self.__wait_jobs_state(self._current_session , CloudSendProviderStateWaitMode.WAIT|CloudSendProviderStateWaitMode.WATCH,job_state,True)
 
 
-    async def wait(self,job_state,processes=None):
+    async def wait(self,job_state):
         
         await self._ensure_watch()
 
@@ -1379,17 +1238,17 @@ class CloudSendFatProvider(CloudSendProvider,ABC):
 
         # we used to fetch the same way watch was fetching but this is redundant
         # and it was causing issues between lists of processes etc.
-        #return await self.__get_or_wait_jobs_state(processes,CloudSendProviderStateWaitMode.WAIT,job_state)
+        #return await self.__get_or_wait_jobs_state(CloudSendProviderStateWaitMode.WAIT,job_state)
         while True:
             
             for instance in self._instances:
                 self.print_jobs_summary(instance)
 
-            if not self._current_processes:
+            if not self._current_session:
                 break
             
             test = True 
-            for process in self._current_processes:
+            for process in self._current_session.get_active_processes():
                 test = test and (process.get_state() & job_state )
             
             if test:
@@ -1397,14 +1256,35 @@ class CloudSendFatProvider(CloudSendProvider,ABC):
             
             await asyncio.sleep(SLEEP_PERIOD)
 
-    async def get_jobs_states(self,processes=None):
+    async def __get_jobs_states_internal(self,instance):
+        instanceid , ssh_conn , ftp_client = await self._wait_and_connect(instance)
+
+        # no recovery here , this is an observation call ... we just fail ...
+        if ssh_conn is None:
+            self.debug(1,"ERROR: could not get jobs states",instance,color=bcolors.FAIL)
+            return
+
+        # let's update the active processes
+        processes = instance.get_active_processes()
+        # first argument: run_session = None, so this won't trigger re-runs etc....
+        await self.__fetch_states_internal(None,instance,processes,ssh_conn)
+
+        # print
+        self.print_jobs_summary(instance)
+
+        ssh_conn.close()
+
+
+    async def get_jobs_states(self):
 
         self.debug(2,'Getting Jobs States ...')
 
-        if not processes or len(processes)==0:
-            self.debug(2,"No process requested >> getting all jobs' processes")
+        jobs = []
+        for instance in self._instances:
+            jobs.append( self.__get_jobs_states_internal(instance) )
+        
+        await asyncio.gather( *jobs )
 
-        return await self.__get_or_wait_jobs_state(processes)     
 
     @abstractmethod
     def get_recommended_cpus(self,inst_cfg):
