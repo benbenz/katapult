@@ -637,9 +637,10 @@ class CloudSendBatch():
     def get_active_processes(self,instance=None):
         processes_res = []
         if instance:
-            for process in self._instances_processes.get(instance.get_name()):
-                if process.is_active():
-                    processes_res.append(process)
+            if instance.get_name() in self._instances_processes:
+                for process in self._instances_processes[instance.get_name()]:
+                    if process.is_active():
+                        processes_res.append(process)
         else:
             for instance_name , processes in self._instances_processes.items():
                 for process in processes:
@@ -649,14 +650,15 @@ class CloudSendBatch():
 
     def deactivate_processes(self,instance=None):
         for instance_name , processes in self._instances_processes.items():
-            if not instance or self._instance.get_name() == instance_name:
+            if not instance or instance.get_name() == instance_name:
                 for process in processes:
                     process.deactivate()
 
     # mark the currently active process as ABORTED
     def mark_aborted(self,instance,state_mask):
         for process in self.get_active_processes(instance):
-            process.set_state(CloudSendProcessState.ABORTED)
+            if process.get_state() & state_mask:
+                process.set_state(CloudSendProcessState.ABORTED)
 
 def init_instance_name(instance_config):
     

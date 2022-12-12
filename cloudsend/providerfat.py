@@ -42,6 +42,7 @@ class CloudSendFatProvider(CloudSendProvider,ABC):
         #self._multiproc_man   = multiprocessing.Manager()
         #self._multiproc_lock  = self._multiproc_man.Lock()
         self._instances_watching = dict()
+        self._instances_reviving = dict()
 
         # watch asyncio future
         self._watcher_task = None
@@ -538,7 +539,7 @@ class CloudSendFatProvider(CloudSendProvider,ABC):
 
     def _mark_aborted(self,run_session,instance,state_mask):
         if run_session:
-            run_session.mark_aborted(instance,state_mask) # mark ABORTED + deactivate()
+            run_session.mark_aborted(instance,state_mask) # mark ABORTED 
 
     async def get_log(self,process,ssh_conn):
         uid   = process.get_uid()
@@ -578,7 +579,7 @@ class CloudSendFatProvider(CloudSendProvider,ABC):
         do_run = True
         
         # fetch the states for active_processes_new list 
-        await self.__fetch_states_internal(run_session,instance,active_processes_new,True,ssh_conn)
+        fetched , ssh_conn = await self.__fetch_states_internal(run_session,instance,active_processes_new,True,ssh_conn)
         do_run = False
         all_done = True
         for process_old in active_processes_old:
@@ -614,14 +615,14 @@ class CloudSendFatProvider(CloudSendProvider,ABC):
         # we've retrieved what we needed and we want to new state to be corrected for future prints
         # this should likely set the states to UNKNOWN if this is a new instance
         # (note: an ABORTED state will not switch to UNKNOWN state - in order to keep the most information)
-        await self.__fetch_states_internal(run_session,instance,active_processes_old,True,ssh_conn)
+        fetched , ssh_conn = await self.__fetch_states_internal(run_session,instance,active_processes_old,True,ssh_conn)
 
         if do_run:
-            return True , False
+            return True , False , ssh_conn
         else:
             # we return the old ones because those are the ones linked with the memory 
             # the other ones have been separated with copy.copy ...
-            return False , all_done
+            return False , all_done , ssh_conn
 
     async def _ensure_watch(self):
         if not self.is_watching():
@@ -645,7 +646,7 @@ class CloudSendFatProvider(CloudSendProvider,ABC):
                 return 
         
         if self._recovery:
-            do_run , all_done = await self._check_run_state(run_session,instance,ssh_conn)
+            do_run , all_done , ssh_conn = await self._check_run_state(run_session,instance,ssh_conn)
             if not do_run:
                 if all_done:
                     self.debug(1,"Skipping run_jobs because the jobs have completed since we left them :)",instance,color=bcolors.WARNING)
@@ -738,7 +739,7 @@ class CloudSendFatProvider(CloudSendProvider,ABC):
             except Exception as e:
                 self.debug(1,e)
                 self.debug(1,"ERROR: the instance is unreachable while sending batch",instance,color=bcolors.FAIL)
-                ssh_conn , processes = await self._handle_instance_disconnect(run_session,instance,True,"could not run jobs for instance")
+                ssh_conn = await self._handle_instance_disconnect(run_session,instance,True,"could not run jobs for instance")
                 if ssh_conn is None:
                     return 
                 tryagain = True
@@ -942,6 +943,11 @@ class CloudSendFatProvider(CloudSendProvider,ABC):
         # not the case anymore.... wait is now leveraging watch
         if not do_revive:
             await asyncio.sleep(SLEEP_PERIOD)
+            while self._instances_reviving[instance.get_name()]:
+                self.debug(1,"waiting for reviving instance (2)",instance)
+                await asyncio.sleep(SLEEP_PERIOD)
+        else:
+            self._instances_reviving[instance.get_name()] = True
 
         if self._instances_watching.get(instance.get_name(),False) == False:
             self.debug(1,"We have stopped watching the instance - We won't try to reconnect",color=bcolors.WARNING)
@@ -979,6 +985,11 @@ class CloudSendFatProvider(CloudSendProvider,ABC):
         ssh_conn = await self._connect_to_instance(instance)
         if ssh_conn is None:
             self.debug(1,"FATAL ERROR(1):",msgs,instance,color=bcolors.FAIL)
+
+        # free the lock
+        if do_revive:
+            self._instances_reviving[instance.get_name()] = False 
+
         return ssh_conn 
 
     def _compute_jobs_info(self,processes):
@@ -1079,12 +1090,13 @@ class CloudSendFatProvider(CloudSendProvider,ABC):
             else:
                 debug(2,"Received UID info that was not requested")
 
-        return fetched
+        return fetched , ssh_conn
 
     async def __wait_for_state_internal( self , run_session , instance , job_state , wait_mode , daemon ):
 
         if wait_mode & CloudSendProviderStateWaitMode.WATCH:
             self._instances_watching[instance.get_name()] = True
+            self._instances_reviving[instance.get_name()] = False
         
         ssh_conn = await self._connect_to_instance(instance)
 
@@ -1102,7 +1114,7 @@ class CloudSendFatProvider(CloudSendProvider,ABC):
             # update before
             processes = run_session.get_active_processes(instance)
 
-            fetched = await self.__fetch_states_internal(run_session,instance,processes,do_revive,ssh_conn)
+            fetched , ssh_conn = await self.__fetch_states_internal(run_session,instance,processes,do_revive,ssh_conn)
 
             # always update the activate processes in case something happened
             processes = run_session.get_active_processes(instance)
@@ -1126,7 +1138,10 @@ class CloudSendFatProvider(CloudSendProvider,ABC):
             self.serialize_state()
 
             if wait_mode & CloudSendProviderStateWaitMode.WAIT:
-                await asyncio.sleep(SLEEP_PERIOD)
+                try:
+                    await asyncio.sleep(SLEEP_PERIOD)
+                except asyncio.exceptions.CancelledError:
+                    self.debug(1,"Wait process cancelled",color=bcolors.WARNING)
             else:
                 break
 
@@ -1255,8 +1270,14 @@ class CloudSendFatProvider(CloudSendProvider,ABC):
         # and it was causing issues between lists of processes etc.
         #return await self.__get_or_wait_jobs_state(CloudSendProviderStateWaitMode.WAIT,job_state)
         while True:
-            
+
             for instance in self._instances:
+                # with this new in-memory test, we can't run the test while the instance is reviving
+                # because the activate processes are being changed ...
+                while self._instances_reviving[instance.get_name()]:
+                    self.debug(1,"waiting for reviving instance (1)",instance)
+                    await asyncio.sleep(SLEEP_PERIOD)
+
                 self.print_jobs_summary(run_session,instance)
 
             if not run_session:
