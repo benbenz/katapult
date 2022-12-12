@@ -34,10 +34,9 @@ class CloudSendFatProvider(CloudSendProvider,ABC):
         self._environments = []
         self._jobs = []
         self._run_sessions = []
+        self._current_session = None
 
         CloudSendProvider.__init__(self,conf)
-
-        self._current_session = None
 
         #self._multiproc_man   = multiprocessing.Manager()
         #self._multiproc_lock  = self._multiproc_man.Lock()
@@ -62,14 +61,15 @@ class CloudSendFatProvider(CloudSendProvider,ABC):
             self._state_serializer = StateSerializer(self)
             self._state_serializer.load()
 
-            consistency = self._state_serializer.check_consistency(self._state,self._instances,self._environments,self._jobs)
+            consistency = self._state_serializer.check_consistency(self._state,self._instances,self._environments,self._jobs,self._run_sessions,self._current_session)
             if consistency:
                 self.debug(1,"State is consistent with configuration - LOADING old state")
                 self._recovery = True
-                self._state , self._instances , self._environments , self._jobs = self._state_serializer.transfer()
+                self._state , self._instances , self._environments , self._jobs , self._run_sessions , self._current_session = self._state_serializer.transfer()
                 self.debug(2,self._instances)
                 self.debug(2,self._environments)
                 self.debug(2,self._jobs)
+                self.debug(2,self._run_sessions)
                 for job in self._jobs:
                     process = job.get_last_process()
                     self.debug(2,process)
@@ -94,7 +94,7 @@ class CloudSendFatProvider(CloudSendProvider,ABC):
 
     def serialize_state(self):
         if self._config.get('recover',False):
-            self._state_serializer.serialize(self._state,self._instances,self._environments,self._jobs)
+            self._state_serializer.serialize(self._state,self._instances,self._environments,self._jobs,self._run_sessions,self._current_session)
 
   
     # def get_job(self,index):
@@ -751,14 +751,19 @@ class CloudSendFatProvider(CloudSendProvider,ABC):
     # entry point ...
     async def run(self):
 
-        # we're gonna create a new run session ... deativate entirely the old one
-        if self._current_session:
-            self._current_session.deactivate() 
+        # we were actually still running processes
+        # >> let's use the current session that has been loaded
+        if self._recovery and self._state & CloudSendProviderState.RUNNING:
+            pass # loaded already
+        else:
+            # we're gonna create a new run session ... deativate entirely the old one
+            if self._current_session:
+                self._current_session.deactivate() 
 
-        # create the new session
-        number = len(self._run_sessions)
-        self._current_session = CloudSendRunSession(number)
-        self._run_sessions.append(self._current_session)
+            # create the new session
+            number = len(self._run_sessions)
+            self._current_session = CloudSendRunSession(number)
+            self._run_sessions.append(self._current_session)
 
         # run the new session
         await self._run(self._current_session)
@@ -823,6 +828,8 @@ class CloudSendFatProvider(CloudSendProvider,ABC):
             ftp_client = None
             for job in _instance.get_jobs():
                 process = job.get_last_process()
+                if process is None: # should not really happened but it did while writing code
+                    continue
                 if process.get_state() == CloudSendProcessState.ABORTED:
                     if run_session:
                         session = process.get_batch().get_session()
@@ -1014,7 +1021,7 @@ class CloudSendFatProvider(CloudSendProvider,ABC):
 
         # nothing to fetch
         if not processes or len(processes)==0:
-            return fetched
+            return fetched , ssh_conn
     
         global_path = instance.get_global_dir()
         state_sh    = instance.path_join( global_path , 'state.sh' )

@@ -277,13 +277,15 @@ class StateSerializer():
         self._state_file = 'state.pickle' #'state.json'
         self._loaded = None
 
-    def serialize(self,provider_state,instances,environments,jobs):
+    def serialize(self,provider_state,instances,environments,jobs,run_sessions,current_session):
         try:
             state = {
                 'state' : provider_state ,
                 'instances' : instances ,
                 'environments' : environments ,
-                'jobs' : jobs
+                'jobs' : jobs ,
+                'run_sessions' : run_sessions ,
+                'current_session' : current_session
             }
             for job in state['jobs']:
                 lastp = job.get_last_process()
@@ -312,7 +314,7 @@ class StateSerializer():
 
     # check if the state is consistent with the provider objects that have been loaded from the config...
     # TODO: do that
-    def check_consistency(self,state,instances,environments,jobs):
+    def check_consistency(self,state,instances,environments,jobs,run_sessions,current_session):
         if self._loaded is None:
             self._provider.debug(2,"Seralized data not loaded. No consistency")
             return False 
@@ -321,10 +323,14 @@ class StateSerializer():
             _instances    = self._loaded['instances']
             _environments = self._loaded['environments']
             _jobs         = self._loaded['jobs']
+            # those won't be compared because they are run time memory stuff...
+            _run_sessions = self._loaded['run_sessions']
+            _current_session = self._loaded['current_session']
             for job in jobs:
                 lastp = job.get_last_process()
                 self._provider.debug(3,"DESERIALIZED PROCESS",lastp)
-            assert state==_state 
+            # state wont be the same by definition ...
+            #assert state==_state 
             assert len(instances)==len(_instances)
             assert len(environments)==len(_environments)
             assert len(jobs)==len(_jobs)
@@ -351,4 +357,4 @@ class StateSerializer():
             return False
 
     def transfer(self):
-        return self._loaded['state'] , self._loaded['instances'] , self._loaded['environments'] , self._loaded['jobs']
+        return self._loaded['state'] , self._loaded['instances'] , self._loaded['environments'] , self._loaded['jobs'] , self._loaded['run_sessions'] , self._loaded['current_session']
