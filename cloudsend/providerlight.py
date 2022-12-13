@@ -1,6 +1,6 @@
 
 from abc import ABC , abstractmethod
-from cloudsend.provider import CloudSendProvider , line_buffered 
+from cloudsend.provider import CloudSendProvider , line_buffered , COMMAND_ARGS_SEP , ARGS_SEP
 from cloudsend.core import *
 import copy , io
 from zipfile import ZipFile
@@ -394,7 +394,7 @@ class CloudSendLightProvider(CloudSendProvider,ABC):
         # install maestro materials
         await self._install_maestro(reset)
         # triggers maestro::start
-        await self._exec_maestro_command("start:"+str(reset))
+        await self._exec_maestro_command("start"+COMMAND_ARGS_SEP+str(reset))
 
     async def add_instances(self,conf):
         # complement self._config
@@ -404,7 +404,7 @@ class CloudSendLightProvider(CloudSendProvider,ABC):
         # deploy the new config to the maestro (every time) (including dependent files)
         await self._deploy_config(ssh_conn,ftp_client)
         # triggers maestro::start
-        await self._exec_maestro_command("add_instances:"+json.dumps(conf))
+        await self._exec_maestro_command("add_instances"+COMMAND_ARGS_SEP+json.dumps(conf))
 
     async def add_environments(self,conf):
         # complement self._config
@@ -414,7 +414,7 @@ class CloudSendLightProvider(CloudSendProvider,ABC):
         # deploy the new config to the maestro (every time) (including dependent files)
         await self._deploy_config(ssh_conn,ftp_client)
         # triggers maestro::start
-        await self._exec_maestro_command("add_environments:"+json.dumps(conf))
+        await self._exec_maestro_command("add_environments"+COMMAND_ARGS_SEP+json.dumps(conf))
 
     async def add_jobs(self,conf):
         # complement self._config
@@ -424,7 +424,7 @@ class CloudSendLightProvider(CloudSendProvider,ABC):
         # deploy the new config to the maestro (every time) (including dependent files)
         await self._deploy_config(ssh_conn,ftp_client)
         # triggers maestro::start
-        await self._exec_maestro_command("add_jobs:"+json.dumps(conf))
+        await self._exec_maestro_command("add_jobs"+COMMAND_ARGS_SEP+json.dumps(conf))
 
     async def reset_instance(self,instance):
         self.debug(1,'RESETTING instance',instance.get_name())
@@ -439,6 +439,10 @@ class CloudSendLightProvider(CloudSendProvider,ABC):
             #ftp_client.close()
             ssh_conn.close()
         self.debug(1,'RESETTING done')
+
+    async def reset(self):
+        # triggers maestro::reset
+        await self._exec_maestro_command("reset") # use output - the deploy part will be skipped depending on option ...
 
     async def deploy(self):
         # triggers maestro::deploy
@@ -487,7 +491,7 @@ class CloudSendLightProvider(CloudSendProvider,ABC):
         maestro_tar_path = self._maestro.path_join( homedir , maestro_tar_file )
 
         # fetch the results on the maestro
-        await self._exec_maestro_command("fetch_results:"+maestro_dir)
+        await self._exec_maestro_command("fetch_results"+COMMAND_ARGS_SEP+maestro_dir)
 
         # get the tar file of the results
         instanceid , ssh_conn , ftp_client = await self._wait_and_connect(self._maestro)

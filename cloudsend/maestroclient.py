@@ -38,8 +38,8 @@ def maestro_client(command):
             if attempts > 40:
                 print("Error: can't connect to server ...")
                 sys.exit(99)
-        
-if __name__ == '__main__':     
+
+def main():
     if len(sys.argv)<2:
         print("python3 -m cloudsend.maestroclient CMD [IP_ADDR]")
         sys.exit()
@@ -53,3 +53,6 @@ if __name__ == '__main__':
         ip_addr = None
 
     maestro_client(command)  
+        
+if __name__ == '__main__':
+    main()

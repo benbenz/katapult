@@ -1,4 +1,5 @@
 from cloudsend import provider as cs
+from cloudsend.provider import COMMAND_ARGS_SEP , ARGS_SEP
 import asyncio , os , sys , time
 from cloudsend.core import CloudSendProcessState , bcolors
 import traceback
@@ -63,10 +64,10 @@ class ServerContext:
                 if not cmd_line:
                     break
                 cmd_line = cmd_line.decode('utf-8').strip()
-                cmd_args = cmd_line.split(':')
+                cmd_args = cmd_line.split(COMMAND_ARGS_SEP)
                 if len(cmd_args)>=2:
                     cmd  = cmd_args[0].strip()
-                    args = cmd_args[1].split(',')
+                    args = cmd_args[1].split(ARGS_SEP)
                 else:
                     cmd  = cmd_line
                     args = None
@@ -104,34 +105,42 @@ class ServerContext:
         sys.stderr = string_writer
 
         if self.cs_client is None:
-            if command != 'start' and command != 'shutdown':
-                print(bcolors.WARNING+"Server not ready. Run 'start' command first"+bcolors.ENDC)
+            if command != 'init' and command != 'shutdown':
+                print(bcolors.WARNING+"Server not ready. Run 'init CONFIG_FILE' command first"+bcolors.ENDC)
                 await writer.drain()
                 return 
         try:
 
-            if command == 'wakeup':
+            if command == 'init':
 
-                await self.cs_client.wakeup()
-
-            elif command == 'start':
                 if not args:
                     config_ = None
-                    reset = False
                 elif len(args)==1:
-                    config_ = None
-                    reset = args[0].strip().lower() == "true"
-                elif len(args)==2:
                     config_ = args[0].strip()
-                    reset = args[1].strip().lower() == "true"
                 else:
                     config_ = None
-                    reset = False 
                 self.cs_client  = cs.get_client(config_)
 
                 # may be we've just restarted a crashed maestro server process
                 # let's test for WATCH state and reach it back again if thats needed
-                await self.wakeup()
+                await self.wakeup()                
+
+            elif command == 'wakeup':
+
+                await self.cs_client.wakeup()
+
+            elif command == 'reset':
+
+                await self.cs_client.reset()
+
+            elif command == 'start':
+
+                if not args:
+                    reset = False
+                elif len(args)==1:
+                    reset = args[0].strip().lower() == "true"
+                else:
+                    reset = False
 
                 await self.cs_client.start(reset)
 

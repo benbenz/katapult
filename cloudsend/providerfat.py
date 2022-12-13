@@ -29,24 +29,19 @@ class CloudSendFatProvider(CloudSendProvider,ABC):
 
     def __init__(self, conf=None):
 
+        # this will call self._init
+        CloudSendProvider.__init__(self,conf)
+
+        self._init(conf)
+
+    def _init(self,conf):
+        #super()._init(conf)
+
         self._instances = []
         self._environments = []
         self._jobs = []
         self._run_sessions = []
-        self._current_session = None
-
-        CloudSendProvider.__init__(self,conf)
-
-        #self._multiproc_man   = multiprocessing.Manager()
-        #self._multiproc_lock  = self._multiproc_man.Lock()
-        self._instances_watching = dict()
-        self._instances_reviving = dict()
-
-        # watch asyncio future
-        self._watcher_task = None
-
-    def _init(self,conf):
-        super()._init(conf)
+        self._current_session = None        
 
         # load the config
         self._config_manager = ConfigManager(self,self._config,self._instances,self._environments,self._jobs)
@@ -77,6 +72,14 @@ class CloudSendFatProvider(CloudSendProvider,ABC):
         else:
             self._recovery = False   
 
+        #self._multiproc_man   = multiprocessing.Manager()
+        #self._multiproc_lock  = self._multiproc_man.Lock()
+        self._instances_watching = dict()
+        self._instances_reviving = dict()
+
+        # watch asyncio future
+        self._watcher_task = None
+
         self._save_config()            
 
     async def add_instances(self,conf):
@@ -100,6 +103,14 @@ class CloudSendFatProvider(CloudSendProvider,ABC):
     def set_state(self,value):
         self._state = value
         self.serialize_state()
+
+    async def reset(self):
+        # remove the state file
+        self._state_serializer.reset()
+        # provider reset: remove config file
+        await super().reset()
+        # re initialize objects
+        self._init(self._config)
 
     # def get_job(self,index):
 
@@ -1268,8 +1279,6 @@ class CloudSendFatProvider(CloudSendProvider,ABC):
             # actually, thanks to state recovery, run_jobs should be smart enough to not run DONE jobs again...
             if self._state & CloudSendProviderState.RUNNING:
                 await self.run()
-            if self._state & CloudSendProviderState.WATCHING:
-                await self._watch() # daemon mode
         else:
             # self.start()
             # self._assign()

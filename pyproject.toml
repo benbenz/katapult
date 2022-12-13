@@ -23,6 +23,7 @@ build-backend = "poetry.core.masonry.api"
 [tool.poetry.scripts]
 demo = 'cloudsend.demo:main'
 cli = 'cloudsend.cli:main'
+client = 'cloudsend.maestroclient:main'
 
 [tool.pytest.ini_options]
 asyncio_mode="strict"

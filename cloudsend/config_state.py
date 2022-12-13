@@ -269,13 +269,19 @@ class ConfigManager():
 #         else:
 #             return dct        
 
+
+STATE_FILE = 'state.pickle'
+
 class StateSerializer():
 
     def __init__(self,provider):
         self._provider = provider
 
-        self._state_file = 'state.pickle' #'state.json'
+        self._state_file = STATE_FILE
         self._loaded = None
+
+    def reset(self):
+        os.remove(STATE_FILE)
 
     def serialize(self,provider_state,instances,environments,jobs,run_sessions,current_session):
         try:

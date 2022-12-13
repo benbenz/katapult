@@ -77,8 +77,7 @@ def start_server():
         #p.daemon = True
         #p.start()
 
-
-if __name__ == '__main__':     
+def main():
     multiprocessing.set_start_method('spawn')
 
     if len(sys.argv)<2:
@@ -88,3 +87,7 @@ if __name__ == '__main__':
     command = sys.argv[1]
 
     cli(command)
+
+
+if __name__ == '__main__':     
+    main()

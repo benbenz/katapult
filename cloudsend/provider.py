@@ -12,7 +12,9 @@ import asyncio
 import asyncssh
 
 
-PROVIDER_CONFIG = 'state.config.json'
+COMMAND_ARGS_SEP = '__:__'
+ARGS_SEP         = '__,__'
+PROVIDER_CONFIG  = 'state.config.json'
 
 class CloudSendProvider(ABC):
 
@@ -21,15 +23,16 @@ class CloudSendProvider(ABC):
         if conf is None:
             conf = dict()
 
-        self._state = CloudSendProviderState.NEW
-
-        self._init(conf)
+        #self._init(conf)
+        CloudSendProvider._init(self,conf)
 
         #self._instances_locks = dict()
         #self._provider_lock   = multiprocessing.Manager().Lock()
         #self._thread_safe_ultra = True # set to False if you want to try per instance locks
 
     def _init(self,conf):
+        self._state = CloudSendProviderState.NEW
+
         self.DBG_LVL = conf.get('debug',1)
         self.DBG_PREFIX = None
         global DBG_LVL
@@ -471,6 +474,15 @@ class CloudSendProvider(ABC):
     async def start(self,reset=False):
         pass
 
+    async def reset(self):
+        config = copy.deepcopy(self._config)
+        os.remove(PROVIDER_CONFIG)
+        # removing objects from config:
+        config['instances']    = []
+        config['environments'] = []
+        config['jobs']         = []
+        self._init(config)
+
     def _save_config(self):
         with open(PROVIDER_CONFIG,'w') as config_file:
             config_file.write( json.dumps(self._config,indent=4) )
@@ -505,6 +517,9 @@ class CloudSendProvider(ABC):
 
     async def add_jobs(self,config):
         self._add_objects('jobs',config)
+
+    async def reset(self):
+        os.remove(PROVIDER_CONFIG)
 
     @abstractmethod
     async def deploy(self):
