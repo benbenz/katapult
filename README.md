@@ -377,7 +377,7 @@ class CloudSendFatProvider(ABC):
 
 # GLOBAL methods 
 
-def get_client(config):
+def get_client(provider='aws',maestro='local'):
 
 def init_instance_name(instance_config):
 

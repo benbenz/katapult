@@ -9,7 +9,7 @@ from io import BytesIO
 import csv , io
 import pkg_resources
 from cloudsend.core import *
-from cloudsend.provider import CloudSendProvider , CloudSendProviderState , debug
+from cloudsend.provider import CloudSendProvider , CloudSendProviderState , debug , PROVIDER_CONFIG
 from cloudsend.config_state import ConfigManager , StateSerializer
 from enum import IntFlag
 from threading import current_thread
@@ -19,7 +19,6 @@ import asyncio , asyncssh
 random.seed()
 
 SLEEP_PERIOD = 15
-
 
 class CloudSendProviderStateWaitMode(IntFlag):
     NO_WAIT       = 0  # provider dont wait for state
@@ -63,7 +62,7 @@ class CloudSendFatProvider(CloudSendProvider,ABC):
 
             consistency = self._state_serializer.check_consistency(self._state,self._instances,self._environments,self._jobs,self._run_sessions,self._current_session)
             if consistency:
-                self.debug(1,"State is consistent with configuration - LOADING old state",color=bcolors.CVIOLET)
+                self.debug(1,"STATE RECOVERY: state is consistent with configuration - LOADING old state",color=bcolors.CVIOLET)
                 self._recovery = True
                 self._state , self._instances , self._environments , self._jobs , self._run_sessions , self._current_session = self._state_serializer.transfer()
                 self.debug(2,self._instances)
@@ -76,7 +75,9 @@ class CloudSendFatProvider(CloudSendProvider,ABC):
             else:
                 self._recovery = False
         else:
-            self._recovery = False        
+            self._recovery = False   
+
+        self._save_config()            
 
     async def add_instances(self,conf):
         await super().add_instances(conf)
@@ -100,7 +101,6 @@ class CloudSendFatProvider(CloudSendProvider,ABC):
         self._state = value
         self.serialize_state()
 
-  
     # def get_job(self,index):
 
     #     return self._jobs[index] 
@@ -114,7 +114,7 @@ class CloudSendFatProvider(CloudSendProvider,ABC):
                     assign_jobs = True
                     break
             if not assign_jobs:
-                self.debug(1,"SKIPPING jobs allocation dues to reloaded state...",color=bcolors.CVIOLET)
+                self.debug(1,"STATE RECOVERY: skipping jobs allocation dues to reloaded state...",color=bcolors.CVIOLET)
                 return 
 
         self.set_state(self._state & (CloudSendProviderState.ANY - CloudSendProviderState.ASSIGNED))
@@ -467,6 +467,9 @@ class CloudSendFatProvider(CloudSendProvider,ABC):
 
     async def start(self,reset=False):
 
+        if not reset and self._state & CloudSendProviderState.STARTED:
+            self.debug(1,"STATE RECOVERY: we're not skipping start() in order to update instance information",color=bcolors.CVIOLET)
+
         self.set_state( self._state & (CloudSendProviderState.ANY - CloudSendProviderState.STARTED) )
 
         self._instances_states = dict() 
@@ -511,8 +514,15 @@ class CloudSendFatProvider(CloudSendProvider,ABC):
     # - shared script files, uploads, inputs ...
     async def deploy(self):
 
-        if self._recovery == True and self._state & CloudSendProviderState.DEPLOYED:
-            self.debug(1,"SKIPPING deploy due to reloaded state ...",color=bcolors.CVIOLET)
+        if not self._state & CloudSendProviderState.STARTED:
+            self.debug(1,"Not ready. Call 'start' first",color=bcolors.WARNING)
+            return
+
+        if self._state & CloudSendProviderState.DEPLOYED:
+            if self._recovery == True:
+                self.debug(1,"STATE RECOVERY: skipping deploy due to reloaded state ...",color=bcolors.CVIOLET)
+            else:
+                self.debug(1,"skipping deploy (already deployed) ...",color=bcolors.OKCYAN)
             return 
 
         self.set_state( self._state & (CloudSendProviderState.ANY - CloudSendProviderState.DEPLOYED) )
@@ -650,9 +660,9 @@ class CloudSendFatProvider(CloudSendProvider,ABC):
     async def _run_jobs_for_instance(self,run_session,batch,instance,except_done) :
 
         # we're not coming from revive but we've recovered a state ...
-        if except_done == False and self._recovery == True:
-            self.debug(1,"INFO: found serialized state: we will not restart jobs that have completed",color=bcolors.CVIOLET)
-            except_done = True
+        # if except_done == False and self._recovery == True:
+        #     self.debug(1,"STATE RECOVERY: found serialized state: we will not restart jobs that have completed",color=bcolors.CVIOLET)
+        #     except_done = True
 
         instanceid , ssh_conn , ftp_client = await self._wait_and_connect(instance)
         if ssh_conn is None:
@@ -661,13 +671,14 @@ class CloudSendFatProvider(CloudSendProvider,ABC):
                 self.debug(1,"Could not run jobs for instance",instance,color=bcolors.FAIL)
                 return 
         
-        if self._recovery:
+        #if self._recovery:
+        if except_done and self._recovery:
             do_run , all_done , ssh_conn = await self._check_run_state(run_session,instance,ssh_conn)
             if not do_run:
                 if all_done:
-                    self.debug(1,"Skipping run_jobs because the jobs have completed since we left them :)",instance,color=bcolors.CVIOLET)
+                    self.debug(1,"STATE RECOVERY: skipping run_jobs because the jobs have completed since we left them :) @",instance.get_name(),color=bcolors.CVIOLET)
                 else:
-                    self.debug(1,"Skipping run_jobs because the jobs have advanced as we left them :)",instance,color=bcolors.CVIOLET)
+                    self.debug(1,"STATE RECOVERY: skipping run_jobs because the jobs have advanced as we left them :) @",instance.get_name(),color=bcolors.CVIOLET)
                 return
 
         global_path = instance.get_global_dir()
@@ -770,8 +781,12 @@ class CloudSendFatProvider(CloudSendProvider,ABC):
         # we were actually still running processes
         # >> let's use the current session that has been loaded
         if self._recovery and self._state & CloudSendProviderState.RUNNING:
+            self.debug(1,"STATE RECOVERY: continuing run job ...",color=bcolors.CVIOLET)
             await self._run(self._current_session,None,True,False)
         else:
+            if self._recovery and self._state & CloudSendProviderState.IDLE:
+                self.debug(1,"STATE RECOVERY: jobs have been ran already - about the run again",color=bcolors.CVIOLET)
+
             # we're gonna create a new run session ... deativate entirely the old one
             if self._current_session:
                 self._current_session.deactivate() 
@@ -787,7 +802,7 @@ class CloudSendFatProvider(CloudSendProvider,ABC):
     async def _run(self,run_session,instance_filter=None,except_done=False,do_init=True):
 
         # update the Provider state
-        self.set_state( self._state & (CloudSendProviderState.ANY - CloudSendProviderState.RUNNING) )
+        self.set_state( self._state & (CloudSendProviderState.ANY - CloudSendProviderState.RUNNING - CloudSendProviderState.IDLE) )
 
         if instance_filter:
             instances = [ instance_filter ] 
@@ -1118,86 +1133,97 @@ class CloudSendFatProvider(CloudSendProvider,ABC):
 
     async def __wait_for_state_internal( self , run_session , instance , job_state , wait_mode , daemon ):
 
-        if wait_mode & CloudSendProviderStateWaitMode.WATCH:
-            self._instances_watching[instance.get_name()] = True
-            self._instances_reviving[instance.get_name()] = False
-        
-        ssh_conn = await self._connect_to_instance(instance)
+        instance_name = instance.get_name()
+        try:
 
-        do_revive = (wait_mode & CloudSendProviderStateWaitMode.WATCH)!=0
+            if wait_mode & CloudSendProviderStateWaitMode.WATCH:
+                self._instances_watching[instance_name] = True
+                self._instances_reviving[instance_name] = False
+            
+            ssh_conn = await self._connect_to_instance(instance)
 
-        if ssh_conn is None:
-            ssh_conn = await self._handle_instance_disconnect(run_session,instance,do_revive,"could not get jobs states for instance")
+            do_revive = (wait_mode & CloudSendProviderStateWaitMode.WATCH)!=0
+
             if ssh_conn is None:
-                return None
+                ssh_conn = await self._handle_instance_disconnect(run_session,instance,do_revive,"could not get jobs states for instance")
+                if ssh_conn is None:
+                    return None
 
-        global_path = instance.get_global_dir() 
+            global_path = instance.get_global_dir() 
 
-        while True:
+            while True:
 
-            # update before
-            processes = run_session.get_active_processes(instance)
+                # update before
+                processes = run_session.get_active_processes(instance)
 
-            fetched , ssh_conn = await self.__fetch_states_internal(run_session,instance,processes,do_revive,ssh_conn)
+                fetched , ssh_conn = await self.__fetch_states_internal(run_session,instance,processes,do_revive,ssh_conn)
 
-            # always update the activate processes in case something happened
-            processes = run_session.get_active_processes(instance)
+                # always update the activate processes in case something happened
+                processes = run_session.get_active_processes(instance)
 
-            # print job status summary
-            if not daemon:
-                self.print_jobs_summary(run_session,instance)
+                # print job status summary
+                if not daemon:
+                    self.print_jobs_summary(run_session,instance)
 
-            # all retrived attributes need to be true
-            arr_retrieved = [ fetched.get(process.get_uid(),False) for process in processes]
-            arr_test      = [ (process.get_state() & job_state)!=0 for process in processes]
-            retrieved = all( arr_retrieved )
-            tested    = all( arr_test )
+                # all retrived attributes need to be true
+                arr_retrieved = [ fetched.get(process.get_uid(),False) for process in processes]
+                arr_test      = [ (process.get_state() & job_state)!=0 for process in processes]
+                retrieved = all( arr_retrieved )
+                tested    = all( arr_test )
 
-            self.debug(2,retrieved,arr_retrieved)
-            self.debug(2,tested   ,arr_test     )
+                self.debug(2,retrieved,arr_retrieved)
+                self.debug(2,tested   ,arr_test     )
 
-            if retrieved and tested :
-                break
+                if retrieved and tested :
+                    break
+
+                self.serialize_state()
+
+                if wait_mode & CloudSendProviderStateWaitMode.WAIT:
+                    try:
+                        await asyncio.sleep(SLEEP_PERIOD)
+                    except asyncio.exceptions.CancelledError:
+                        self.debug(1,"Wait process cancelled",color=bcolors.WARNING)
+                else:
+                    break
+
+            ssh_conn.close() 
 
             self.serialize_state()
 
-            if wait_mode & CloudSendProviderStateWaitMode.WAIT:
-                try:
-                    await asyncio.sleep(SLEEP_PERIOD)
-                except asyncio.exceptions.CancelledError:
-                    self.debug(1,"Wait process cancelled",color=bcolors.WARNING)
-            else:
-                break
+            if wait_mode & CloudSendProviderStateWaitMode.WATCH:
+                # lets wait 1 minutes before stopping
+                # this helps with the demo which runs a wait() and a get() sequentially ...
+                if self._auto_stop:
+                    await asyncio.sleep(60*1)  
 
-        ssh_conn.close() 
+                self._instances_watching[instance.get_name()] = False            
+                any_watching = any( self._instances_watching.values() )
 
-        self.serialize_state()
-
-        if wait_mode & CloudSendProviderStateWaitMode.WATCH:
-            # lets wait 1 minutes before stopping
-            # this helps with the demo which runs a wait() and a get() sequentially ...
-            if self._auto_stop:
-                await asyncio.sleep(60*1)  
-
-            self._instances_watching[instance.get_name()] = False            
-            any_watching = any( self._instances_watching.values() )
-
-            if not any_watching:
-                self.debug(2,"WATCHING has ended")
-                run_session.deactivate()
-                self.set_state( self._state & (CloudSendProviderState.ANY - CloudSendProviderState.WATCHING - CloudSendProviderState.RUNNING) )
-                self.debug(2,"entering IDLE state",self._state)
-
-            if self._auto_stop:
-                try:
-                    self.debug(1,"Stopping instance",instance.get_name(),color=bcolors.WARNING)
-                    self.stop_instance(instance)
-                except:
-                    pass
-                debug(2,self._instances_watching)
                 if not any_watching:
-                    self.debug(1,"Stopping the fat client (maestro) because all instances have ran the jobs",color=bcolors.WARNING)
-                    os.system("sudo shutdown -h now")
+                    self.debug(2,"WATCHING has ended")
+                    run_session.deactivate()
+                    # we mark it specifically as IDLE so we know it's been ran once ... (could be useful)
+                    self.set_state(  (CloudSendProviderState.IDLE | self._state) & (CloudSendProviderState.ANY - CloudSendProviderState.WATCHING - CloudSendProviderState.RUNNING) )
+                    self.debug(2,"entering IDLE state",self._state)
+
+                if self._auto_stop:
+                    try:
+                        self.debug(1,"Stopping instance",instance.get_name(),color=bcolors.WARNING)
+                        self.stop_instance(instance)
+                    except:
+                        pass
+                    debug(2,self._instances_watching)
+                    if not any_watching:
+                        self.debug(1,"Stopping the fat client (maestro) because all instances have ran the jobs",color=bcolors.WARNING)
+                        os.system("sudo shutdown -h now")
+
+        except Exception as e:
+            # make sure we catch any exception and unlock those variables
+            if wait_mode & CloudSendProviderStateWaitMode.WATCH:
+                self._instances_watching[instance_name] = False
+                self._instances_reviving[instance_name] = False
+            raise e
 
     def _get_num_workers(self):
         num_workers = 10

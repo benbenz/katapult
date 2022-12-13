@@ -116,16 +116,16 @@ class ServerContext:
 
             elif command == 'start':
                 if not args:
-                    config_ = cs.get_default_config()
+                    config_ = None
                     reset = False
                 elif len(args)==1:
-                    config_ = cs.get_default_config()
+                    config_ = None
                     reset = args[0].strip().lower() == "true"
                 elif len(args)==2:
                     config_ = args[0].strip()
                     reset = args[1].strip().lower() == "true"
                 else:
-                    config_ = cs.get_default_config()
+                    config_ = None
                     reset = False 
                 self.cs_client  = cs.get_client(config_)
 

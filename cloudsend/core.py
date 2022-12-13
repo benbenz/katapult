@@ -20,6 +20,8 @@ cs_maestroPolicyName   = 'cloudsend-maestro-policy'
 K_LOADED   = '_loaded_'
 K_COMPUTED = '_computed_'
 
+# NEW > STARTED > ASSIGNED > DEPLOYED > ( RUNNING | WATCHING <-> IDLE )
+
 class CloudSendProviderState(IntFlag):
     NEW           = 0  # provider created
     STARTED       = 1  # provider started
@@ -27,7 +29,8 @@ class CloudSendProviderState(IntFlag):
     DEPLOYED      = 4  # provider deployed  
     RUNNING       = 8  # provider ran jobs
     WATCHING      = 16 # provider is watching jobs
-    ANY           = 16 + 8 + 4 + 2 + 1     
+    IDLE          = 32 # provider has stopped running jobs and watching
+    ANY           = 32 + 16 + 8 + 4 + 2 + 1     
 
 class bcolors:
     HEADER = '\033[95m'

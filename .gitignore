@@ -8,12 +8,14 @@ remote_files/config.json
 /config.py
 /config*.py
 /config*.zip
+/config*.json
 /example/config.py
 /config-cloudsend*.json
 poetry.lock
 __pycache__
 state.json
 state.pickle
+state.config.json
 commits.log
 watch.log
 /tmp

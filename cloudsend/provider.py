@@ -11,6 +11,9 @@ from enum import IntFlag
 import asyncio
 import asyncssh
 
+
+PROVIDER_CONFIG = 'state.config.json'
+
 class CloudSendProvider(ABC):
 
     def __init__(self, conf=None):
@@ -38,6 +41,8 @@ class CloudSendProvider(ABC):
         self._profile_name = self._config.get('profile')
         if self._config.get('profile'):
             self.set_profile(self._config.get('profile'))   
+        
+        self._save_config()
 
     def debug_set_prefix(self,value):
         self.DBG_PREFIX = value
@@ -466,7 +471,11 @@ class CloudSendProvider(ABC):
     async def start(self,reset=False):
         pass
 
-    def add_objects(self,key_name,config_list_obj):
+    def _save_config(self):
+        with open(PROVIDER_CONFIG,'w') as config_file:
+            config_file.write( json.dumps(self._config,indent=4) )
+
+    def _add_objects(self,key_name,config_list_obj):
         if isinstance(config_list_obj,list):
             config = { key_name : config_list_obj }
         elif isinstance(config_list_obj,dict) and key_name in config_list_obj:
@@ -486,14 +495,16 @@ class CloudSendProvider(ABC):
         for cfg in config[key_name]:
             self._config[key_name].append( cfg )
 
+        self._save_config()
+
     async def add_instances(self,config):
-        self.add_objects('instances',config)
+        self._add_objects('instances',config)
 
     async def add_environments(self,config):
-        self.add_objects('environments',config)
+        self._add_objects('environments',config)
 
     async def add_jobs(self,config):
-        self.add_objects('jobs',config)
+        self._add_objects('jobs',config)
 
     @abstractmethod
     async def deploy(self):
@@ -533,27 +544,21 @@ def get_config(path):
     configbase  = os.path.basename(config_file)
     config_name , config_extension = os.path.splitext(configbase)
 
-    if config_extension=='.json' and os.path.exists(config_file):
-        with open(config_file,'r') as config_file:
-            config = json.loads(config_file.read())
-        print("loaded config from json file")
-    else:
+    if config_extension=='.json':
+        if os.path.exists(config_file):
+            with open(config_file,'r') as config_file:
+                config = json.loads(config_file.read())
+            print("loaded config from json file")
+        else:
+            config = None
+    elif config_extension=='.py':
         try:
             sys.path.append(os.path.abspath(configdir))
-            #sys.path.append(os.path.abspath(os.getcwd()))    
             configModule = __import__(config_name,globals(),locals())
             config = configModule.config
         except ModuleNotFoundError as mfe:
-            print("\n\033[91mYou need to create a config.py file (see 'example/config.example.py')\033[0m\n")
-            print("\n\033[91m(you can also create a config.json file instead)\033[0m\n")
-            raise mfe
+            config = None
     return config
-
-def get_default_config():
-    if os.path.exists('config.json'):
-        return get_config('config.json')
-    else:
-        return get_config('config.py')        
 
 def get_client(config_=None):
 
@@ -562,7 +567,12 @@ def get_client(config_=None):
     elif isinstance(config_,dict):
         config = config_
     else:
-        config = dict()
+        config = get_config(PROVIDER_CONFIG)
+
+    if config is None:
+        debug(1,"You need to specify a valid configuration path",color=bcolors.FAIL)
+        debug(1,"(could also not find default config file",PROVIDER_CONFIG,")",color=bcolors.FAIL)
+        raise CloudSendError()
 
     if config.get('provider','aws') == 'aws':
 
