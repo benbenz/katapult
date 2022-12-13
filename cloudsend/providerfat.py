@@ -96,6 +96,10 @@ class CloudSendFatProvider(CloudSendProvider,ABC):
         if self._config.get('recover',False):
             self._state_serializer.serialize(self._state,self._instances,self._environments,self._jobs,self._run_sessions,self._current_session)
 
+    def set_state(self,value):
+        self._state = value
+        self.serialize_state()
+
   
     # def get_job(self,index):
 
@@ -103,9 +107,7 @@ class CloudSendFatProvider(CloudSendProvider,ABC):
 
     async def _assign(self):
 
-        self._state = self._state & (CloudSendProviderState.ANY - CloudSendProviderState.ASSIGNED)
-
-        if self._recovery == True:
+        if self._recovery == True and self._state & CloudSendProviderState.ASSIGNED:
             assign_jobs = False
             for job in self._jobs:
                 if not job.get_instance():
@@ -114,6 +116,8 @@ class CloudSendFatProvider(CloudSendProvider,ABC):
             if not assign_jobs:
                 self.debug(1,"SKIPPING jobs allocation dues to reloaded state...",color=bcolors.WARNING)
                 return 
+
+        self.set_state(self._state & (CloudSendProviderState.ANY - CloudSendProviderState.ASSIGNED))
 
         assignation = self._config.get('job_assign','multi_knapsack')
 
@@ -137,7 +141,7 @@ class CloudSendFatProvider(CloudSendProvider,ABC):
 
             combopt.multiple_knapsack_assignation(self._jobs,self._instances)   
 
-        self._state |= CloudSendProviderState.ASSIGNED            
+        self.set_state( self._state | CloudSendProviderState.ASSIGNED )
 
         self.serialize_state()         
                
@@ -463,7 +467,7 @@ class CloudSendFatProvider(CloudSendProvider,ABC):
 
     async def start(self,reset=False):
 
-        self._state = self._state & (CloudSendProviderState.ANY - CloudSendProviderState.STARTED)
+        self.set_state( self._state & (CloudSendProviderState.ANY - CloudSendProviderState.STARTED) )
 
         self._instances_states = dict() 
         self.debug(3,"Starting ...")
@@ -477,7 +481,7 @@ class CloudSendFatProvider(CloudSendProvider,ABC):
                 self.debug(1,"ERROR: Your configuration is causing an instance to not be created. Please fix.",inst.get_config_DIRTY(),color=bcolors.FAIL)
                 sys.exit()
 
-        self._state |= CloudSendProviderState.STARTED
+        self.set_state( self._state | CloudSendProviderState.STARTED )
 
     async def reset_instance(self,instance):
         self.debug(1,'RESETTING instance',instance.get_name())
@@ -507,7 +511,7 @@ class CloudSendFatProvider(CloudSendProvider,ABC):
     # - shared script files, uploads, inputs ...
     async def deploy(self):
 
-        self._state = self._state & (CloudSendProviderState.ANY - CloudSendProviderState.DEPLOYED)
+        self.set_state( self._state & (CloudSendProviderState.ANY - CloudSendProviderState.DEPLOYED) )
 
         await self._assign()
 
@@ -521,9 +525,7 @@ class CloudSendFatProvider(CloudSendProvider,ABC):
             jobs.append( self._deploy_all(instance) )
         await asyncio.gather( *jobs )
 
-        self._state |= CloudSendProviderState.DEPLOYED   
-
-        self.serialize_state() 
+        self.set_state( self._state | CloudSendProviderState.DEPLOYED )
 
     async def _revive(self,run_session,instance):
         self.debug(1,"REVIVING instance",instance,color=bcolors.OKCYAN)
@@ -781,7 +783,7 @@ class CloudSendFatProvider(CloudSendProvider,ABC):
     async def _run(self,run_session,instance_filter=None,except_done=False,do_init=True):
 
         # update the Provider state
-        self._state = self._state & (CloudSendProviderState.ANY - CloudSendProviderState.RUNNING)
+        self.set_state( self._state & (CloudSendProviderState.ANY - CloudSendProviderState.RUNNING) )
 
         if instance_filter:
             instances = [ instance_filter ] 
@@ -805,10 +807,7 @@ class CloudSendFatProvider(CloudSendProvider,ABC):
         await asyncio.gather( *jobs )
 
         # update the Provider state
-        self._state |= CloudSendProviderState.RUNNING
-
-        # serialize
-        self.serialize_state()
+        self.set_state( self._state | CloudSendProviderState.RUNNING )
 
         # Now we can start wathing !
         # NOTE: do not ensure watch at the beginning of run...
@@ -1182,9 +1181,8 @@ class CloudSendFatProvider(CloudSendProvider,ABC):
             if not any_watching:
                 self.debug(2,"WATCHING has ended")
                 run_session.deactivate()
-                self._state = self._state & (CloudSendProviderState.ANY - CloudSendProviderState.WATCHING - CloudSendProviderState.RUNNING)
+                self.set_state( self._state & (CloudSendProviderState.ANY - CloudSendProviderState.WATCHING - CloudSendProviderState.RUNNING) )
                 self.debug(2,"entering IDLE state",self._state)
-                self.serialize_state()
 
             if self._auto_stop:
                 try:
@@ -1271,8 +1269,7 @@ class CloudSendFatProvider(CloudSendProvider,ABC):
         # switch the state to watch mode ... 
         # this will allow to check if the Provider needs to run all methods until watch, on wakeup
         # (no matter the state recovery)
-        self._state |= CloudSendProviderState.WATCHING
-        self.serialize_state()
+        self.set_state( self._state | CloudSendProviderState.WATCHING )
 
         await self.__wait_jobs_state(self._current_session , CloudSendProviderStateWaitMode.WAIT|CloudSendProviderStateWaitMode.WATCH,job_state,True)
 

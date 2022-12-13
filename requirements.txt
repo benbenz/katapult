@@ -3,3 +3,4 @@ jcs
 pyyaml
 asyncssh
 ortools
+psutil

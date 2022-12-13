@@ -341,7 +341,7 @@ class CloudSendLightProvider(CloudSendProvider,ABC):
         waitmaestro_sh = self._get_remote_files_path( 'waitmaestro.sh' )
         venv_python    = self._maestro.path_join( self._get_cloudsend_dir() , '.venv' , 'maestro' , 'bin' , 'python3' )
 
-        cmd = "cd "+self._get_cloudsend_dir()+ " && "+waitmaestro_sh+" && sudo "+venv_python+" -u -m cloudsend.maestroclient " + maestro_command
+        cmd = "cd "+self._get_cloudsend_dir()+ " && "+waitmaestro_sh+" && sudo "+venv_python+" -u -m cloudsend.maestroclient remote " + maestro_command
 
         stdout , stderr = await self._exec_command(self.ssh_conn,cmd)
 

@@ -4,6 +4,7 @@
     // For more information, visit: https://go.microsoft.com/fwlink/?linkid=830387
     "version": "0.2.0",
     "configurations": [
+
         {
             "name": "Demo",
             "type": "python",
@@ -61,8 +62,32 @@
             "cwd": "${workspaceFolder}",
             "args": ["-u"],
             "env": {
-                "PYTHONPATH":"${workspaceRoot}:/home/maxepstein/myproject/"
+                "PYTHONPATH":"${workspaceRoot}:$PYTHONPATH"
             }
-        }      
+        } ,
+        {
+            "name": "Client Start",
+            "type": "python",
+            "request": "launch",
+            "program": "${workspaceFolder}/cloudsend/maestroclient.py",
+            "console": "integratedTerminal",
+            "cwd": "${workspaceFolder}",
+            "args": ["-u","start"],
+            "env": {
+                "PYTHONPATH":"${workspaceRoot}:$PYTHONPATH"
+            }
+        }   ,
+        {
+            "name": "CLI Start",
+            "type": "python",
+            "request": "launch",
+            "program": "${workspaceFolder}/cloudsend/cli.py",
+            "console": "integratedTerminal",
+            "cwd": "${workspaceFolder}",
+            "args": ["-u","start"],
+            "env": {
+                "PYTHONPATH":"${workspaceRoot}:$PYTHONPATH"
+            }
+        }  
     ]
 }
