@@ -63,7 +63,7 @@ class CloudSendFatProvider(CloudSendProvider,ABC):
 
             consistency = self._state_serializer.check_consistency(self._state,self._instances,self._environments,self._jobs,self._run_sessions,self._current_session)
             if consistency:
-                self.debug(1,"State is consistent with configuration - LOADING old state")
+                self.debug(1,"State is consistent with configuration - LOADING old state",color=bcolors.CVIOLET)
                 self._recovery = True
                 self._state , self._instances , self._environments , self._jobs , self._run_sessions , self._current_session = self._state_serializer.transfer()
                 self.debug(2,self._instances)
@@ -114,7 +114,7 @@ class CloudSendFatProvider(CloudSendProvider,ABC):
                     assign_jobs = True
                     break
             if not assign_jobs:
-                self.debug(1,"SKIPPING jobs allocation dues to reloaded state...",color=bcolors.WARNING)
+                self.debug(1,"SKIPPING jobs allocation dues to reloaded state...",color=bcolors.CVIOLET)
                 return 
 
         self.set_state(self._state & (CloudSendProviderState.ANY - CloudSendProviderState.ASSIGNED))
@@ -511,6 +511,10 @@ class CloudSendFatProvider(CloudSendProvider,ABC):
     # - shared script files, uploads, inputs ...
     async def deploy(self):
 
+        if self._recovery == True and self._state & CloudSendProviderState.DEPLOYED:
+            self.debug(1,"SKIPPING deploy due to reloaded state ...",color=bcolors.CVIOLET)
+            return 
+
         self.set_state( self._state & (CloudSendProviderState.ANY - CloudSendProviderState.DEPLOYED) )
 
         await self._assign()
@@ -647,7 +651,7 @@ class CloudSendFatProvider(CloudSendProvider,ABC):
 
         # we're not coming from revive but we've recovered a state ...
         if except_done == False and self._recovery == True:
-            self.debug(1,"INFO: found serialized state: we will not restart jobs that have completed",color=bcolors.OKCYAN)
+            self.debug(1,"INFO: found serialized state: we will not restart jobs that have completed",color=bcolors.CVIOLET)
             except_done = True
 
         instanceid , ssh_conn , ftp_client = await self._wait_and_connect(instance)
@@ -661,9 +665,9 @@ class CloudSendFatProvider(CloudSendProvider,ABC):
             do_run , all_done , ssh_conn = await self._check_run_state(run_session,instance,ssh_conn)
             if not do_run:
                 if all_done:
-                    self.debug(1,"Skipping run_jobs because the jobs have completed since we left them :)",instance,color=bcolors.WARNING)
+                    self.debug(1,"Skipping run_jobs because the jobs have completed since we left them :)",instance,color=bcolors.CVIOLET)
                 else:
-                    self.debug(1,"Skipping run_jobs because the jobs have advanced as we left them :)",instance,color=bcolors.WARNING)
+                    self.debug(1,"Skipping run_jobs because the jobs have advanced as we left them :)",instance,color=bcolors.CVIOLET)
                 return
 
         global_path = instance.get_global_dir()

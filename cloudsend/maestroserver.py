@@ -1,6 +1,6 @@
 from cloudsend import provider as cs
 import asyncio , os , sys , time
-from cloudsend.core import CloudSendProcessState
+from cloudsend.core import CloudSendProcessState , bcolors
 import traceback
 import json
 import socket
@@ -105,7 +105,7 @@ class ServerContext:
 
         if self.cs_client is None:
             if command != 'start' and command != 'shutdown':
-                print("Server not ready. Run 'start' command first")
+                print(bcolors.WARNING+"Server not ready. Run 'start' command first"+bcolors.ENDC)
                 await writer.drain()
                 return 
         try:

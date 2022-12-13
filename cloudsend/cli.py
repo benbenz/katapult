@@ -41,9 +41,9 @@ def is_cloudsend_process(p,name='maestroserver'):
     except psutil.NoSuchProcess:
         return False
 
-def cli():
+def cli(command):
     start_server() # locally we use python to start the server. maximizes the chance to be Windows complatible
-    maestro_client()
+    maestro_client(command)
 
 def start_server():
     server_started = False
@@ -51,7 +51,7 @@ def start_server():
         try:
             p = psutil.Process(pid)
             if is_cloudsend_process(p,"cloudsend.maestroserver"):
-                print("CloudSend server already started ...")
+                print("[CloudSend server already started]")
                 server_started = True
                 break
         except psutil.NoSuchProcess:
@@ -68,7 +68,7 @@ def start_server():
                     cloudsend_kill(p)
             except psutil.NoSuchProcess:
                 pass
-        print("Starting CloudSend server ...")
+        print("[Starting CloudSend server ...]")
         subprocess.Popen(['python3','-u','-m','cloudsend.maestroserver'])
         time.sleep(1)
         #q = multiprocessing.Queue()
@@ -87,4 +87,4 @@ if __name__ == '__main__':
 
     command = sys.argv[1]
 
-    maestro_client(command)
+    cli(command)
