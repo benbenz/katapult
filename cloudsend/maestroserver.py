@@ -175,7 +175,7 @@ class ServerContext:
                     return
                 await self.cs_client.cfg_add_jobs(config)
 
-            elif command == 'add_config':
+            elif command == 'cfg_add_config':
                 if len(args)==1:
                     config = json.loads( args[0] )
                 else:

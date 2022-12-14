@@ -98,6 +98,7 @@ class CloudSendProvider(ABC):
         if instance is None:
             instance , created = self.create_instance_objects(inst_cfg)
         else:
+            self.update_instance_info(instance) # make sure we update
             created = False
 
         return instance , created  
@@ -532,7 +533,7 @@ class CloudSendProvider(ABC):
         CloudSendProvider._cfg_add_objects(self,'instances',config,False)
         CloudSendProvider._cfg_add_objects(self,'environments',config,False)
         CloudSendProvider._cfg_add_objects(self,'jobs',config,False)
-        CloudSendProvider._save_config()
+        self._save_config()
 
     async def cfg_reset(self):
         config = copy.deepcopy(self._config)

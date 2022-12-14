@@ -335,6 +335,13 @@ class CloudSendEnvironment():
     def deploy(self,instance):
         return CloudSendDeployedEnvironment(self,instance)
 
+    def __repr__(self):
+        return "{0}: NAME = {1} , HASH = {2}".format(type(self).__name__,self._name,self._hash)
+
+    def __str__(self):
+        return "{0}: NAME = {1} , HASH = {2}".format(type(self).__name__,self._name,self._hash)
+
+
 # "Temporary" objects used when starting scripts      
 
 class CloudSendDeployedEnvironment(CloudSendEnvironment):

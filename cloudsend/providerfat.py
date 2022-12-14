@@ -32,6 +32,7 @@ class CloudSendFatProvider(CloudSendProvider,ABC):
         # this will call self._init
         CloudSendProvider.__init__(self,conf)
 
+        # will be called by the parent
         #self._init(conf)
 
     def _init(self,conf):
@@ -83,41 +84,34 @@ class CloudSendFatProvider(CloudSendProvider,ABC):
 
         self._save_config() 
 
-    async def cfg_add_instances(self,conf):
-        await super().cfg_add_instances(conf)
-        self._config_manager.load()     
+    async def _cfg_add_objects(self,conf,method):
+        await method(conf)
+        self._config_manager.load()    
+        self.set_state( self._state & (CloudSendProviderState.NEW|CloudSendProviderState.STARTED))
         if self._state & CloudSendProviderState.STARTED:
             await self.start()
+
+    async def cfg_add_instances(self,conf):
+        await self._cfg_add_objects(conf,super().cfg_add_instances)
 
     async def cfg_add_environments(self,conf):
-        await super().cfg_add_environments(conf)
-        self._config_manager.load()        
-        if self._state & CloudSendProviderState.STARTED:
-            await self.start()
+        await self._cfg_add_objects(conf,super().cfg_add_environments)
 
     async def cfg_add_jobs(self,conf):
-        await super().cfg_add_jobs(conf)
-        self._config_manager.load()        
-        if self._state & CloudSendProviderState.STARTED:
-            await self.start()
+        await self._cfg_add_objects(conf,super().cfg_add_jobs)
 
     async def cfg_add_config(self,conf):
-        await super().cfg_add_config(conf)
-        self._config_manager.load()        
-        if self._state & CloudSendProviderState.STARTED:
-            await self.start()
+        await self._cfg_add_objects(conf,super().cfg_add_config)
 
     async def cfg_reset(self):
         # remove the state file
         if self._state_serializer:
             self._state_serializer.reset()
-        else: # let's still remove this
-            if os.path.isfile(STATE_FILE):
-                try:
-                    os.remove(STATE_FILE)
-                except:
-                    pass
-
+        elif os.path.isfile(STATE_FILE): # let's always remove it
+            try:
+                os.remove(STATE_FILE)
+            except:
+                pass
         # provider reset: remove config file
         await super().cfg_reset()
         # re initialize objects
@@ -816,7 +810,8 @@ class CloudSendFatProvider(CloudSendProvider,ABC):
         else:
 
             if not self._state & CloudSendProviderState.DEPLOYED:
-                self.debug(1,"Not ready for run. Call 'deploy' first.",color=bcolors.WARNING)
+                method_to_call = self._get_method_to_call()
+                self.debug(1,"Not ready for run. Call '"+method_to_call+"' first.",color=bcolors.WARNING)
                 return
 
             if self._recovery and self._state & CloudSendProviderState.IDLE:
@@ -870,6 +865,10 @@ class CloudSendFatProvider(CloudSendProvider,ABC):
 
 
     def print_jobs_summary(self,run_session=None,instance=None):
+        if not self._state & CloudSendProviderState.STARTED:
+            self.debug(1,"Not ready to get print jobs. Call 'start' first",color=bcolors.WARNING)
+            return
+
         jobs = instance.get_jobs() if instance is not None else self._jobs
         # the lock is to make sure the prints are not scrambled 
         # when coming back from the instance at the same time ...
@@ -889,6 +888,10 @@ class CloudSendFatProvider(CloudSendProvider,ABC):
                     self.debug(1,"|_",process.str_simple())
 
     async def print_aborted_logs(self,run_session=None,instance=None):
+        if not self._state & CloudSendProviderState.STARTED:
+            self.debug(1,"Not ready to get logs. Call 'start' first",color=bcolors.WARNING)
+            return
+
         instances = self._instances if instance is None else [ instance ]
         for _instance in instances:
             ssh_conn   = None
@@ -914,6 +917,7 @@ class CloudSendFatProvider(CloudSendProvider,ABC):
                 ssh_conn.close()   
 
     async def print_objects(self):
+        self.debug(1,"STATE =",self._state)
         self.debug(1,"\nINSTANCES: --------------------")
         for instance in self._instances:
             self.debug(1,instance)
@@ -923,6 +927,18 @@ class CloudSendFatProvider(CloudSendProvider,ABC):
         self.debug(1,"\nJOBS: -------------------------")
         for job in self._jobs:
             self.debug(1,job)
+
+    def _get_method_to_call(self):
+        if not self._state   & CloudSendProviderState.STARTED:
+            return 'start'
+        elif not self._state & CloudSendProviderState.DEPLOYED:
+            return 'deploy'
+        elif not self._state & CloudSendProviderState.RUNNING:
+            return 'run'
+        elif not self._state & CloudSendProviderState.ASSIGNED:
+            return 'assign'
+        else:
+            return ''        
 
     async def fetch_results(self,out_dir,run_session=None):
 
@@ -1338,6 +1354,10 @@ class CloudSendFatProvider(CloudSendProvider,ABC):
 
     async def _watch(self):
 
+        if not self._state & CloudSendProviderState.STARTED:
+            self.debug(1,"Not ready to watch. Call 'start' first",color=bcolors.WARNING)
+            return
+
         job_state = CloudSendProcessState.DONE|CloudSendProcessState.ABORTED
         
         # switch the state to watch mode ... 
@@ -1352,7 +1372,7 @@ class CloudSendFatProvider(CloudSendProvider,ABC):
 
             # with this new in-memory test, we can't run the test while the instance is reviving
             # because the activate processes are being changed ...
-            while self._instances_reviving[instance.get_name()]:
+            while self._instances_reviving.get(instance.get_name(),False):
                 self.debug(1,"waiting for reviving instance (1)",instance)
                 await asyncio.sleep(SLEEP_PERIOD)
 
@@ -1414,6 +1434,10 @@ class CloudSendFatProvider(CloudSendProvider,ABC):
     async def get_jobs_states(self,run_session=None):
 
         self.debug(2,'Getting Jobs States ...')
+
+        if not self._state & CloudSendProviderState.STARTED:
+            self.debug(1,"Not ready to get job states. Call 'start' first")
+            return
 
         if not run_session:
             run_session = self._current_session

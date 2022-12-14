@@ -18,9 +18,6 @@ async def mainloop(cs_client,reset=False):
     # distribute the jobs on the instances (dummy algo for now)
     await cs_client.start(reset) 
 
-    await cs_client.cfg_reset()
-    await cs_client.cfg_add_instances('config.py')
-
     print("\n== DEPLOY ==\n")
 
     # pre-deploy instance , environments and job files

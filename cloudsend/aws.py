@@ -349,7 +349,7 @@ def aws_find_instance(session,instance_config):
 
     if len(existing['Reservations']) > 0 and len(existing['Reservations'][0]['Instances']) >0 :
         instance_data = existing['Reservations'][0]['Instances'][0]
-        debug(1,"Found exisiting instance !",instance_data['InstanceId'],instanceName)
+        debug(1,"Found existing instance !",instance_data['InstanceId'],instanceName)
         debug(3,instance_data)
         instance = CloudSendInstance( instance_config , instance_data['InstanceId'] , instance_data )
         return instance 
@@ -395,7 +395,7 @@ def aws_create_instance(session,instance_config,vpc,subnet,secGroup,keypair_name
 
     if len(existing['Reservations']) > 0 and len(existing['Reservations'][0]['Instances']) >0 :
         instance_data = existing['Reservations'][0]['Instances'][0]
-        debug(1,"Found exisiting instance !",instance_data['InstanceId'])
+        debug(1,"Found existing instance !",instance_data['InstanceId'])
         debug(3,instance_data)
         instance = CloudSendInstance( instance_config, instance_data['InstanceId'] , instance_data )
         return instance , created
