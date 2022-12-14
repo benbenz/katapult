@@ -13,6 +13,8 @@ PORT = 5000
 
 async def mainloop(ctxt):
 
+    await ctxt.init()
+
     server = await asyncio.start_server(ctxt.handle_client, HOST, PORT, reuse_address=True, reuse_port=True)
 
     addrs = ', '.join(str(sock.getsockname()) for sock in server.sockets)
@@ -49,10 +51,19 @@ class ByteStreamWriter():
         asyncio.ensure_future( self.writer.drain() )
 
 class ServerContext:
-    def __init__(self):
+    def __init__(self,args):
         self.cs_client  = None
         self.old_stdout = sys.stdout
         self.old_stderr = sys.stderr
+        self.auto_init = any( arg == 'auto_init' for arg in args )
+
+    async def init(self):
+        # triggered by the crontab in case maestro crashed
+        if self.auto_init:
+            self.cs_client = cs.get_client(None)
+            # we've just restarted a crashed maestro server process
+            # let's test for WATCH state and reach it back again if thats needed
+            await self.wakeup()
 
     async def wakeup(self):
         await self.cs_client.wakeup()
@@ -106,7 +117,7 @@ class ServerContext:
 
         if self.cs_client is None:
             if command != 'init' and command != 'shutdown':
-                print(bcolors.WARNING+"Server not ready. Run 'init CONFIG_FILE' command first"+bcolors.ENDC)
+                print(bcolors.WARNING+"Server not ready. Run 'init CONFIG_FILE' or 'start' command first"+bcolors.ENDC)
                 await writer.drain()
                 return 
         try:
@@ -121,8 +132,6 @@ class ServerContext:
                     config_ = None
                 self.cs_client  = cs.get_client(config_)
 
-                # may be we've just restarted a crashed maestro server process
-                # let's test for WATCH state and reach it back again if thats needed
                 await self.wakeup()                
 
             elif command == 'wakeup':
@@ -146,30 +155,39 @@ class ServerContext:
 
             elif command == 'add_instances':
                 if len(args)==1:
-                    config = json.loads( args[0] )
+                    config = args[0]
                 else:
                     print("Error: you need to send a JSON stream for config")
                     await writer.drain()
                     return
-                self.cs_client.add_instances(config)
+                await self.cs_client.add_instances(config)
 
             elif command == 'add_environments':
                 if len(args)==1:
-                    config = json.loads( args[0] )
+                    config = args[0]
                 else:
                     print("Error: you need to send a JSON stream for config")
                     await writer.drain()
                     return
-                self.cs_client.add_environments(config)
+                await self.cs_client.add_environments(config)
 
             elif command == 'add_jobs':
+                if len(args)==1:
+                    config = args[0]
+                else:
+                    print("Error: you need to send a JSON stream for config")
+                    await writer.drain()
+                    return
+                await self.cs_client.add_jobs(config)
+
+            elif command == 'add_config':
                 if len(args)==1:
                     config = json.loads( args[0] )
                 else:
                     print("Error: you need to send a JSON stream for config")
                     await writer.drain()
                     return
-                self.cs_client.add_jobs(config)
+                await self.cs_client.add_config(config)
 
             elif command == 'deploy':
 
@@ -233,7 +251,7 @@ class ServerContext:
 # run main loop
 def main():
 
-    ctxt = ServerContext()
+    ctxt = ServerContext(sys.argv)
 
     try:
         asyncio.run( mainloop(ctxt) )

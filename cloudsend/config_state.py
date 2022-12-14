@@ -281,7 +281,11 @@ class StateSerializer():
         self._loaded = None
 
     def reset(self):
-        os.remove(STATE_FILE)
+        if os.path.isfile(self._state_file):
+            try:
+                os.remove(self._state_file)
+            except:
+                pass
 
     def serialize(self,provider_state,instances,environments,jobs,run_sessions,current_session):
         try:

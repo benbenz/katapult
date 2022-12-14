@@ -1,5 +1,7 @@
 #!/usr/bin/env bash
 
+auto_init="$1"
+
 if [[ $(ps aux | grep "cloudsend.maestroserver" | grep -v 'grep') ]] ; then
     echo "Maestro server already running"
 else
@@ -13,5 +15,5 @@ else
     echo "Starting maestro server ..."
     cd $HOME/cloudsend
     source $HOME/cloudsend/.venv/maestro/bin/activate
-    $HOME/cloudsend/.venv/maestro/bin/python3 -u -m cloudsend.maestroserver
+    $HOME/cloudsend/.venv/maestro/bin/python3 -u -m cloudsend.maestroserver $auto_init
 fi

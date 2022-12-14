@@ -23,8 +23,8 @@ class CloudSendProvider(ABC):
         if conf is None:
             conf = dict()
 
-        #self._init(conf)
-        CloudSendProvider._init(self,conf)
+        self._init(conf)
+        #CloudSendProvider._init(self,conf)
 
         #self._instances_locks = dict()
         #self._provider_lock   = multiprocessing.Manager().Lock()
@@ -476,26 +476,46 @@ class CloudSendProvider(ABC):
 
     async def reset(self):
         config = copy.deepcopy(self._config)
-        os.remove(PROVIDER_CONFIG)
+        if os.path.isfile(PROVIDER_CONFIG):
+            try:
+                os.remove(PROVIDER_CONFIG)
+            except:
+                pass
         # removing objects from config:
         config['instances']    = []
         config['environments'] = []
         config['jobs']         = []
+
         self._init(config)
 
     def _save_config(self):
         with open(PROVIDER_CONFIG,'w') as config_file:
             config_file.write( json.dumps(self._config,indent=4) )
 
-    def _add_objects(self,key_name,config_list_obj):
-        if isinstance(config_list_obj,list):
+    def _add_objects(self,key_name,config_list_obj,save=True):
+        # config could be a file path
+        if isinstance(config_list_obj,str) and os.path.isfile(config_list_obj):
+            config = get_config(config_list_obj)
+        # config could be a json string stream
+        elif isinstance(config_list_obj,str):
+            try:
+                config = json.loads(config_list_obj)
+            except:
+                config = dict()
+        # config could be an array (of instances, envs or jobs specs)
+        elif isinstance(config_list_obj,list):
             config = { key_name : config_list_obj }
+        # config could be a cloudsend-compatible config
         elif isinstance(config_list_obj,dict) and key_name in config_list_obj:
             config = config_list_obj
+        # config could be a singleton instance,env or job config
         elif isinstance(config_list_obj,dict):
             config = { key_name : [ config_list_obj ] }
+        # other cases
         else:
             config = dict()
+
+        self.debug(2,"ADDING objects",config)
         
         if key_name not in config:
             self.debug(1,"No "+key_name+" specified in config file",config)
@@ -507,19 +527,25 @@ class CloudSendProvider(ABC):
         for cfg in config[key_name]:
             self._config[key_name].append( cfg )
 
-        self._save_config()
+        # no need, this only plays with global vars...
+        # self._init(self._config)
+        if save:
+            self._save_config()
 
     async def add_instances(self,config):
-        self._add_objects('instances',config)
+        CloudSendProvider._add_objects(self,'instances',config)
 
     async def add_environments(self,config):
-        self._add_objects('environments',config)
+        CloudSendProvider._add_objects(self,'environments',config)
 
     async def add_jobs(self,config):
-        self._add_objects('jobs',config)
+        CloudSendProvider._add_objects(self,'jobs',config)
 
-    async def reset(self):
-        os.remove(PROVIDER_CONFIG)
+    async def add_config(self,config):
+        CloudSendProvider._add_objects(self,'instances',config,False)
+        CloudSendProvider._add_objects(self,'environments',config,False)
+        CloudSendProvider._add_objects(self,'jobs',config,False)
+        CloudSendProvider._save_config()
 
     @abstractmethod
     async def deploy(self):
@@ -560,11 +586,14 @@ def get_config(path):
     config_name , config_extension = os.path.splitext(configbase)
 
     if config_extension=='.json':
-        if os.path.exists(config_file):
-            with open(config_file,'r') as config_file:
-                config = json.loads(config_file.read())
-            print("loaded config from json file")
-        else:
+        try:
+            if os.path.exists(config_file):
+                with open(config_file,'r') as config_file:
+                    config = json.loads(config_file.read())
+                print("loaded config from json file")
+            else:
+                config = None
+        except:
             config = None
     elif config_extension=='.py':
         try:
@@ -572,6 +601,8 @@ def get_config(path):
             configModule = __import__(config_name,globals(),locals())
             config = configModule.config
         except ModuleNotFoundError as mfe:
+            config = None
+        except:
             config = None
     return config
 
@@ -581,7 +612,7 @@ def get_client(config_=None):
         config = get_config(config_)
     elif isinstance(config_,dict):
         config = config_
-    else:
+    else: # get the auto-saved config
         config = get_config(PROVIDER_CONFIG)
 
     if config is None:

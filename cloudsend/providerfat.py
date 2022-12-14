@@ -32,10 +32,10 @@ class CloudSendFatProvider(CloudSendProvider,ABC):
         # this will call self._init
         CloudSendProvider.__init__(self,conf)
 
-        self._init(conf)
+        #self._init(conf)
 
     def _init(self,conf):
-        #super()._init(conf)
+        super()._init(conf)
 
         self._instances = []
         self._environments = []
@@ -91,10 +91,20 @@ class CloudSendFatProvider(CloudSendProvider,ABC):
     async def add_environments(self,conf):
         await super().add_environments(conf)
         self._config_manager.load()        
+        if self._state & CloudSendProviderState.STARTED:
+            self.start()
 
     async def add_jobs(self,conf):
         await super().add_jobs(conf)
         self._config_manager.load()        
+        if self._state & CloudSendProviderState.STARTED:
+            self.start()
+
+    async def add_config(self,conf):
+        await super().add_config(conf)
+        self._config_manager.load()        
+        if self._state & CloudSendProviderState.STARTED:
+            self.start()
 
     def serialize_state(self):
         if self._config.get('recover',False):

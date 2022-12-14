@@ -761,7 +761,7 @@ def aws_setup_auto_stop(session,instance):
 def aws_get_suggested_image(session,region):
     ec2_client = session.client("ec2")
 
-    debug(1,'Getting suggested image ID')
+    debug(2,'Getting suggested image ID')
 
     flt_creation = []
     for month in range(1):
