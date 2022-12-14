@@ -474,25 +474,11 @@ class CloudSendProvider(ABC):
     async def start(self,reset=False):
         pass
 
-    async def reset(self):
-        config = copy.deepcopy(self._config)
-        if os.path.isfile(PROVIDER_CONFIG):
-            try:
-                os.remove(PROVIDER_CONFIG)
-            except:
-                pass
-        # removing objects from config:
-        config['instances']    = []
-        config['environments'] = []
-        config['jobs']         = []
-
-        self._init(config)
-
     def _save_config(self):
         with open(PROVIDER_CONFIG,'w') as config_file:
             config_file.write( json.dumps(self._config,indent=4) )
 
-    def _add_objects(self,key_name,config_list_obj,save=True):
+    def _cfg_add_objects(self,key_name,config_list_obj,save=True):
         # config could be a file path
         if isinstance(config_list_obj,str) and os.path.isfile(config_list_obj):
             config = get_config(config_list_obj)
@@ -525,6 +511,7 @@ class CloudSendProvider(ABC):
             self._config[key_name] = []
 
         for cfg in config[key_name]:
+            cfg[K_LOADED] =False # make sure we mark it as not-loaded
             self._config[key_name].append( cfg )
 
         # no need, this only plays with global vars...
@@ -532,20 +519,34 @@ class CloudSendProvider(ABC):
         if save:
             self._save_config()
 
-    async def add_instances(self,config):
-        CloudSendProvider._add_objects(self,'instances',config)
+    async def cfg_add_instances(self,config):
+        CloudSendProvider._cfg_add_objects(self,'instances',config)
 
-    async def add_environments(self,config):
-        CloudSendProvider._add_objects(self,'environments',config)
+    async def cfg_add_environments(self,config):
+        CloudSendProvider._cfg_add_objects(self,'environments',config)
 
-    async def add_jobs(self,config):
-        CloudSendProvider._add_objects(self,'jobs',config)
+    async def cfg_add_jobs(self,config):
+        CloudSendProvider._cfg_add_objects(self,'jobs',config)
 
-    async def add_config(self,config):
-        CloudSendProvider._add_objects(self,'instances',config,False)
-        CloudSendProvider._add_objects(self,'environments',config,False)
-        CloudSendProvider._add_objects(self,'jobs',config,False)
+    async def cfg_add_config(self,config):
+        CloudSendProvider._cfg_add_objects(self,'instances',config,False)
+        CloudSendProvider._cfg_add_objects(self,'environments',config,False)
+        CloudSendProvider._cfg_add_objects(self,'jobs',config,False)
         CloudSendProvider._save_config()
+
+    async def cfg_reset(self):
+        config = copy.deepcopy(self._config)
+        if os.path.isfile(PROVIDER_CONFIG):
+            try:
+                os.remove(PROVIDER_CONFIG)
+            except:
+                pass
+        # removing objects from config:
+        config['instances']    = []
+        config['environments'] = []
+        config['jobs']         = []
+
+        self._init(config)        
 
     @abstractmethod
     async def deploy(self):
@@ -569,6 +570,10 @@ class CloudSendProvider(ABC):
 
     @abstractmethod
     async def print_aborted_logs(self,run_session=None,instance=None):
+        pass
+
+    @abstractmethod
+    async def print_objects(self):
         pass
 
     @abstractmethod
@@ -663,7 +668,28 @@ def line_buffered(f):
         debug(1,"error (2) while buffering line",str(e0))
         #doContinue = False
 
+def escape_arg_for_send(args):
+    if not args:
+        return args
+    args_escaped = []
+    for i,arg in enumerate(args):
+        if isinstance(arg,dict):
+            arg = json.dump(arg)
+        elif not isinstance(arg,str):
+            arg = str(arg)
+        arg = arg.replace("\"","\\\"")
+        args_escaped.append(arg)
+    return args_escaped  
 
+def make_client_command(maestro_command,args):
+    if not args:
+        the_command = maestro_command
+    else:
+        if not isinstance(args,list):
+            args = [ args ]
+        args = escape_arg_for_send(args)
+        the_command = COMMAND_ARGS_SEP.join( [ maestro_command , ARGS_SEP.join(args) ] )
+    return the_command
 
 DBG_LVL=1
 DBG_PREFIX=None

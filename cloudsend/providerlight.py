@@ -1,6 +1,6 @@
 
 from abc import ABC , abstractmethod
-from cloudsend.provider import CloudSendProvider , line_buffered , COMMAND_ARGS_SEP , ARGS_SEP
+from cloudsend.provider import CloudSendProvider , line_buffered , make_client_command
 from cloudsend.core import *
 import copy , io
 from zipfile import ZipFile
@@ -340,28 +340,9 @@ class CloudSendLightProvider(CloudSendProvider,ABC):
         #         break
         #     self.debug(1,l,end='')
 
-    def escape_arg_for_send(self,args):
-        if not args:
-            return args
-        args_escaped = []
-        for i,arg in enumerate(args):
-            if isinstance(arg,dict):
-                arg = json.dump(arg)
-            elif not isinstance(arg,str):
-                arg = str(arg)
-            arg = arg.replace("\"","\\\"")
-            args_escaped.append(arg)
-        return args_escaped
-
     async def _exec_maestro_command(self,maestro_command,args=None):
 
-        if not args:
-            the_command = maestro_command
-        else:
-            if not isinstance(args,list):
-                args = [ args ]
-            args = self.escape_arg_for_send(args)
-            the_command = COMMAND_ARGS_SEP.join( [ maestro_command , ARGS_SEP.join(args) ] )
+        the_command = make_client_command(maestro_command,args)
 
         if self.ssh_conn is None:
             instanceid , self.ssh_conn , self.ftp_client = await self._wait_and_connect(self._maestro)
@@ -432,7 +413,7 @@ class CloudSendLightProvider(CloudSendProvider,ABC):
         # triggers maestro::start
         await self._exec_maestro_command("start",reset)
 
-    async def _add_objects(self,conf,coroutine,name):
+    async def _cfg_add_objects(self,conf,coroutine,name):
         # complement self._config
         await coroutine(conf)
         # wait for maestro to be ready
@@ -441,45 +422,25 @@ class CloudSendLightProvider(CloudSendProvider,ABC):
         config_name = 'config_add-' + cloudsendutils.generate_unique_id() + '.json'
         # deploy the new config to the maestro (every time) (including dependent files)
         translated_config = await self._deploy_config(ssh_conn,ftp_client,config_name)
-        # triggers maestro::add_* (use the stream or the config name either way ...)
-        await self._exec_maestro_command(name,json.dumps(translated_config))
+        # triggers maestro::add_* : use string dump or config file name (either way)
         #await self._exec_maestro_command(name,config_name)
+        await self._exec_maestro_command(name,json.dumps(translated_config))
 
-    async def add_instances(self,conf):
-        # # complement self._config
-        # await super().add_instances(conf)
-        # # wait for maestro to be ready
-        # instanceid , ssh_conn , ftp_client = await self._wait_and_connect(self._maestro)
-        # # deploy the new config to the maestro (every time) (including dependent files)
-        # await self._deploy_config(ssh_conn,ftp_client)
-        # # triggers maestro::start
-        # await self._exec_maestro_command("add_instances",json.dumps(conf))
-        await self._add_objects(conf,super().add_instances,"add_instances")
+    async def cfg_add_instances(self,conf):
+        await self._cfg_add_objects(conf,super().cfg_add_instances,"cfg_add_instances")
 
-    async def add_environments(self,conf):
-        # # complement self._config
-        # await super().add_environments(conf)
-        # # wait for maestro to be ready
-        # instanceid , ssh_conn , ftp_client = await self._wait_and_connect(self._maestro)
-        # # deploy the new config to the maestro (every time) (including dependent files)
-        # await self._deploy_config(ssh_conn,ftp_client)
-        # # triggers maestro::start
-        # await self._exec_maestro_command("add_environments",json.dumps(conf))
-        await self._add_objects(conf,super().add_environments,"add_environments")
+    async def cfg_add_environments(self,conf):
+        await self._cfg_add_objects(conf,super().cfg_add_environments,"cfg_add_environments")
 
-    async def add_jobs(self,conf):
-        # # complement self._config
-        # await super().add_jobs(conf)
-        # # wait for maestro to be ready
-        # instanceid , ssh_conn , ftp_client = await self._wait_and_connect(self._maestro)
-        # # deploy the new config to the maestro (every time) (including dependent files)
-        # await self._deploy_config(ssh_conn,ftp_client)
-        # # triggers maestro::start
-        # await self._exec_maestro_command("add_jobs",json.dumps(conf))
-        await self._add_objects(conf,super().add_jobs,"add_jobs")
+    async def cfg_add_jobs(self,conf):
+        await self._cfg_add_objects(conf,super().cfg_add_jobs,"cfg_add_jobs")
 
-    async def add_config(self,conf):
-        await self._add_objects(conf,super().add_config,"add_config")
+    async def cfg_add_config(self,conf):
+        await self._cfg_add_objects(conf,super().cfg_add_config,"cfg_add_config")
+
+    async def cfg_reset(self):
+        # triggers maestro::reset
+        await self._exec_maestro_command("cfg_reset") # use output - the deploy part will be skipped depending on option ...
 
     async def reset_instance(self,instance):
         self.debug(1,'RESETTING instance',instance.get_name())
@@ -494,10 +455,6 @@ class CloudSendLightProvider(CloudSendProvider,ABC):
             #ftp_client.close()
             ssh_conn.close()
         self.debug(1,'RESETTING done')
-
-    async def reset(self):
-        # triggers maestro::reset
-        await self._exec_maestro_command("reset") # use output - the deploy part will be skipped depending on option ...
 
     async def deploy(self):
         # triggers maestro::deploy
@@ -527,6 +484,10 @@ class CloudSendLightProvider(CloudSendProvider,ABC):
     async def print_aborted_logs(self,run_session=None,instance=None):
         # triggers maestro::print_aborted_logs
         await self._exec_maestro_command("print_aborted")
+
+    async def print_objects(self):
+        # triggers maestro::print_objects
+        await self._exec_maestro_command("print_objects")
 
     async def fetch_results(self,out_dir,run_session=None):
 

@@ -10,7 +10,7 @@ import csv , io
 import pkg_resources
 from cloudsend.core import *
 from cloudsend.provider import CloudSendProvider , CloudSendProviderState , debug , PROVIDER_CONFIG
-from cloudsend.config_state import ConfigManager , StateSerializer
+from cloudsend.config_state import ConfigManager , StateSerializer , STATE_FILE
 from enum import IntFlag
 from threading import current_thread
 import shutil
@@ -50,6 +50,7 @@ class CloudSendFatProvider(CloudSendProvider,ABC):
         # option
         self._mutualize_uploads = conf.get('mutualize_uploads',True)
 
+        self._state_serializer = None
         if self._config.get('recover',False):
             # load the state (if existing) and set the recovery mode accordingly
             self._state_serializer = StateSerializer(self)
@@ -80,31 +81,47 @@ class CloudSendFatProvider(CloudSendProvider,ABC):
         # watch asyncio future
         self._watcher_task = None
 
-        self._save_config()            
+        self._save_config() 
 
-    async def add_instances(self,conf):
-        await super().add_instances(conf)
+    async def cfg_add_instances(self,conf):
+        await super().cfg_add_instances(conf)
         self._config_manager.load()     
         if self._state & CloudSendProviderState.STARTED:
-            self.start()
+            await self.start()
 
-    async def add_environments(self,conf):
-        await super().add_environments(conf)
+    async def cfg_add_environments(self,conf):
+        await super().cfg_add_environments(conf)
         self._config_manager.load()        
         if self._state & CloudSendProviderState.STARTED:
-            self.start()
+            await self.start()
 
-    async def add_jobs(self,conf):
-        await super().add_jobs(conf)
+    async def cfg_add_jobs(self,conf):
+        await super().cfg_add_jobs(conf)
         self._config_manager.load()        
         if self._state & CloudSendProviderState.STARTED:
-            self.start()
+            await self.start()
 
-    async def add_config(self,conf):
-        await super().add_config(conf)
+    async def cfg_add_config(self,conf):
+        await super().cfg_add_config(conf)
         self._config_manager.load()        
         if self._state & CloudSendProviderState.STARTED:
-            self.start()
+            await self.start()
+
+    async def cfg_reset(self):
+        # remove the state file
+        if self._state_serializer:
+            self._state_serializer.reset()
+        else: # let's still remove this
+            if os.path.isfile(STATE_FILE):
+                try:
+                    os.remove(STATE_FILE)
+                except:
+                    pass
+
+        # provider reset: remove config file
+        await super().cfg_reset()
+        # re initialize objects
+        self._init(self._config)
 
     def serialize_state(self):
         if self._config.get('recover',False):
@@ -113,14 +130,6 @@ class CloudSendFatProvider(CloudSendProvider,ABC):
     def set_state(self,value):
         self._state = value
         self.serialize_state()
-
-    async def reset(self):
-        # remove the state file
-        self._state_serializer.reset()
-        # provider reset: remove config file
-        await super().reset()
-        # re initialize objects
-        self._init(self._config)
 
     # def get_job(self,index):
 
@@ -488,7 +497,7 @@ class CloudSendFatProvider(CloudSendProvider,ABC):
 
     async def start(self,reset=False):
 
-        if not reset and self._state & CloudSendProviderState.STARTED:
+        if not reset and self._state & CloudSendProviderState.STARTED & self._recovery:
             self.debug(1,"STATE RECOVERY: we're not skipping start() in order to update instance information",color=bcolors.CVIOLET)
 
         self.set_state( self._state & (CloudSendProviderState.ANY - CloudSendProviderState.STARTED) )
@@ -805,6 +814,11 @@ class CloudSendFatProvider(CloudSendProvider,ABC):
             self.debug(1,"STATE RECOVERY: continuing run job ...",color=bcolors.CVIOLET)
             await self._run(self._current_session,None,True,False)
         else:
+
+            if not self._state & CloudSendProviderState.DEPLOYED:
+                self.debug(1,"Not ready for run. Call 'deploy' first.",color=bcolors.WARNING)
+                return
+
             if self._recovery and self._state & CloudSendProviderState.IDLE:
                 self.debug(1,"STATE RECOVERY: jobs have been ran already - about the run again",color=bcolors.CVIOLET)
 
@@ -898,6 +912,17 @@ class CloudSendFatProvider(CloudSendProvider,ABC):
             if ssh_conn:
                 # ftp_client.close()
                 ssh_conn.close()   
+
+    async def print_objects(self):
+        self.debug(1,"\nINSTANCES: --------------------")
+        for instance in self._instances:
+            self.debug(1,instance)
+        self.debug(1,"\nENVIRONMENTS: -----------------")
+        for env in self._environments:
+            self.debug(1,env)
+        self.debug(1,"\nJOBS: -------------------------")
+        for job in self._jobs:
+            self.debug(1,job)
 
     async def fetch_results(self,out_dir,run_session=None):
 

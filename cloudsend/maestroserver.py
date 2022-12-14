@@ -58,8 +58,7 @@ class ServerContext:
         self.auto_init = any( arg == 'auto_init' for arg in args )
 
     async def init(self):
-        # triggered by the crontab in case maestro crashed
-        if self.auto_init:
+        if self.auto_init: # set to True by the crontab in case maestro crashed
             self.cs_client = cs.get_client(None)
             # we've just restarted a crashed maestro server process
             # let's test for WATCH state and reach it back again if thats needed
@@ -138,10 +137,6 @@ class ServerContext:
 
                 await self.cs_client.wakeup()
 
-            elif command == 'reset':
-
-                await self.cs_client.reset()
-
             elif command == 'start':
 
                 if not args:
@@ -153,32 +148,32 @@ class ServerContext:
 
                 await self.cs_client.start(reset)
 
-            elif command == 'add_instances':
+            elif command == 'cfg_add_instances':
                 if len(args)==1:
                     config = args[0]
                 else:
                     print("Error: you need to send a JSON stream for config")
                     await writer.drain()
                     return
-                await self.cs_client.add_instances(config)
+                await self.cs_client.cfg_add_instances(config)
 
-            elif command == 'add_environments':
+            elif command == 'cfg_add_environments':
                 if len(args)==1:
                     config = args[0]
                 else:
                     print("Error: you need to send a JSON stream for config")
                     await writer.drain()
                     return
-                await self.cs_client.add_environments(config)
+                await self.cs_client.cfg_add_environments(config)
 
-            elif command == 'add_jobs':
+            elif command == 'cfg_add_jobs':
                 if len(args)==1:
                     config = args[0]
                 else:
                     print("Error: you need to send a JSON stream for config")
                     await writer.drain()
                     return
-                await self.cs_client.add_jobs(config)
+                await self.cs_client.cfg_add_jobs(config)
 
             elif command == 'add_config':
                 if len(args)==1:
@@ -187,7 +182,11 @@ class ServerContext:
                     print("Error: you need to send a JSON stream for config")
                     await writer.drain()
                     return
-                await self.cs_client.add_config(config)
+                await self.cs_client.cfg_add_config(config)
+
+            elif command == 'cfg_reset':
+
+                await self.cs_client.cfg_reset()
 
             elif command == 'deploy':
 
@@ -212,6 +211,10 @@ class ServerContext:
             elif command == 'print_aborted':
 
                 await self.cs_client.print_aborted_logs()
+
+            elif command == 'print_objects':
+
+                await self.cs_client.print_objects()
 
             elif command == 'fetch_results':
 
