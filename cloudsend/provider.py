@@ -232,7 +232,11 @@ class CloudSendProvider(ABC):
         #    region = self.get_user_region(self._config.get('profile'))
         keypair_filename = self.get_key_filename(self._config.get('profile'),region)
         if not os.path.exists(keypair_filename):
-            self.create_keypair(region,True)
+            #self.create_keypair(region)
+            if self.retrieve_keypair(region): # the keypair has to be created
+                self.terminate_instance(instance) # we have to re-create the instance with the new keypair
+                instance , created = self._get_or_create_instance(instance)
+                await self._wait_for_instance(instance)
         k = asyncssh.read_private_key(keypair_filename)
         self.debug(1,"connecting to",instance.get_name(),"@",instance.get_ip_addr())
         retrys = 0 
@@ -432,7 +436,11 @@ class CloudSendProvider(ABC):
         pass
 
     @abstractmethod
-    def create_keypair(self,region,force=False):
+    def retrieve_keypair(self,region):
+        pass
+
+    @abstractmethod
+    def create_keypair(self,region):
         pass
 
     @abstractmethod

@@ -40,9 +40,31 @@ def aws_get_region(profile_name=None):
 
 def aws_get_account_id(profile_name=None):
     client = boto3.client("sts")
-    return client.get_caller_identity()["Account"]        
+    return client.get_caller_identity()["Account"]   
 
-def aws_create_keypair(session,region,keypair_name,key_filename,force=False):
+def aws_retrieve_keypair(session,region,keypair_name,key_filename):
+    debug(1,"Retrieving KEYPAIR ...")
+    ec2_client = session.client("ec2")
+    ec2 = session.resource('ec2')
+
+    try:
+        keypairs = ec2_client.describe_key_pairs(KeyNames=[keypair_name])
+    except ClientError as e:
+        errmsg = str(e)
+        if 'InvalidKeyPair.NotFound' in errmsg:
+            if aws_create_keypair(session,region,keypair_name,key_filename):
+                return True # created
+
+    keypair = ec2.KeyPair(keypair_name)
+    fpath   = key_filename
+    pemfile = open(fpath, "w")
+    pemfile.write(keypair.key_material) # save the private key in the directory (we will use it with SSH client)
+    pemfile.close()
+    os.chmod(fpath, 0o600) # change permission to use with ssh (for debugging)
+
+    return False 
+
+def aws_create_keypair(session,region,keypair_name,key_filename):
     debug(1,"Creating KEYPAIR ...")
     ec2_client = session.client("ec2")
     #ec2_client = boto3.client("ec2",config=aws_get_config(region))
@@ -70,13 +92,6 @@ def aws_create_keypair(session,region,keypair_name,key_filename,force=False):
 
         elif 'DryRunOperation' in errmsg: # we are good with credentials
             try :
-                if force:
-                    try:
-                        ec2_client.delete_key_pair(
-                            KeyName=keypair_name
-                        )
-                    except:
-                        pass
                 keypair = ec2_client.create_key_pair(
                     KeyName=keypair_name,
                     DryRun=False,
@@ -325,7 +340,7 @@ def aws_find_instance(session,instance_config):
     instanceName = init_instance_name(instance_config)
     region = instance_config.get('region')
 
-    debug(1,"Searching INSTANCE ...",instanceName)
+    debug(1,"Searching INSTANCE",instanceName,"...")
 
     #ec2_client = boto3.client("ec2", config=aws_get_config(region))
     ec2_client = session.client("ec2")
@@ -806,11 +821,17 @@ class AWSCloudSendProviderImpl():
         session = self.get_session(instance)
         aws_update_instance_info(session,instance)
 
-    def create_keypair(self,region,force=False):
+    def retrieve_keypair(self,region):
         keypair_name = self.get_keypair_name(self._profile_name,region)
         key_filename = self.get_key_filename(self._profile_name,region)
-        session = self.get_session(config)
-        aws_create_keypair(session,region,keypair_name,key_filename,force)
+        session = self.get_session(region)
+        return aws_retrieve_keypair(session,region,keypair_name,key_filename)
+
+    def create_keypair(self,region):
+        keypair_name = self.get_keypair_name(self._profile_name,region)
+        key_filename = self.get_key_filename(self._profile_name,region)
+        session = self.get_session(region)
+        aws_create_keypair(session,region,keypair_name,key_filename)
 
     def create_instance_objects(self,config):
         keypair_name = self.get_keypair_name(self._profile_name,config.get('region'))
@@ -868,8 +889,11 @@ class AWSCloudSendFatProvider(CloudSendFatProvider,AWSCloudSendProviderImpl):
     def update_instance_info(self,instance):
         AWSCloudSendProviderImpl.update_instance_info(self,instance)
 
-    def create_keypair(self,region,force=False):
-        AWSCloudSendProviderImpl.create_keypair(self,region,force=False)
+    def retrieve_keypair(self,region):
+        return AWSCloudSendProviderImpl.retrieve_keypair(self,region)
+
+    def create_keypair(self,region):
+        AWSCloudSendProviderImpl.create_keypair(self,region)
 
     def create_instance_objects(self,config):
         return AWSCloudSendProviderImpl.create_instance_objects(self,config)
@@ -916,8 +940,11 @@ class AWSCloudSendLightProvider(CloudSendLightProvider,AWSCloudSendProviderImpl)
     def update_instance_info(self,instance):
         AWSCloudSendProviderImpl.update_instance_info(self,instance)
 
-    def create_keypair(self,region,force=False):
-        AWSCloudSendProviderImpl.create_keypair(self,region,force=False)
+    def retrieve_keypair(self,region):
+        return AWSCloudSendProviderImpl.retrieve_keypair(self,region)
+
+    def create_keypair(self,region):
+        AWSCloudSendProviderImpl.create_keypair(self,region)
 
     def create_instance_objects(self,config):
         return AWSCloudSendProviderImpl.create_instance_objects(self,config)

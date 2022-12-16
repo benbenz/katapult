@@ -304,8 +304,12 @@ class CloudSendLightProvider(CloudSendProvider,ABC):
         zip_buffer = io.BytesIO()
         # create a ZipFile object
         with ZipFile(zip_buffer, 'w') as zipObj:    
-            for otherfilepath in ['pyproject.toml' , 'requirements.txt' ]:
-                with open(otherfilepath,'r') as thefile:
+            import cloudsend as cs
+            cloudsendinit = os.path.abspath(cs.__file__) # this is the __init__.py file
+            cloudsendmodu = os.path.dirname(cloudsendinit)
+            cloudsendroot = os.path.dirname(cloudsendmodu)
+            for otherfilepath in [ 'requirements.txt' ]:
+                with open(os.path.join(cloudsendroot,otherfilepath),'r') as thefile:
                     data = thefile.read()
                     zipObj.writestr(otherfilepath,data)
             # write the package
