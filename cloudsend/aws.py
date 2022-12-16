@@ -55,12 +55,21 @@ def aws_retrieve_keypair(session,region,keypair_name,key_filename):
             if aws_create_keypair(session,region,keypair_name,key_filename):
                 return True # created
 
-    keypair = ec2.KeyPair(keypair_name)
-    fpath   = key_filename
-    pemfile = open(fpath, "w")
-    pemfile.write(keypair.key_material) # save the private key in the directory (we will use it with SSH client)
-    pemfile.close()
-    os.chmod(fpath, 0o600) # change permission to use with ssh (for debugging)
+    # delete / create instead ... 
+    # ISSUE: this will invalidate clients on other computers ... 
+    ec2_client.delete_key_pair(KeyName=keypair_name,KeyPairId=keypairs['KeyPairs'][0]['KeyPairId'])
+    aws_create_keypair(session,region,keypair_name,key_filename)
+    return True
+
+    # this is sadly not working: ec2.KeyPair returns a KeyPairInfo and not a KeyPair ... :/
+    # TODO: make code commented below work
+    #
+    # keypair = ec2.KeyPair(keypair_name)
+    # fpath   = key_filename
+    # pemfile = open(fpath, "w")
+    # pemfile.write(keypair.key_material) # save the private key in the directory (we will use it with SSH client)
+    # pemfile.close()
+    # os.chmod(fpath, 0o600) # change permission to use with ssh (for debugging)
 
     return False 
 
@@ -623,10 +632,8 @@ def aws_update_instance_info(session,instance):
     if state == CloudSendInstanceState.RUNNING:
         status_res = ec2_client.describe_instance_status( InstanceIds=[instance.get_id()] )
         status_res = status_res['InstanceStatuses'][0]
-        # if status_res['InstanceStatus']['Status'] == 'ok': #and status_res['SystemStatus']['Status'] == 'ok':
-        #     instance.set_reachability(True)
-        # this seems okay to force-try to connect...
-        instance.set_reachability(True)
+        if status_res['InstanceStatus']['Status'] == 'ok' and status_res['SystemStatus']['Status'] == 'ok':
+             instance.set_reachability(True)
 
     platform_details = instance_new_data.get('PlatformDetails').lower()
     if 'linux' in platform_details:

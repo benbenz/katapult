@@ -282,7 +282,7 @@ class CloudSendInstance():
         self._state    = instance._state
         self._reachability  = instance._reachability
         self._platform = instance._platform
-        self._config   = copy.deepcopy(instance._config)
+        self._config   = instance._config #copy.deepcopy(instance._config)
         self._data     = copy.deepcopy(instance._data)        
 
     def __repr__(self):

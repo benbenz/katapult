@@ -164,7 +164,7 @@ class CloudSendProvider(ABC):
         else:
             return instance.get_id() , None , None
 
-    async def _wait_for_instance(self,instance):
+    async def _wait_for_instance(self,instance,with_reachability=False):
         
         # get the public DNS info when instance actually started (todo: check actual state)
         waitFor = True
@@ -199,7 +199,10 @@ class CloudSendProvider(ABC):
                 except:
                     pass
 
-            waitFor = lookForDNS or lookForState or not reachability
+            if with_reachability:
+                waitFor = lookForDNS or lookForState or not reachability
+            else:
+                waitFor = lookForDNS or lookForState
             if waitFor:
                 if lookForDNS:
                     debug(1,"waiting for",instance.get_name(),"...",instanceState.name)
@@ -208,7 +211,7 @@ class CloudSendProvider(ABC):
                         debug(1,"waiting for",instance.get_name(),"...",instanceState.name)
                     elif lookForState:
                         debug(1,"waiting for",instance.get_name(),"...",instanceState.name," IP =",instance.get_ip_addr())
-                    elif not reachability:
+                    elif with_reachability and not reachability:
                         debug(1,"waiting for",instance.get_name(),"...",instanceState.name," IP =",instance.get_ip_addr(),"(waiting to be reachable)")
                     else:
                         debug(1,"waiting for",instance.get_name(),"...",instanceState.name," IP =",instance.get_ip_addr())
@@ -232,11 +235,14 @@ class CloudSendProvider(ABC):
         #    region = self.get_user_region(self._config.get('profile'))
         keypair_filename = self.get_key_filename(self._config.get('profile'),region)
         if not os.path.exists(keypair_filename):
+            self.debug(1,"KeyPair not found locally, we will have to regenerate it ...")
             #self.create_keypair(region)
-            if self.retrieve_keypair(region): # the keypair has to be created
+            if self.retrieve_keypair(region): # if the keypair has been created ...
                 self.terminate_instance(instance) # we have to re-create the instance with the new keypair
-                instance , created = self._get_or_create_instance(instance)
-                await self._wait_for_instance(instance)
+                new_instance , created = self._get_or_create_instance(instance)
+                if created: # this is likely true
+                    instance.update_from_instance(new_instance)
+                await self._wait_for_instance(instance) 
         k = asyncssh.read_private_key(keypair_filename)
         self.debug(1,"connecting to",instance.get_name(),"@",instance.get_ip_addr())
         retrys = 0 
