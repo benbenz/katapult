@@ -2,18 +2,6 @@
 
 CloudSend is a Python package that allows you to run any script on a cloud service (for now AWS only).
 
-| Important Note |
-| CloudSend helps you easily create instances on AWS so that you can focus on your scripts. It is important to realize that it can and **will likely generate extra costs**. If you want to minimize those costs, activate the `eco` mode in the configuration or make sure you monitor the resources created by CloudSend. Those include:
-- VPCs
-- Subnets
-- Security Groups
-- Instances
-- Device Mappings / Disks
-- Policies & Roles
-- KeyPairs
-|
-| --- |
-
 # Features
 
 - Easily run scripts on AWS by writing a simple configuration file
@@ -23,6 +11,10 @@ CloudSend is a Python package that allows you to run any script on a cloud servi
 - Handles disconnections from instances, including stopped or terminated instances
 - Handles interruption of CloudSend, with state recovery
 - Runs locally or on a remote instance, with 'watcher' functionality 
+
+| Important Note |
+| --- |
+| CloudSend helps you easily create instances on AWS so that you can focus on your scripts. It is important to realize that it can and **will likely generate extra costs**. If you want to minimize those costs, activate the `eco` mode in the configuration or make sure you monitor the resources created by CloudSend. Those include:<ul><li>VPCs</li><li>Subnets</li><li>Security Groups</li><li>Instances</li><li>Device Mappings / Disks</li><li>Policies & Roles</li><li>KeyPairs</li> |
 
 # Pre-requisites
 
