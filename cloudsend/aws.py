@@ -82,6 +82,16 @@ def aws_create_keypair(session,region,keypair_name,key_filename):
 
     #keypair_name = cs_keypairName + '-' + region
 
+    if not os.path.exists(key_filename):
+        debug(1,"Key not found locally. Resetting remote KeyPair first")
+        try:
+            keypairs = ec2_client.describe_key_pairs(KeyNames=[keypair_name])
+            ec2_client.delete_key_pair(KeyName=keypair_name,KeyPairId=keypairs['KeyPairs'][0]['KeyPairId'])
+        except ClientError as e:
+            errmsg = str(e)
+            if 'InvalidKeyPair.NotFound' in errmsg:
+                debug(1,"KeyPair not existing remotely. All good.")
+
     keypair = None
     try:
         keypair = ec2_client.create_key_pair(

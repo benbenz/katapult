@@ -525,7 +525,7 @@ class CloudSendFatProvider(CloudSendProvider,ABC):
         self.debug(1,'RESETTING done')    
 
 
-    async def hard_reset_instance(instance):        
+    async def hard_reset_instance(self,instance):        
         await super().hard_reset_instance(instance)
         await self._deploy_all(instance)
 

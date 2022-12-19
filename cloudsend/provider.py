@@ -126,7 +126,7 @@ class CloudSendProvider(ABC):
             instance.set_invalid(True)
 
             self.debug(1,cre)
-        
+
         except Exception as e:
             self.debug(1,e)
 
@@ -228,6 +228,18 @@ class CloudSendProvider(ABC):
         except:
             pass
 
+    async def _refresh_instance_key(self,instance,force=False):
+        region = instance.get_region()
+        if force:
+            key_filename = self.get_key_filename(self._profile_name,region)
+            try:
+                os.remove(key_filename)
+            except:
+                pass
+        if self.retrieve_keypair(region): # if the keypair has been created ...
+            await self.hard_reset_instance(instance)
+            await self._wait_for_instance(instance) 
+
     async def _connect_to_instance(self,instance,**kwargs):
         # ssh into instance and run the script 
         region = instance.get_region()
@@ -235,21 +247,35 @@ class CloudSendProvider(ABC):
         #    region = self.get_user_region(self._config.get('profile'))
         keypair_filename = self.get_key_filename(self._config.get('profile'),region)
         if not os.path.exists(keypair_filename):
-            self.debug(1,"KeyPair not found locally, we will have to regenerate it ...")
+            self.debug(1,"KeyPair not found locally, we will have to regenerate it ...",color=bcolors.WARNING)
             #self.create_keypair(region)
-            if self.retrieve_keypair(region): # if the keypair has been created ...
-                self.terminate_instance(instance) # we have to re-create the instance with the new keypair
-                new_instance , created = self._get_or_create_instance(instance)
-                if created: # this is likely true
-                    instance.update_from_instance(new_instance)
-                await self._wait_for_instance(instance) 
+            await self._refresh_instance_key(instance)
         k = asyncssh.read_private_key(keypair_filename)
         self.debug(1,"connecting to",instance.get_name(),"@",instance.get_ip_addr())
         retrys = 0 
+        retrys_key = 0
         while True:
             try:
                 conn = await asyncssh.connect(host=instance.get_dns_addr(),username=instance.get_config('img_username'),client_keys=[k],known_hosts=None,**kwargs) #,password=’mypassword’)
                 break
+            except asyncssh.PermissionDenied as pde:
+                # we need to forward this higher up so we can handle the private key issue
+                self.debug(1,pde)
+                if retrys_key == 0:
+                    self.debug(1,"The key seems to have changed for instance {0}. Recreating instance.".format(instance.get_name()),color=bcolors.WARNING)
+                    await self.hard_reset_instance(instance)
+                    await self._wait_for_instance(instance) 
+                else:
+                    # we tried to refresh the instance but it did not work
+                    # this means the remote key stored in AWS, doesnt match the local .pem private key
+                    # refresh it ...
+                    await self._refresh_instance_key(instance,True) 
+
+                self.debug(1,"Retrying ...")
+                retrys_key = retrys_key + 1
+                if retrys_key > 5:
+                    self.debug(1,"Too many retrys",color=bcolors.WARNING)
+                    break
             except Exception as cexc:
                 # check whats going on
                 self.update_instance_info(instance)
