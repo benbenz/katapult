@@ -11,6 +11,7 @@ import pkg_resources
 import time
 import random
 import shutil
+import asyncssh
 
 random.seed()
 
@@ -336,7 +337,9 @@ class CloudSendLightProvider(CloudSendProvider,ABC):
                 if not line:
                     break
                 self.debug(1,line,end='')
-        except StopAsyncOperation:
+        except asyncssh.misc.ConnectionLost:
+            pass
+        except StopAsyncIteration:
             pass
 
         # for l in await line_buffered(stdout):
@@ -366,7 +369,9 @@ class CloudSendLightProvider(CloudSendProvider,ABC):
                 if not line:
                     break
                 self.debug(1,line,end='')
-        except StopAsyncOperation:
+        except asyncssh.misc.ConnectionLost:
+            pass
+        except StopAsyncIteration:
             pass
         except:
             pass
@@ -538,7 +543,11 @@ class CloudSendLightProvider(CloudSendProvider,ABC):
 
     async def finalize(self):
         # triggers maestro::print_aborted_logs
-        await self._exec_maestro_command("finalize")
+        try:
+            await self._exec_maestro_command("finalize")
+        # this will likely happen if auto_stop is one
+        except asyncssh.misc.ConnectionLost as cle:
+            pass
 
     def _get_or_create_instance(self,instance):
         instance , created = super()._get_or_create_instance(instance)
