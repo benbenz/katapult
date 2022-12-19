@@ -536,6 +536,10 @@ class CloudSendLightProvider(CloudSendProvider,ABC):
         #ftp_client.close()
         ssh_conn.close()
 
+    async def finalize(self):
+        # triggers maestro::print_aborted_logs
+        await self._exec_maestro_command("finalize")
+
     def _get_or_create_instance(self,instance):
         instance , created = super()._get_or_create_instance(instance)
         # dangerous !

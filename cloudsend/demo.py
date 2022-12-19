@@ -51,6 +51,8 @@ async def mainloop(cs_client,reset=False):
 
     await cs_client.fetch_results(os.path.join(os.getcwd(),'tmp'))
 
+    await cs_client.finalize()
+
     print("\n== DONE ==\n")
 
 async def waitloop(cs_client):
@@ -72,6 +74,8 @@ async def waitloop(cs_client):
     print("\n== FETCH RESULTS ==\n")
 
     await cs_client.fetch_results(os.path.join(os.getcwd(),'tmp'))
+
+    await cs_client.finalize()
 
     print("\n== DONE ==\n")        
 

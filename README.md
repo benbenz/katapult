@@ -346,11 +346,17 @@ class CloudSendFatProvider(ABC):
     # get the states of the processes
     def get_jobs_states(self,run_session=None):
 
+    # print a summary of processes
     def print_jobs_summary(self,run_session=None,instance=None):
 
+    # print the aborted logs, if any
     def print_aborted_logs(self,run_session=None,instance=None):
 
+    # fetch results data
     def fetch_results(self,out_directory,run_session=None):
+
+    # wait for the watcher process to be completely done (useful for demo)
+    def finalize(self):
 
     # wakeup = start + assign + deploy + run + watch
     def wakeup(self)

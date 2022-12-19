@@ -1004,6 +1004,12 @@ class CloudSendFatProvider(CloudSendProvider,ABC):
             #client['ftp'].close()
             client['ssh'].close()
 
+    async def finalize(self):
+        if self._watcher_task:
+            await self._watcher_task
+            # while not self._watcher_task.done():
+            #     await asyncio.sleep(SLEEP_PERIOD)
+
     def _get_ln_command(self,dpl_job,uid):
         files_to_ln = []
         upload_files = dpl_job.get_config('upload_files')
@@ -1254,28 +1260,29 @@ class CloudSendFatProvider(CloudSendProvider,ABC):
             self.serialize_state()
 
             if wait_mode & CloudSendProviderStateWaitMode.WATCH:
-                # lets wait 1 minutes before stopping
-                # this helps with the demo which runs a wait() and a get() sequentially ...
-                if self._auto_stop:
-                    await asyncio.sleep(60*1)  
-
                 self._instances_watching[instance.get_name()] = False            
                 any_watching = any( self._instances_watching.values() )
+                debug(2,self._instances_watching)
 
                 if not any_watching:
-                    self.debug(2,"WATCHING has ended")
+                    self.debug(1,"WATCHING has ended")
                     run_session.deactivate()
                     # we mark it specifically as IDLE so we know it's been ran once ... (could be useful)
                     self.set_state(  (CloudSendProviderState.IDLE | self._state) & (CloudSendProviderState.ANY - CloudSendProviderState.WATCHING - CloudSendProviderState.RUNNING) )
                     self.debug(2,"entering IDLE state",self._state)
 
+                # lets wait 1 minutes before stopping
+                # this helps with the demo which runs a wait() and a get() sequentially ...
                 if self._auto_stop:
+                    try:
+                        await asyncio.sleep(60*0.5)  
+                    except asyncio.CancelledError as cerr:
+                        raise cerr
                     try:
                         self.debug(1,"Stopping instance",instance.get_name(),color=bcolors.WARNING)
                         self.stop_instance(instance)
                     except:
                         pass
-                    debug(2,self._instances_watching)
                     if not any_watching:
                         self.debug(1,"Stopping the fat client (maestro) because all instances have ran the jobs",color=bcolors.WARNING)
                         os.system("sudo shutdown -h now")
@@ -1305,12 +1312,15 @@ class CloudSendFatProvider(CloudSendProvider,ABC):
         if not daemon:
             await asyncio.gather( *jobs )
         else:
-            await self._cancel_watch()
-            # spawn it ...
-            self._watcher_task = asyncio.ensure_future( asyncio.gather( *jobs ) )            
-            self.debug(2,self._watcher_task)
             if wait_state & CloudSendProviderStateWaitMode.WATCH:
+                await self._cancel_watch()
+                # spawn it ...
+                self._watcher_task = asyncio.ensure_future( asyncio.gather( *jobs ) )            
+                self.debug(2,self._watcher_task)
                 self.debug(2,"Watching ...")
+            else:
+                asyncio.ensure_future( asyncio.gather( *jobs ) )
+
             await asyncio.sleep(2) # let it go to the loop
         # done
 

@@ -222,6 +222,10 @@ class ServerContext:
                     directory = args[0].strip()
                     await self.cs_client.fetch_results(directory)
 
+            elif command == 'finalize':
+                
+                await self.cs_client.finalize()
+
             elif command == 'shutdown':
 
                 asyncio.get_event_loop().stop()

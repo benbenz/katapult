@@ -620,6 +620,10 @@ class CloudSendProvider(ABC):
     @abstractmethod
     async def fetch_results(self,directory,run_session=None):
         pass
+
+    @abstractmethod
+    async def finalize(self):
+        pass
           
     @abstractmethod
     def get_suggested_image(self,region):
