@@ -39,7 +39,7 @@ class CloudSendProvider(ABC):
         DBG_LVL = conf.get('debug',1)
 
         self._config  = conf
-        self._auto_stop = conf.get('auto_stop',False)
+        self._auto_stop = conf.get('auto_stop',True)
 
         self._profile_name = self._config.get('profile')
         if self._config.get('profile'):

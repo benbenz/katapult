@@ -310,9 +310,20 @@ class CloudSendLightProvider(CloudSendProvider,ABC):
             cloudsendmodu = os.path.dirname(cloudsendinit)
             cloudsendroot = os.path.dirname(cloudsendmodu)
             for otherfilepath in [ 'requirements.txt' ]:
-                with open(os.path.join(cloudsendroot,otherfilepath),'r') as thefile:
-                    data = thefile.read()
-                    zipObj.writestr(otherfilepath,data)
+                opened = False
+                for thedir in [cloudsendmodu , cloudsendroot ]: # not sure why: Kyel bug Windows
+                    thefilepath = os.path.join(thedir,otherfilepath)
+                    if os.path.exists(thefilepath):
+                        try:
+                            with open(thefilepath,'r') as thefile:
+                                opened = True
+                                data = thefile.read()
+                                zipObj.writestr(otherfilepath,data)
+                        except:
+                            self.debug(1,"Could not open file ",thefilepath,color=bcolors.FAIL)
+                            pass
+                if not opened:
+                    self.debug(1,"Could not open file ",otherfilepath,color=bcolors.FAIL)
             # write the package
             self._zip_package("cloudsend",".","cloudsend",zipObj)
 
