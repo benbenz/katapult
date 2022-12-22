@@ -18,6 +18,9 @@ async def mainloop(cs_client,reset=False):
     # distribute the jobs on the instances (dummy algo for now)
     await cs_client.start(reset) 
 
+    # clear the cache
+    await cs_client.clear_results_dir()
+
     print("\n== DEPLOY ==\n")
 
     # pre-deploy instance , environments and job files
@@ -61,6 +64,9 @@ async def waitloop(cs_client):
 
     await cs_client.start()
 
+    # clear the cache
+    await cs_client.clear_results_dir()
+
     print("\n== WAIT ==\n")
     
     await cs_client.wait(CloudSendProcessState.DONE|CloudSendProcessState.ABORTED)
@@ -72,9 +78,6 @@ async def waitloop(cs_client):
     await cs_client.print_aborted_logs()
 
     print("\n== FETCH RESULTS ==\n")
-
-    # clear the cache
-    await cs_client.clear_results_dir()
 
     await cs_client.fetch_results()
 

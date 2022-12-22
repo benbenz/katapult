@@ -9,7 +9,7 @@ from io import BytesIO
 import csv , io
 import pkg_resources
 from cloudsend.core import *
-from cloudsend.provider import CloudSendProvider , CloudSendProviderState , debug , PROVIDER_CONFIG
+from cloudsend.provider import CloudSendProvider , CloudSendProviderState , debug , PROVIDER_CONFIG , DIRECTORY_TMP_AUTO_STOP
 from cloudsend.config_state import ConfigManager , StateSerializer , STATE_FILE
 from enum import IntFlag
 from threading import current_thread
@@ -81,6 +81,7 @@ class CloudSendFatProvider(CloudSendProvider,ABC):
 
         # watch asyncio future
         self._watcher_task = None
+        self._terminate_task = None
 
         self._save_config() 
 
@@ -947,7 +948,11 @@ class CloudSendFatProvider(CloudSendProvider,ABC):
         if not os.path.isabs(out_dir):
             out_dir = os.path.join(os.getcwd(),out_dir)
 
-        shutil.rmtree(out_dir, ignore_errors=True)            
+        shutil.rmtree(out_dir, ignore_errors=True)   
+
+        out_dir2 = os.path.join(os.getcwd(),DIRECTORY_TMP_AUTO_STOP)
+        shutil.rmtree(out_dir2, ignore_errors=True)   
+        
 
     async def fetch_results(self,out_dir='./tmp',run_session=None,use_cached=True):
 
@@ -968,9 +973,16 @@ class CloudSendFatProvider(CloudSendProvider,ABC):
 
         clients   = dict()
 
-        # we've already fetched the results (possibly from the watcher process)
+        # we've already fetched the results
         if use_cached and os.path.exists(session_out_dir):
             return session_out_dir
+
+        # we may have fetched in the auto_stop dir already ...
+        auto_dir = self._get_session_out_dir(DIRECTORY_TMP_AUTO_STOP,run_session)
+        if not os.path.isabs(auto_dir):
+            auto_dir = os.path.join(os.getcwd(),auto_dir)
+        if use_cached and os.path.exists(auto_dir):
+            return auto_dir
 
         try:
             shutil.rmtree(session_out_dir, ignore_errors=True)
@@ -983,7 +995,7 @@ class CloudSendFatProvider(CloudSendProvider,ABC):
 
         for process in processes:
 
-            if process.get_state() != CloudSendProcessState.DONE:
+            if process.get_state() != CloudSendProcessState.DONE and process.get_state() != CloudSendProcessState.ABORTED:
                 self.debug(2,"Skipping process import",process.get_uid(),process.get_state())
             
             dpl_job  = process.get_job()
@@ -1002,21 +1014,49 @@ class CloudSendFatProvider(CloudSendProvider,ABC):
                 ssh_conn = clients[instance.get_name()]['ssh']
                 ftp_client = clients[instance.get_name()]['ftp']
             
-            out_file = dpl_job.get_config('output_file') # this file is written for the local machine
-            remote_file_path = instance.path_join( process.get_path() , out_file )
-            directory = instance.path_dirname( remote_file_path )
-            filename  = instance.path_basename( remote_file_path )
-            
-            file_name , file_extension = os.path.splitext(out_file)
-            file_name = file_name.replace(os.sep,'_')
-            #ftp_client.chdir(directory)
-            local_path = os.path.join(session_out_dir,'job_'+str(rank).zfill(3)+'_'+file_name+file_extension)
-            await ftp_client.chdir( directory )
-            try:
-                await ftp_client.get( filename , local_path )   
-            except asyncssh.sftp.SFTPNoSuchFile:
-                self.debug(1,"No file for process",process.get_uid(),"job#",rank,directory,filename,local_path)
-                pass
+            retrys = 0 
+            while True:
+                try :
+                    if process.get_state() == CloudSendProcessState.ABORTED:
+                        local_path = os.path.join(session_out_dir,'job_'+str(rank).zfill(3)+'_error.log')
+                        log = await self.get_log(process,ssh_conn)
+                        try:
+                            with open(local_path,'w') as log_file:
+                                log_file.write(log)
+                        except:
+                            pass
+
+                    elif process.get_state() == CloudSendProcessState.DONE:
+                        out_file = dpl_job.get_config('output_file') # this file is written for the local machine
+                        remote_file_path = instance.path_join( process.get_path() , out_file )
+                        directory = instance.path_dirname( remote_file_path )
+                        filename  = instance.path_basename( remote_file_path )
+                        
+                        file_name , file_extension = os.path.splitext(out_file)
+                        file_name = file_name.replace(os.sep,'_')
+                        #ftp_client.chdir(directory)
+                        local_path = os.path.join(session_out_dir,'job_'+str(rank).zfill(3)+'_'+file_name+file_extension)
+                        await ftp_client.chdir( directory )
+                        try:
+                            await ftp_client.get( filename , local_path )   
+                        except asyncssh.sftp.SFTPNoSuchFile:
+                            self.debug(1,"No file for process",process.get_uid(),"job#",rank,directory,filename,local_path)
+                            pass
+                    break
+                except (OSError, asyncssh.Error):
+                    retrys += 1
+                    if retrys < 5:
+                        await asyncio.sleep(10)
+                        instanceid , ssh_conn , ftp_client = await self._wait_and_connect(instance)
+                        if ssh_conn is not None:
+                            #ftp_client = await ssh_conn.start_sftp_client()
+                            clients[instance.get_name()] = { 'ssh': ssh_conn , 'ftp' : ftp_client}
+                        else:
+                            self.debug(1,"Fetch results: could not wait for instance",instance.get_name(),color=bcolors.FAIL)
+                            break
+                    else:
+                        self.debug(1,"Enough retries. Stop fetching results",color=bcolors.FAIL)
+                        break
         
         for client in clients.values():
             #client['ftp'].close()
@@ -1295,7 +1335,7 @@ class CloudSendFatProvider(CloudSendProvider,ABC):
                 # this helps with the demo which runs a wait() and a get() sequentially ...
                 if self._auto_stop:
                     try:
-                        await asyncio.sleep(60*0.5)  
+                        await asyncio.sleep(60*1)  # wait 1 min so demo works smoothly
                     except asyncio.CancelledError as cerr:
                         raise cerr
                     try:
@@ -1303,9 +1343,9 @@ class CloudSendFatProvider(CloudSendProvider,ABC):
                         self.stop_instance(instance)
                     except:
                         pass
-                    if not any_watching:
-                        self.debug(1,"Stopping the fat client (maestro) because all instances have ran the jobs",color=bcolors.WARNING)
-                        os.system("sudo shutdown -h now")
+                    #if not any_watching:
+                    #    self.debug(1,"Stopping the fat client (maestro) because all instances have ran the jobs",color=bcolors.WARNING)
+                    #    os.system("sudo shutdown -h now")
 
         except Exception as e:
             # make sure we catch any exception and unlock those variables
@@ -1322,13 +1362,37 @@ class CloudSendFatProvider(CloudSendProvider,ABC):
 
             if not any_watching:
 
-                await asyncio.sleep( 60 * 60 * 6 ) # wait 6 hours 
+                #await asyncio.sleep( 60 * 60 * 2 ) # wait 2 hours 
+                await asyncio.sleep( 1 ) # wait 1 second (for testing)
+
+                self.debug(1,"Getting results",color=bcolors.WARNING)
+
+                # don't use the cache?
+                await self.fetch_results(DIRECTORY_TMP_AUTO_STOP,run_session,False)
+
+                self.debug(1,"Results auto-fetched",color=bcolors.WARNING)
 
                 for instance in run_session.get_instances():
 
                     self.debug(1,"Terminating instance",instance.get_name(),color=bcolors.WARNING)
 
                     self.terminate_instance(instance)
+
+                # and stopping the fat client
+                self.debug(1,"Stopping the fat client (maestro) because all instances have ran the jobs",color=bcolors.WARNING)
+                
+                os.system("sudo shutdown -h now")
+
+                # let it do its job
+                await asyncio.sleep(2)
+
+                break
+
+            else:            
+                
+                #await asyncio.sleep( SLEEP_PERIOD )
+                await asyncio.sleep( 1 )
+
 
     def _get_num_workers(self):
         num_workers = 10
@@ -1350,11 +1414,12 @@ class CloudSendFatProvider(CloudSendProvider,ABC):
         else:
             if wait_state & CloudSendProviderStateWaitMode.WATCH:
                 await self._cancel_watch()
-                # add the auto_stop coroutine
-                #jobs.append( self.__auto_stop_watch_terminate(run_session))
                 # spawn it ...
                 self._watcher_task = asyncio.ensure_future( asyncio.gather( *jobs ) )            
                 self.debug(2,self._watcher_task)
+                # add the auto_stop coroutine
+                self._terminate_task = asyncio.ensure_future(self.__auto_stop_watch_terminate(run_session))
+                self.debug(2,self._terminate_task)
                 self.debug(2,"Watching ...")
             else:
                 asyncio.ensure_future( asyncio.gather( *jobs ) )
@@ -1390,6 +1455,13 @@ class CloudSendFatProvider(CloudSendProvider,ABC):
             try:
                 await self._watcher_task
                 self._watcher_task = None
+            except asyncio.CancelledError:
+                pass
+        if self._terminate_task is not None:
+            self._terminate_task.cancel()
+            try:
+                await self._terminate_task
+                self._terminate_task = None
             except asyncio.CancelledError:
                 pass
 

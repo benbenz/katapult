@@ -12,6 +12,7 @@ import time
 import random
 import shutil
 import asyncssh
+import asyncio
 
 random.seed()
 
@@ -91,17 +92,17 @@ class CloudSendLightProvider(CloudSendProvider,ABC):
 
         if re_init:
             # remove the file
-            await self._exec_command(ssh_conn,'rm -f ' + ready_file )
+            stdout , stderr , ssh_conn , ftp_client = await self._exec_maestro_command_simple(ssh_conn,ftp_client,'rm -f ' + ready_file )
             # make cloudsend dir
-            await self._exec_command(ssh_conn,'mkdir -p ' + files_dir ) 
+            stdout , stderr , ssh_conn , ftp_client = await self._exec_maestro_command_simple(ssh_conn,ftp_client,'mkdir -p ' + files_dir ) 
             # mark it as maestro...
-            await self._exec_command(ssh_conn,'echo "" > ' + maestro_file ) 
+            stdout , stderr , ssh_conn , ftp_client = await self._exec_maestro_command_simple(ssh_conn,ftp_client,'echo "" > ' + maestro_file ) 
             # add manually the 
             if self._config.get('profile'):
                 profile = self._config.get('profile')
                 region  = self.get_region() # we have a profile so this returns the region for this profile
                 aws_config_cmd = "mkdir -p "+aws_dir+" && echo \"[profile "+profile+"]\nregion = " + region + "\noutput = json\" > " + aws_config
-                await self._exec_command(ssh_conn,aws_config_cmd)
+                stdout , stderr , ssh_conn , ftp_client =  await self._exec_maestro_command_simple(ssh_conn,ftp_client,aws_config_cmd)
             # grant its admin rights (we need to be (stopped or) running to be able to do that)
             self.grant_admin_rights(self._maestro)
             # setup auto_stop behavior for maestro
@@ -109,7 +110,7 @@ class CloudSendLightProvider(CloudSendProvider,ABC):
             # deploy CloudSend on the maestro
             await self._deploy_cloudsend(ssh_conn,ftp_client)
             # mark as ready
-            await self._exec_command(ssh_conn,'if [ -f '+activate_file+' ]; then echo "" > '+ready_file+' ; fi')
+            stdout , stderr , ssh_conn , ftp_client = await self._exec_maestro_command_simple(ssh_conn,ftp_client,'if [ -f '+activate_file+' ]; then echo "" > '+ready_file+' ; fi')
 
         # deploy the config to the maestro (every time)
         await self._deploy_config(ssh_conn,ftp_client)
@@ -188,7 +189,7 @@ class CloudSendLightProvider(CloudSendProvider,ABC):
         await self.sftp_put_string(ftp_client,config_filename,json.dumps(config))
         # execute the mkdir_cmd
         if mkdir_cmd:
-            await self._exec_command(ssh_conn,mkdir_cmd)
+            stdout , stderr , ssh_conn , ftp_client = await self._exec_maestro_command_simple(ssh_conn,ftp_client,mkdir_cmd)
         for remote_dir , files_infos in files_to_upload_per_dir.items():
             await ftp_client.chdir(remote_dir)
             for file_info in files_infos:
@@ -342,7 +343,7 @@ class CloudSendLightProvider(CloudSendProvider,ABC):
         waitmaestro_sh = self._get_remote_files_path( 'waitmaestro.sh' )
         cmd = waitmaestro_sh+" 1" # 1 = with tail log
 
-        stdout , stderr = await self._exec_command(ssh_conn,cmd)      
+        stdout , stderr , ssh_conn , ftp_client = await self._exec_maestro_command_simple(ssh_conn,None,cmd)      
 
         try:
             async for line in stdout:
@@ -359,6 +360,27 @@ class CloudSendLightProvider(CloudSendProvider,ABC):
         #         break
         #     self.debug(1,l,end='')
 
+    async def _exec_maestro_command_simple(self,ssh_conn,ftp_client,command_line):
+        if ssh_conn is None:
+            instanceid , ssh_conn , ftp_client = await self._wait_and_connect(self._maestro)
+        retrys = 0 
+        while True:
+            try:
+                stdout,stderr = await self._exec_command(ssh_conn,command_line)      
+                return stdout,stderr,ssh_conn,ftp_client
+            except (OSError, asyncssh.Error) as e:
+                retrys += 1
+                if retrys<5:
+                    self.debug(1,"Retrying ...",color=bcolors.WARNING)
+                    self.debug(2,"Retrying command",maestro_command,color=bcolors.WARNING)
+                    await asyncio.sleep(10)
+                    instanceid , ssh_conn , ftp_client = await self._wait_and_connect(self._maestro)
+                    await self._run_server(ssh_conn)
+                else:
+                    self.debug(1,"Enough Retries",e,color=bcolors.FAIL)
+                    break     
+        return None,None,ssh_conn,ftp_client 
+
     async def _exec_maestro_command(self,maestro_command,args=None):
 
         the_command = make_client_command(maestro_command,args)
@@ -366,34 +388,48 @@ class CloudSendLightProvider(CloudSendProvider,ABC):
         if self.ssh_conn is None:
             instanceid , self.ssh_conn , self.ftp_client = await self._wait_and_connect(self._maestro)
         
-        private_ip = self._maestro.get_ip_addr_priv()
-
         # -u for no buffering
         waitmaestro_sh = self._get_remote_files_path( 'waitmaestro.sh' )
         venv_python    = self._maestro.path_join( self._get_cloudsend_dir() , '.venv' , 'maestro' , 'bin' , 'python3' )
 
         cmd = "cd "+self._get_cloudsend_dir()+ " && "+waitmaestro_sh+" && sudo "+venv_python+" -u -m cloudsend.maestroclient " + the_command
 
-        stdout , stderr = await self._exec_command(self.ssh_conn,cmd)
+        retrys = 0 
 
-        try:
-            async for line in stdout:
-                if not line:
-                    break
-                # kinda dirty ... 
-                if line.startswith(STREAM_RESULT):
-                    line = line.replace(STREAM_RESULT,'')
-                    line = line.strip()
-                    self.debug(2,"Got RESULT",line,color=bcolors.OKCYAN)
-                    return line # result is printed last...
+        while True:
+            try:
+                stdout , stderr = await self._exec_command(self.ssh_conn,cmd)    
+                try:
+                    async for line in stdout:
+                        if not line:
+                            break
+                        # kinda dirty ... 
+                        if line.startswith(STREAM_RESULT):
+                            line = line.replace(STREAM_RESULT,'')
+                            line = line.strip()
+                            self.debug(2,"Got RESULT",line,color=bcolors.OKCYAN)
+                            return line # result is printed last...
+                        else:
+                            self.debug(1,line,end='')
+                except asyncssh.misc.ConnectionLost:
+                    pass
+                except StopAsyncIteration:
+                    pass
+                except:
+                    pass
+                
+                break
+            except (OSError, asyncssh.Error):
+                retrys += 1
+                if retrys<5:
+                    await asyncio.sleep(10)
+                    self.debug(1,"Retrying _exec_maestro_command",cmd,color=bcolors.WARNING)
+                    instanceid , self.ssh_conn , self.ftp_client = await self._wait_and_connect(self._maestro)
+                    await self._run_server(self.ssh_conn)
                 else:
-                    self.debug(1,line,end='')
-        except asyncssh.misc.ConnectionLost:
-            pass
-        except StopAsyncIteration:
-            pass
-        except:
-            pass
+                    self.debug(1,"Enough tries _exec_maestro_command",color=bcolors.FAIL)
+                    break
+
 
         return None
 
@@ -529,9 +565,10 @@ class CloudSendLightProvider(CloudSendProvider,ABC):
             out_dir = os.path.join(os.getcwd(),out_dir)
         shutil.rmtree(out_dir, ignore_errors=True)    
 
-        homedir     = self._maestro.get_home_dir()
-        maestro_dir = self._maestro.path_join( homedir , "cloudsend_tmp_fetch" )
-        await self._exec_maestro_command("clear_results_dir",maestro_dir)
+        if self._maestro:
+            homedir     = self._maestro.get_home_dir()
+            maestro_dir = self._maestro.path_join( homedir , "cloudsend_tmp_fetch" )
+            await self._exec_maestro_command("clear_results_dir",maestro_dir)
 
 
     async def fetch_results(self,out_dir='./tmp',run_session=None,use_cached=True):
@@ -574,8 +611,8 @@ class CloudSendLightProvider(CloudSendProvider,ABC):
         session_out_dir_remote = await self._exec_maestro_command("fetch_results",maestro_dir)
 
         # get the tar file of the results
-        instanceid , ssh_conn , ftp_client = await self._wait_and_connect(self._maestro)
-        stdout,stderr = await self._exec_command(ssh_conn,"cd " + session_out_dir_remote + " && tar -cvf "+maestro_tar_path+" .")      
+        stdout , stderr , ssh_conn , ftp_client = await self._exec_maestro_command_simple(None,None,"cd " + session_out_dir_remote + " && tar -cvf "+maestro_tar_path+" .")
+
         stdout_str = await stdout.read()
         stderr_str = await stderr.read()
         self.debug(1,stdout_str) 
@@ -589,7 +626,7 @@ class CloudSendLightProvider(CloudSendProvider,ABC):
 
         # cleanup
         os.remove(local_tar_path)
-        stdout,stderr = await self._exec_command(ssh_conn,"rm -rf "+session_out_dir_remote+" "+maestro_tar_path)
+        stdout , stderr , ssh_conn , ftp_client = await self._exec_maestro_command_simple(ssh_conn,ftp_client,"rm -rf "+session_out_dir_remote+" "+maestro_tar_path)
 
         # close
         #ftp_client.close()

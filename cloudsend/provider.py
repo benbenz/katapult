@@ -17,6 +17,8 @@ ARGS_SEP         = '__,__'
 STREAM_RESULT    = '__RESULT__:'
 PROVIDER_CONFIG  = 'state.config.json'
 
+DIRECTORY_TMP_AUTO_STOP = './tmp-auto_stop'
+
 class CloudSendProvider(ABC):
 
     def __init__(self, conf=None):
