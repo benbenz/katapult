@@ -1,5 +1,5 @@
 from cloudsend import provider as cs
-from cloudsend.provider import COMMAND_ARGS_SEP , ARGS_SEP
+from cloudsend.provider import COMMAND_ARGS_SEP , ARGS_SEP , STREAM_RESULT
 import asyncio , os , sys , time
 from cloudsend.core import CloudSendProcessState , bcolors
 import traceback
@@ -9,7 +9,6 @@ import asyncio
 
 HOST = 'localhost' #'0.0.0.0' #127.0.0.1' 
 PORT = 5000
-
 
 async def mainloop(ctxt):
 
@@ -194,7 +193,9 @@ class ServerContext:
 
             elif command == 'run':
 
-                await self.cs_client.run()
+                run_session = await self.cs_client.run()
+
+                print(STREAM_RESULT+str(run_session.get_number()))
             
             elif command == 'wait':
 
@@ -216,11 +217,23 @@ class ServerContext:
 
                 await self.cs_client.print_objects()
 
+            elif command == 'clear_results_dir':
+
+                if args and len(args)>0:
+                    directory = args[0].strip()
+                    await self.cs_client.clear_results_dir(directory)
+                else:
+                    await self.cs_client.clear_results_dir()
+
             elif command == 'fetch_results':
 
-                if args:
+                if args and len(args)>0:
                     directory = args[0].strip()
-                    await self.cs_client.fetch_results(directory)
+                    out_dir = await self.cs_client.fetch_results(directory)
+                else:
+                    out_dir = await self.cs_client.fetch_results()
+                
+                print(STREAM_RESULT+str(out_dir))
 
             elif command == 'finalize':
                 

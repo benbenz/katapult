@@ -1,6 +1,6 @@
 
 from abc import ABC , abstractmethod
-from cloudsend.provider import CloudSendProvider , line_buffered , make_client_command
+from cloudsend.provider import CloudSendProvider , line_buffered , make_client_command , STREAM_RESULT
 from cloudsend.core import *
 import copy , io
 from zipfile import ZipFile
@@ -30,6 +30,7 @@ class CloudSendLightProvider(CloudSendProvider,ABC):
     def _init(self,conf):
         self.ssh_conn   = None
         self.ftp_client = None
+        self._current_session = None
         super()._init(conf)
         self._load()
     
@@ -379,13 +380,22 @@ class CloudSendLightProvider(CloudSendProvider,ABC):
             async for line in stdout:
                 if not line:
                     break
-                self.debug(1,line,end='')
+                # kinda dirty ... 
+                if line.startswith(STREAM_RESULT):
+                    line = line.replace(STREAM_RESULT,'')
+                    line = line.strip()
+                    self.debug(2,"Got RESULT",line,color=bcolors.OKCYAN)
+                    return line # result is printed last...
+                else:
+                    self.debug(1,line,end='')
         except asyncssh.misc.ConnectionLost:
             pass
         except StopAsyncIteration:
             pass
         except:
             pass
+
+        return None
 
         # for l in await line_buffered(stdout):
         #     if not l:
@@ -482,7 +492,11 @@ class CloudSendLightProvider(CloudSendProvider,ABC):
 
     async def run(self):
         # triggers maestro::run
-        await self._exec_maestro_command("run")
+        run_session_rank = await self._exec_maestro_command("run")
+        if run_session_rank is not None:
+            run_session_rank = int(run_session_rank)
+            self._current_session = CloudSendRunSession(run_session_rank)
+        return self._current_session
 
     async def wakeup(self):
         await self.start()
@@ -509,48 +523,79 @@ class CloudSendLightProvider(CloudSendProvider,ABC):
         # triggers maestro::print_objects
         await self._exec_maestro_command("print_objects")
 
-    async def fetch_results(self,out_dir,run_session=None):
+    async def clear_results_dir(self,out_dir='./tmp') :
+
+        if not os.path.isabs(out_dir):
+            out_dir = os.path.join(os.getcwd(),out_dir)
+        shutil.rmtree(out_dir, ignore_errors=True)    
+
+        homedir     = self._maestro.get_home_dir()
+        maestro_dir = self._maestro.path_join( homedir , "cloudsend_tmp_fetch" )
+        await self._exec_maestro_command("clear_results_dir",maestro_dir)
+
+
+    async def fetch_results(self,out_dir='./tmp',run_session=None,use_cached=True):
+
+        # out_dir is local
+        if not os.path.isabs(out_dir):
+            out_dir = os.path.join(os.getcwd(),out_dir)
+
+        if not run_session:
+            run_session = self._current_session
+
+        if not run_session:
+            self.debug(1,"No session to fetch",color=bcolors.WARNING)
+            return None
+
+        session_out_dir  = self._get_session_out_dir(out_dir,run_session)
+
+        # we've already fetched the results (possibly from the watcher process)
+        if use_cached and os.path.exists(session_out_dir):
+            return session_out_dir
 
         try:
             #os.rmdir(out_dir)
-            shutil.rmtree(out_dir, ignore_errors=True)
+            shutil.rmtree(session_out_dir, ignore_errors=True)
         except:
             pass
         try:
-            os.makedirs(out_dir)
+            os.makedirs(session_out_dir)
         except:
             pass
 
         randnum          = str(random.randrange(1000))
         homedir          = self._maestro.get_home_dir()
-        maestro_dir      = self._maestro.path_join( homedir , "cloudsend_tmp_fetch" + randnum )
+        maestro_dir      = self._maestro.path_join( homedir , "cloudsend_tmp_fetch" ) #+ randnum )
         maestro_tar_file = "maestro"+randnum+".tar"
         maestro_tar_path = self._maestro.path_join( homedir , maestro_tar_file )
+        session_out_dir_remote = self._get_session_out_dir(maestro_dir,run_session,self._maestro)
 
         # fetch the results on the maestro
-        await self._exec_maestro_command("fetch_results",maestro_dir)
+        session_out_dir_remote = await self._exec_maestro_command("fetch_results",maestro_dir)
 
         # get the tar file of the results
         instanceid , ssh_conn , ftp_client = await self._wait_and_connect(self._maestro)
-        stdout,stderr = await self._exec_command(ssh_conn,"cd " + maestro_dir + " && tar -cvf "+maestro_tar_path+" .")      
+        stdout,stderr = await self._exec_command(ssh_conn,"cd " + session_out_dir_remote + " && tar -cvf "+maestro_tar_path+" .")      
         stdout_str = await stdout.read()
         stderr_str = await stderr.read()
         self.debug(1,stdout_str) 
         self.debug(2,stderr_str) 
-        local_tar_path = os.path.join(out_dir,maestro_tar_file)
+        local_tar_path = os.path.join(session_out_dir,maestro_tar_file)
         await ftp_client.chdir( homedir )
         await ftp_client.get( maestro_tar_file , local_tar_path )
 
         # untar
-        os.system("tar -xvf "+local_tar_path+" -C "+out_dir)
+        os.system("tar -xvf "+local_tar_path+" -C "+session_out_dir)
 
         # cleanup
         os.remove(local_tar_path)
-        stdout,stderr = await self._exec_command(ssh_conn,"rm -rf "+maestro_dir+" "+maestro_tar_path)
+        stdout,stderr = await self._exec_command(ssh_conn,"rm -rf "+session_out_dir_remote+" "+maestro_tar_path)
 
         # close
         #ftp_client.close()
         ssh_conn.close()
+
+        return session_out_dir
 
     async def finalize(self):
         # triggers maestro::print_aborted_logs

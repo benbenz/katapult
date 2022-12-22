@@ -77,14 +77,14 @@ class CloudSendInstanceState(IntFlag):
 
 class CloudSendProcessState(IntFlag):
 #    FOO = 100
-    UNKNOWN   = 0
+    UNKNOWN   = 64 # set != 0 otherwise it may test positive when watching
     WAIT      = 1  # waiting for bootstraping
     QUEUE     = 2  # queued (for sequential scripts)
     IDLE      = 4  # script about to start
     RUNNING   = 8  # script running
     DONE      = 16 # script has completed
     ABORTED   = 32 # script has been aborted
-    ANY       = 32 + 16 + 8 + 4 + 2 + 1 
+    ANY       = 64 + 32 + 16 + 8 + 4 + 2 + 1 
 
 class CloudSendPlatform(IntFlag):
     LINUX       = 1
@@ -633,6 +633,18 @@ class CloudSendRunSession():
     def mark_aborted(self,instance,state_mask):
         for batch in self._batches:
             batch.mark_aborted(instance,state_mask)
+
+    # get the instances this RunSession has ran on
+    def get_instances(self):
+        instances = dict()
+        # scan all the processes in order of the batches ...
+        for batch in self._batches:
+            for process in batch.get_processes():
+                dpl_job  = process.get_job()
+                instance = dpl_job.get_instance()
+                instances[instance] = instance 
+        
+        return instances.values()
 
 
 class CloudSendBatch():

@@ -49,7 +49,7 @@ async def mainloop(cs_client,reset=False):
 
     print("\n== FETCH RESULTS ==\n")
 
-    await cs_client.fetch_results(os.path.join(os.getcwd(),'tmp'))
+    await cs_client.fetch_results()
 
     await cs_client.finalize()
 
@@ -73,8 +73,13 @@ async def waitloop(cs_client):
 
     print("\n== FETCH RESULTS ==\n")
 
-    await cs_client.fetch_results(os.path.join(os.getcwd(),'tmp'))
+    # clear the cache
+    await cs_client.clear_results_dir()
 
+    await cs_client.fetch_results()
+
+    # we have to wait for the watcher daemon here
+    # otherwise the program will exit and the daemon will have a CancelledError 
     await cs_client.finalize()
 
     print("\n== DONE ==\n")        

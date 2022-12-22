@@ -353,7 +353,7 @@ class CloudSendFatProvider(ABC):
     def print_aborted_logs(self,run_session=None,instance=None):
 
     # fetch results data
-    def fetch_results(self,out_directory,run_session=None):
+    def fetch_results(self,out_directory=None,run_session=None):
 
     # wait for the watcher process to be completely done (useful for demo)
     def finalize(self):

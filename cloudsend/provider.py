@@ -14,6 +14,7 @@ import asyncssh
 
 COMMAND_ARGS_SEP = '__:__'
 ARGS_SEP         = '__,__'
+STREAM_RESULT    = '__RESULT__:'
 PROVIDER_CONFIG  = 'state.config.json'
 
 class CloudSendProvider(ABC):
@@ -433,6 +434,12 @@ class CloudSendProvider(ABC):
 
     def _get_remote_file(self,file):
         return self._get_resource_file(os.sep.join(('remote_files',file)))
+    
+    def _get_session_out_dir(self,out_dir,run_session,instance=None):
+        if not instance:
+            return os.path.join(out_dir,'session-'+str(run_session.get_number()))        
+        else:
+            return instance.path_join(out_dir,'session-'+str(run_session.get_number()))        
 
     def get_key_filename(self,profile_name,region):
         userid = profile_name
@@ -618,7 +625,11 @@ class CloudSendProvider(ABC):
         pass
 
     @abstractmethod
-    async def fetch_results(self,directory,run_session=None):
+    async def clear_results_dir(self,directory='./tmp'):
+        pass
+
+    @abstractmethod
+    async def fetch_results(self,directory='./tmp',run_session=None,use_cached=True):
         pass
 
     @abstractmethod

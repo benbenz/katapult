@@ -828,6 +828,8 @@ class CloudSendFatProvider(CloudSendProvider,ABC):
 
             # run the new session
             await self._run(self._current_session)
+        
+        return self._current_session
 
     async def _run(self,run_session,instance_filter=None,except_done=False,do_init=True):
 
@@ -938,28 +940,44 @@ class CloudSendFatProvider(CloudSendProvider,ABC):
         elif not self._state & CloudSendProviderState.ASSIGNED:
             return 'assign'
         else:
-            return ''        
+            return ''  
 
-    async def fetch_results(self,out_dir,run_session=None):
+    async def clear_results_dir(self,out_dir='./tmp') :
+
+        if not os.path.isabs(out_dir):
+            out_dir = os.path.join(os.getcwd(),out_dir)
+
+        shutil.rmtree(out_dir, ignore_errors=True)            
+
+    async def fetch_results(self,out_dir='./tmp',run_session=None,use_cached=True):
+
+        if not os.path.isabs(out_dir):
+            out_dir = os.path.join(os.getcwd(),out_dir)
 
         if not run_session:
             run_session = self._current_session
 
         if not run_session:
             self.debug(1,"No result to fetch",color=bcolors.WARNING)
-            return 
+            return None
+
+        session_out_dir = self._get_session_out_dir(out_dir,run_session)
 
         #processes = self.get_last_processes()
         processes = run_session.get_ran_processes()
 
         clients   = dict()
 
+        # we've already fetched the results (possibly from the watcher process)
+        if use_cached and os.path.exists(session_out_dir):
+            return session_out_dir
+
         try:
-            shutil.rmtree(out_dir, ignore_errors=True)
+            shutil.rmtree(session_out_dir, ignore_errors=True)
         except:
             pass
         try:
-            os.makedirs(out_dir)
+            os.makedirs(session_out_dir)
         except:
             pass
 
@@ -992,7 +1010,7 @@ class CloudSendFatProvider(CloudSendProvider,ABC):
             file_name , file_extension = os.path.splitext(out_file)
             file_name = file_name.replace(os.sep,'_')
             #ftp_client.chdir(directory)
-            local_path = os.path.join(out_dir,'job_'+str(rank).zfill(3)+'_'+file_name+file_extension)
+            local_path = os.path.join(session_out_dir,'job_'+str(rank).zfill(3)+'_'+file_name+file_extension)
             await ftp_client.chdir( directory )
             try:
                 await ftp_client.get( filename , local_path )   
@@ -1003,6 +1021,8 @@ class CloudSendFatProvider(CloudSendProvider,ABC):
         for client in clients.values():
             #client['ftp'].close()
             client['ssh'].close()
+
+        return session_out_dir
 
     async def finalize(self):
         if self._watcher_task:
@@ -1260,12 +1280,12 @@ class CloudSendFatProvider(CloudSendProvider,ABC):
             self.serialize_state()
 
             if wait_mode & CloudSendProviderStateWaitMode.WATCH:
-                self._instances_watching[instance.get_name()] = False            
+                self._instances_watching[instance.get_name()] = False        
                 any_watching = any( self._instances_watching.values() )
                 debug(2,self._instances_watching)
 
                 if not any_watching:
-                    self.debug(1,"WATCHING has ended")
+                    self.debug(1,"WATCHING has ended",color=bcolors.OKCYAN)
                     run_session.deactivate()
                     # we mark it specifically as IDLE so we know it's been ran once ... (could be useful)
                     self.set_state(  (CloudSendProviderState.IDLE | self._state) & (CloudSendProviderState.ANY - CloudSendProviderState.WATCHING - CloudSendProviderState.RUNNING) )
@@ -1294,6 +1314,22 @@ class CloudSendFatProvider(CloudSendProvider,ABC):
                 self._instances_reviving[instance_name] = False
             raise e
 
+    async def __auto_stop_watch_terminate( self , run_session ):
+
+        while True:
+
+            any_watching = any( self._instances_watching.values() )
+
+            if not any_watching:
+
+                await asyncio.sleep( 60 * 60 * 6 ) # wait 6 hours 
+
+                for instance in run_session.get_instances():
+
+                    self.debug(1,"Terminating instance",instance.get_name(),color=bcolors.WARNING)
+
+                    self.terminate_instance(instance)
+
     def _get_num_workers(self):
         num_workers = 10
         if self._instances:
@@ -1314,6 +1350,8 @@ class CloudSendFatProvider(CloudSendProvider,ABC):
         else:
             if wait_state & CloudSendProviderStateWaitMode.WATCH:
                 await self._cancel_watch()
+                # add the auto_stop coroutine
+                #jobs.append( self.__auto_stop_watch_terminate(run_session))
                 # spawn it ...
                 self._watcher_task = asyncio.ensure_future( asyncio.gather( *jobs ) )            
                 self.debug(2,self._watcher_task)
