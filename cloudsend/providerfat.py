@@ -575,6 +575,8 @@ class CloudSendFatProvider(CloudSendProvider,ABC):
             jobs_can_be_saved = True
             #self.start_instance(instance)
             await self._wait_for_instance(instance)
+            # we also may have to re-deploy (if the instance stopped during WAIT / deployment phase)
+            await self._deploy_all(instance)
         else:
             # try restarting it
             self._start_and_update_instance(instance)
@@ -586,9 +588,9 @@ class CloudSendFatProvider(CloudSendProvider,ABC):
         if run_session: 
             await self._run(run_session,instance,jobs_can_be_saved) #will run the jobs for this instance
 
-    def _mark_aborted(self,run_session,instance,state_mask):
+    def _mark_aborted(self,run_session,instance,state_mask,reason=None):
         if run_session:
-            run_session.mark_aborted(instance,state_mask) # mark ABORTED 
+            run_session.mark_aborted(instance,state_mask,reason) # mark ABORTED 
 
     async def get_log(self,process,ssh_conn):
         uid   = process.get_uid()
@@ -1172,10 +1174,10 @@ class CloudSendFatProvider(CloudSendProvider,ABC):
         if run_session:
             if instance.get_state() & (CloudSendInstanceState.STOPPING | CloudSendInstanceState.STOPPED) :
                 # mark any type of process as aborted, but DONE
-                self._mark_aborted(run_session,instance,CloudSendProcessState.ANY - CloudSendProcessState.DONE) 
+                self._mark_aborted(run_session,instance,CloudSendProcessState.ANY - CloudSendProcessState.DONE,"instance stopped") 
             elif instance.get_state() & (CloudSendInstanceState.TERMINATING | CloudSendInstanceState.TERMINATED):
                 # mark any type of process as aborted
-                self._mark_aborted(run_session,instance,CloudSendProcessState.ANY) 
+                self._mark_aborted(run_session,instance,CloudSendProcessState.ANY,"instance terminated") 
             if do_revive:
                 await self._revive(run_session,instance)
         ssh_conn = await self._connect_to_instance(instance)
@@ -1364,7 +1366,8 @@ class CloudSendFatProvider(CloudSendProvider,ABC):
                 # this helps with the demo which runs a wait() and a get() sequentially ...
                 if self._auto_stop:
                     try:
-                        await asyncio.sleep(60*1)  # wait 1 min so demo works smoothly
+                        # wait 2 mins so the demo works smoothly 
+                        await asyncio.sleep(60*2)
                     except asyncio.CancelledError as cerr:
                         raise cerr
                     try:
@@ -1389,7 +1392,7 @@ class CloudSendFatProvider(CloudSendProvider,ABC):
 
             any_watching = any( self._instances_watching.values() )
 
-            if not any_watching:
+            if not any_watching and self._auto_stop:
 
                 await asyncio.sleep( 60 * 60 * 2 ) # wait 2 hours 
                 #await asyncio.sleep( 1 ) # wait 1 second (for testing)

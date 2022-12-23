@@ -550,6 +550,7 @@ class CloudSendProcess():
         self._batch = batch
         self._state = CloudSendProcessState.UNKNOWN
         self._active = True
+        self._aborted_reason = None
         self._job.attach_process(self)
      
     def get_uid(self):
@@ -577,6 +578,9 @@ class CloudSendProcess():
     def set_state(self,value):
         self._state = value
 
+    def set_aborted_reason(self,reason):
+        self._aborted_reason = reason 
+
     def set_pid(self,value):
         self._pid = value 
 
@@ -585,9 +589,15 @@ class CloudSendProcess():
 
     def str_simple(self):
         if self._batch:
-            return "CloudSendProcess: UID = {0} , PID = {1} , BATCH = {2} , STATE = {3}".format(self._uid,str(self._pid).rjust(5),self._batch.get_uid(),self._state.name)
+            if self._aborted_reason:
+                return "CloudSendProcess: UID = {0} , PID = {1} , BATCH = {2} , STATE = {3} ({4})".format(self._uid,str(self._pid).rjust(5),self._batch.get_uid(),self._state.name,self._aborted_reason)
+            else:
+                return "CloudSendProcess: UID = {0} , PID = {1} , BATCH = {2} , STATE = {3}".format(self._uid,str(self._pid).rjust(5),self._batch.get_uid(),self._state.name)
         else:
-            return "CloudSendProcess: UID = {0} , PID = {1} , STATE = {2}".format(self._uid,str(self._pid).rjust(5),self._state.name)
+            if self._aborted_reason:
+                return "CloudSendProcess: UID = {0} , PID = {1} , STATE = {2} ({3})".format(self._uid,str(self._pid).rjust(5),self._state.name,self._aborted_reason)
+            else:
+                return "CloudSendProcess: UID = {0} , PID = {1} , STATE = {2}".format(self._uid,str(self._pid).rjust(5),self._state.name)
 
     def __repr__(self):
         return "CloudSendProcess: job = {0} , UID = {1} , PID = {2} , STATE = {3}".format(self._job,self._uid,str(self._pid).rjust(5),self._state.name)
@@ -639,9 +649,9 @@ class CloudSendRunSession():
         for batch in self._batches:
             batch.deactivate_processes(instance)
 
-    def mark_aborted(self,instance,state_mask):
+    def mark_aborted(self,instance,state_mask,reason=None):
         for batch in self._batches:
-            batch.mark_aborted(instance,state_mask)
+            batch.mark_aborted(instance,state_mask,reason)
 
     # get the instances this RunSession has ran on
     def get_instances(self):
@@ -711,10 +721,12 @@ class CloudSendBatch():
                     process.deactivate()
 
     # mark the currently active process as ABORTED
-    def mark_aborted(self,instance,state_mask):
+    def mark_aborted(self,instance,state_mask,reason=None):
         for process in self.get_active_processes(instance):
             if process.get_state() & state_mask:
                 process.set_state(CloudSendProcessState.ABORTED)
+                if reason:
+                    process.set_aborted_reason(reason)
 
 def init_instance_name(instance_config):
     
