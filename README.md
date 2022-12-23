@@ -441,6 +441,8 @@ await provider.fetch_results('./tmp')
 
 Note: the commands below work the same way, whether CloudSend runs locally or remotely
 
+### with Poetry
+
 ```bash
 # init the client with global params and add instances, envs and jobs (if any)
 poetry run cli init config.py
@@ -458,6 +460,27 @@ poetry run cli wait
 poetry run cli fetch_results
  # shutdown the daemon
 poetry run cli shutdown
+```
+
+### with virtualenv
+
+```bash
+# init the client with global params and add instances, envs and jobs (if any)
+python3 -m cloudsend.cli init config.py
+# add more jobs
+python3 -m cloudsend.cli cfg_add_jobs config_jobs.py
+# add more stuff
+python3 -m cloudsend.cli cfg_add_config config_more.py
+# deploy the material onto the instances
+python3 -m cloudsend.cli deploy
+# run the jobs
+python3 -m cloudsend.cli run
+# wait for the jobs to be done
+python3 -m cloudsend.cli wait
+# get the results
+python3 -m cloudsend.cli fetch_results
+ # shutdown the daemon
+python3 -m cloudsend.cli shutdown
 ```
 
 # Contributing
