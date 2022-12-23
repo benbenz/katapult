@@ -1,11 +1,12 @@
 [tool.poetry]
 name = "cloudsend"
-version = "0.4.15"
+version = "0.4.16"
 description = "CloudSend is a Python package that allows you to run any script on a cloud service (for now AWS only)."
 authors = ["Your Name <you@example.com>"]
 license = "MIT"
 readme = "README.md"
 repository = "https://github.com/benbenz/cloudsend"
+include = ["requirements.txt"]
 
 [tool.poetry.dependencies]
 protobuf = "^3.20"
