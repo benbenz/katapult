@@ -52,14 +52,14 @@ def aws_retrieve_keypair(session,region,keypair_name,key_filename):
     except ClientError as e:
         errmsg = str(e)
         if 'InvalidKeyPair.NotFound' in errmsg:
-            if aws_create_keypair(session,region,keypair_name,key_filename):
-                return True # created
+            keypair , kcreated = aws_create_keypair(session,region,keypair_name,key_filename)
+            return kcreated # created
 
     # delete / create instead ... 
     # ISSUE: this will invalidate clients on other computers ... 
     ec2_client.delete_key_pair(KeyName=keypair_name,KeyPairId=keypairs['KeyPairs'][0]['KeyPairId'])
-    aws_create_keypair(session,region,keypair_name,key_filename)
-    return True
+    keypair , kcreated = aws_create_keypair(session,region,keypair_name,key_filename)
+    return kcreated
 
     # this is sadly not working: ec2.KeyPair returns a KeyPairInfo and not a KeyPair ... :/
     # TODO: make code commented below work
@@ -83,16 +83,19 @@ def aws_create_keypair(session,region,keypair_name,key_filename):
     #keypair_name = cs_keypairName + '-' + region
 
     if not os.path.exists(key_filename):
-        debug(1,"Key not found locally. Resetting remote KeyPair first")
+        debug(1,"Key not found locally. Resetting remote KeyPair first",keypair_name,key_filename)
         try:
             keypairs = ec2_client.describe_key_pairs(KeyNames=[keypair_name])
             ec2_client.delete_key_pair(KeyName=keypair_name,KeyPairId=keypairs['KeyPairs'][0]['KeyPairId'])
         except ClientError as e:
             errmsg = str(e)
             if 'InvalidKeyPair.NotFound' in errmsg:
-                debug(1,"KeyPair not existing remotely. All good.")
+                debug(1,"KeyPair not existing remotely. All good.",keypair_name)
+        except Exception as ee:
+            pass
 
     keypair = None
+    created = False
     try:
         keypair = ec2_client.create_key_pair(
             KeyName=keypair_name,
@@ -127,6 +130,7 @@ def aws_create_keypair(session,region,keypair_name,key_filename):
                 pemfile.close()
                 os.chmod(fpath, 0o600) # change permission to use with ssh (for debugging)
                 debug(2,keypair)
+                created = True
 
             except ClientError as e2: # the keypair probably exists already
                 errmsg2 = str(e2)
@@ -135,20 +139,21 @@ def aws_create_keypair(session,region,keypair_name,key_filename):
                     keypairs = ec2_client.describe_key_pairs( KeyNames= [keypair_name] )
                     keypair  = keypairs['KeyPairs'][0] 
                     debug(2,keypair)
+                    created = False
                 else:
                     debug(1,"An unknown error occured while retrieving the KeyPair")
                     debug(2,errmsg2)
                     #sys.exit()
+                    created = False
                     raise CloudSendError()
-
-        
         else:
             debug(1,"An unknown error occured while creating the KeyPair")
             debug(2,errmsg)
             #sys.exit()
+            created = False
             raise CloudSendError()
     
-    return keypair 
+    return keypair , created 
 
 def aws_find_or_create_default_vpc(session,region):
     ec2_client = session.client("ec2")
@@ -543,7 +548,7 @@ def aws_create_instance(session,instance_config,vpc,subnet,secGroup,keypair_name
 
 def aws_create_instance_objects(session,instance_config,keypair_name,key_filename):
     region   = instance_config.get('region')
-    keypair  = aws_create_keypair(session,region,keypair_name,key_filename)
+    keypair , kcreated = aws_create_keypair(session,region,keypair_name,key_filename)
     vpc      = aws_create_vpc(session,region,instance_config.get('cloud_id')) 
     secGroup = aws_create_security_group(session,region,vpc)
     subnet   = aws_create_subnet(session,region,vpc) 
@@ -848,7 +853,8 @@ class AWSCloudSendProviderImpl():
         keypair_name = self.get_keypair_name(self._profile_name,region)
         key_filename = self.get_key_filename(self._profile_name,region)
         session = self.get_session(region)
-        aws_create_keypair(session,region,keypair_name,key_filename)
+        keypair , kcreated = aws_create_keypair(session,region,keypair_name,key_filename)
+        return kcreated
 
     def create_instance_objects(self,config):
         keypair_name = self.get_keypair_name(self._profile_name,config.get('region'))
@@ -910,7 +916,7 @@ class AWSCloudSendFatProvider(CloudSendFatProvider,AWSCloudSendProviderImpl):
         return AWSCloudSendProviderImpl.retrieve_keypair(self,region)
 
     def create_keypair(self,region):
-        AWSCloudSendProviderImpl.create_keypair(self,region)
+        return AWSCloudSendProviderImpl.create_keypair(self,region)
 
     def create_instance_objects(self,config):
         return AWSCloudSendProviderImpl.create_instance_objects(self,config)
@@ -961,7 +967,7 @@ class AWSCloudSendLightProvider(CloudSendLightProvider,AWSCloudSendProviderImpl)
         return AWSCloudSendProviderImpl.retrieve_keypair(self,region)
 
     def create_keypair(self,region):
-        AWSCloudSendProviderImpl.create_keypair(self,region)
+        return AWSCloudSendProviderImpl.create_keypair(self,region)
 
     def create_instance_objects(self,config):
         return AWSCloudSendProviderImpl.create_instance_objects(self,config)

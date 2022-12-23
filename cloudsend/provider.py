@@ -269,17 +269,16 @@ class CloudSendProvider(ABC):
                     self.debug(1,"The key seems to have changed for instance {0}. Recreating instance.".format(instance.get_name()),color=bcolors.WARNING)
                     await self.hard_reset_instance(instance)
                     await self._wait_for_instance(instance) 
-                else:
+                    retrys_key += 1
+                    self.debug(1,"Retrying ...")
+                elif retrys_key == 1:
                     # we tried to refresh the instance but it did not work
                     # this means the remote key stored in AWS, doesnt match the local .pem private key
                     # refresh it ...
                     await self._refresh_instance_key(instance,True) 
+                    retrys_key += 1
+                    self.debug(1,"Retrying ...")
 
-                self.debug(1,"Retrying ...")
-                retrys_key = retrys_key + 1
-                if retrys_key > 5:
-                    self.debug(1,"Too many retrys",color=bcolors.WARNING)
-                    break
             except Exception as cexc:
                 # check whats going on
                 self.update_instance_info(instance)
