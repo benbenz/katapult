@@ -905,12 +905,7 @@ class CloudSendFatProvider(CloudSendProvider,ABC):
         processes = self._get_processes(identifier)
 
         # organize processes by instance
-        instances_processes = dict()
-        for p in processes:
-            instance = p.get_instance()
-            if instance not in instances_processes:
-                instances_processes[instance] = []
-            instances_processes[instance].append(p)
+        instances_processes = self._get_instances_processes(processes)
 
         # actually kill the processes on the runners
         jobs = []
@@ -1079,11 +1074,6 @@ class CloudSendFatProvider(CloudSendProvider,ABC):
             self.debug(1,"Failed finding session results",color=bcolors.FAIL)
             return None
 
-        #processes = self.get_last_processes()
-        processes = run_session.get_ran_processes()
-
-        clients   = dict()
-
         try:
             shutil.rmtree(session_out_dir, ignore_errors=True)
         except:
@@ -1093,6 +1083,30 @@ class CloudSendFatProvider(CloudSendProvider,ABC):
         except:
             pass
 
+        #processes = self.get_last_processes()
+        processes = run_session.get_ran_processes()
+
+        # organize processes per instance
+        instances_processes = self._get_instances_processes(processes)
+
+        # parallelize
+        jobs = []
+        for instance , i_processes in instances_processes.items():
+            jobs.append( self._fetch_results( instance , i_processes , session_out_dir) )
+        
+        await asyncio.gather( *jobs )
+
+        return session_out_dir
+
+
+    async def _fetch_results(self,instance,processes,session_out_dir):
+
+        instanceid , ssh_conn , ftp_client = await self._wait_and_connect(instance)
+
+        if not ssh_conn:
+            self.debug(1,"Skipping instance",instance.get_name(),"(unreachable)",color=bcolors.WARNING)
+            return
+
         for process in processes:
 
             if process.get_state() != CloudSendProcessState.DONE and process.get_state() != CloudSendProcessState.ABORTED:
@@ -1101,18 +1115,6 @@ class CloudSendFatProvider(CloudSendProvider,ABC):
             dpl_job  = process.get_job()
             rank     = dpl_job.get_rank()
             instance = dpl_job.get_instance()
-
-            if not instance.get_name() in clients:
-                clients[instance.get_name()] = dict()
-                instanceid , ssh_conn , ftp_client = await self._wait_and_connect(instance)
-                if ssh_conn is not None:
-                    #ftp_client = await ssh_conn.start_sftp_client()
-                    clients[instance.get_name()] = { 'ssh': ssh_conn , 'ftp' : ftp_client}
-                else:
-                    self.debug(1,"Skipping instance",instance.get_name(),"(unreachable)",color=bcolors.WARNING)
-            else:
-                ssh_conn = clients[instance.get_name()]['ssh']
-                ftp_client = clients[instance.get_name()]['ftp']
             
             retrys = 0 
             while True:
@@ -1148,21 +1150,13 @@ class CloudSendFatProvider(CloudSendProvider,ABC):
                     if retrys < 5:
                         await asyncio.sleep(10)
                         instanceid , ssh_conn , ftp_client = await self._wait_and_connect(instance)
-                        if ssh_conn is not None:
-                            #ftp_client = await ssh_conn.start_sftp_client()
-                            clients[instance.get_name()] = { 'ssh': ssh_conn , 'ftp' : ftp_client}
-                        else:
+                        if ssh_conn is None:
                             self.debug(1,"Fetch results: could not wait for instance",instance.get_name(),color=bcolors.FAIL)
-                            break
                     else:
                         self.debug(1,"Enough retries. Stop fetching results",color=bcolors.FAIL)
-                        break
+                        return
         
-        for client in clients.values():
-            #client['ftp'].close()
-            client['ssh'].close()
-
-        return session_out_dir
+        ssh_conn.close()
 
     async def finalize(self):
         if self._watcher_task:
@@ -1274,6 +1268,15 @@ class CloudSendFatProvider(CloudSendProvider,ABC):
             self._instances_reviving[instance.get_name()] = False 
 
         return ssh_conn 
+
+    def _get_instances_processes(self,processes):
+        instances_processes = dict()
+        for p in processes:
+            instance = p.get_instance()
+            if instance not in instances_processes:
+                instances_processes[instance] = []
+            instances_processes[instance].append(p)
+        return instances_processes
 
     def _compute_jobs_info(self,processes):
         jobsinfo = ""
@@ -1451,8 +1454,9 @@ class CloudSendFatProvider(CloudSendProvider,ABC):
                 # this helps with the demo which runs a wait() and a get() sequentially ...
                 if self._auto_stop:
                     try:
-                        # wait 1 mins so the demo works smoothly 
-                        await asyncio.sleep(60*1)
+                        # wait 5 mins so the demo works smoothly 
+                        # and so the user has time thinking and typing stuff in the CLI as well
+                        await asyncio.sleep(60*5)
                     except asyncio.CancelledError as cerr:
                         raise cerr
                     try:
