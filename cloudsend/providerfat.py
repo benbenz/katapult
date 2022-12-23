@@ -9,7 +9,7 @@ from io import BytesIO
 import csv , io
 import pkg_resources
 from cloudsend.core import *
-from cloudsend.provider import CloudSendProvider , CloudSendProviderState , debug , PROVIDER_CONFIG , DIRECTORY_TMP_AUTO_STOP
+from cloudsend.provider import CloudSendProvider , CloudSendProviderState , debug , PROVIDER_CONFIG , DIRECTORY_TMP_AUTO_STOP , DIRECTORY_TMP
 from cloudsend.config_state import ConfigManager , StateSerializer , STATE_FILE
 from enum import IntFlag
 from threading import current_thread
@@ -943,7 +943,10 @@ class CloudSendFatProvider(CloudSendProvider,ABC):
         else:
             return ''  
 
-    async def clear_results_dir(self,out_dir='./tmp') :
+    async def clear_results_dir(self,out_dir=None) :
+
+        if out_dir is None:
+            out_dir = DIRECTORY_TMP
 
         if not os.path.isabs(out_dir):
             out_dir = os.path.join(os.getcwd(),out_dir)
@@ -954,7 +957,10 @@ class CloudSendFatProvider(CloudSendProvider,ABC):
         shutil.rmtree(out_dir2, ignore_errors=True)   
         
 
-    async def fetch_results(self,out_dir='./tmp',run_session=None,use_cached=True):
+    async def fetch_results(self,out_dir=None,run_session=None,use_cached=True):
+
+        if out_dir is None:
+            out_dir = DIRECTORY_TMP
 
         if not os.path.isabs(out_dir):
             out_dir = os.path.join(os.getcwd(),out_dir)
@@ -968,21 +974,28 @@ class CloudSendFatProvider(CloudSendProvider,ABC):
 
         session_out_dir = self._get_session_out_dir(out_dir,run_session)
 
-        #processes = self.get_last_processes()
-        processes = run_session.get_ran_processes()
-
-        clients   = dict()
-
         # we've already fetched the results
         if use_cached and os.path.exists(session_out_dir):
             return session_out_dir
 
-        # we may have fetched in the auto_stop dir already ...
+        # we've already fetched the results with the auto_stop functionality ...
         auto_dir = self._get_session_out_dir(DIRECTORY_TMP_AUTO_STOP,run_session)
         if not os.path.isabs(auto_dir):
             auto_dir = os.path.join(os.getcwd(),auto_dir)
         if use_cached and os.path.exists(auto_dir):
             return auto_dir
+
+        # special case - we may reach this point with a shallow CloudSendRunSessionProxy object
+        # this is to allow the FatClient to search the cache (see above)
+        # but we cant go further than that
+        if isinstance(run_session,CloudSendRunSessionProxy):
+            self.debug(1,"Failed finding session results",color=bcolors.FAIL)
+            return None
+
+        #processes = self.get_last_processes()
+        processes = run_session.get_ran_processes()
+
+        clients   = dict()
 
         try:
             shutil.rmtree(session_out_dir, ignore_errors=True)
@@ -1069,6 +1082,22 @@ class CloudSendFatProvider(CloudSendProvider,ABC):
             await self._watcher_task
             # while not self._watcher_task.done():
             #     await asyncio.sleep(SLEEP_PERIOD)
+
+    # this method fetched a "real" RunSession object in memory
+    # this is used especially when we use the light client to control a fat client
+    # a proxied session is used (shallow object with only an ID and a number)
+    # and we need to retrieve a true connected object in memory 
+    def get_run_session( self , session_number , session_id ):
+        for session in self._run_sessions:
+            if session.get_id() == session_id and session.get_number() == session_number:
+                return session
+        return None
+
+    def get_instance( self , instance_name ):
+        for instance in self._instances:
+            if instance.get_name() == instance_name:
+                return instance
+        return None
 
     def _get_ln_command(self,dpl_job,uid):
         files_to_ln = []
@@ -1362,8 +1391,8 @@ class CloudSendFatProvider(CloudSendProvider,ABC):
 
             if not any_watching:
 
-                #await asyncio.sleep( 60 * 60 * 2 ) # wait 2 hours 
-                await asyncio.sleep( 1 ) # wait 1 second (for testing)
+                await asyncio.sleep( 60 * 60 * 2 ) # wait 2 hours 
+                #await asyncio.sleep( 1 ) # wait 1 second (for testing)
 
                 self.debug(1,"Getting results",color=bcolors.WARNING)
 
@@ -1390,8 +1419,8 @@ class CloudSendFatProvider(CloudSendProvider,ABC):
 
             else:            
                 
-                #await asyncio.sleep( SLEEP_PERIOD )
-                await asyncio.sleep( 1 )
+                await asyncio.sleep( SLEEP_PERIOD )
+                #await asyncio.sleep( 1 )
 
 
     def _get_num_workers(self):

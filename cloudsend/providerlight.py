@@ -1,6 +1,6 @@
 
 from abc import ABC , abstractmethod
-from cloudsend.provider import CloudSendProvider , line_buffered , make_client_command , STREAM_RESULT
+from cloudsend.provider import CloudSendProvider , line_buffered , make_client_command , STREAM_RESULT, DIRECTORY_TMP
 from cloudsend.core import *
 import copy , io
 from zipfile import ZipFile
@@ -528,10 +528,12 @@ class CloudSendLightProvider(CloudSendProvider,ABC):
 
     async def run(self):
         # triggers maestro::run
-        run_session_rank = await self._exec_maestro_command("run")
-        if run_session_rank is not None:
-            run_session_rank = int(run_session_rank)
-            self._current_session = CloudSendRunSession(run_session_rank)
+        run_session_number_id = await self._exec_maestro_command("run")
+        if run_session_number_id is not None:
+            values = run_session_number_id.split(' ')            
+            run_session_number = int(values[0])
+            run_session_id     = values[1]
+            self._current_session = self.get_run_session(run_session_number,run_session_id)
         return self._current_session
 
     async def wakeup(self):
@@ -540,26 +542,50 @@ class CloudSendLightProvider(CloudSendProvider,ABC):
         await self._exec_maestro_command("wakeup")
 
     async def wait(self,job_state,run_session=None):
+        if run_session is not None:
+            args = [ int(job_state) , run_session.get_number() , run_session.get_id() ]
+        else:
+            args = [ int(job_state) ]
         # triggers maestro::wait
-        await self._exec_maestro_command("wait")
+        await self._exec_maestro_command("wait",args)
 
     async def get_jobs_states(self,run_session=None):
+        if run_session is not None:
+            args = [ run_session.get_number() , run_session.get_id() ]
+        else:
+            args = None
         # triggers maestro::get_jobs_states
-        await self._exec_maestro_command("get_states")
+        await self._exec_maestro_command("get_states",args)
 
     async def print_jobs_summary(self,run_session=None,instance=None):
+        if run_session is not None:
+            args = [ run_session.get_number() , run_session.get_id() ]
+        else:
+            args = []
+        if instance is not None:
+            args.append(instance.get_name())
+
         # triggers maestro::print_jobs_summary
-        await self._exec_maestro_command("print_summary")
+        await self._exec_maestro_command("print_summary",args)
 
     async def print_aborted_logs(self,run_session=None,instance=None):
+        if run_session is not None:
+            args = [ run_session.get_number() , run_session.get_id() ]
+        else:
+            args = []
+        if instance is not None:
+            args.append(instance.get_name())
         # triggers maestro::print_aborted_logs
-        await self._exec_maestro_command("print_aborted")
+        await self._exec_maestro_command("print_aborted",args)
 
     async def print_objects(self):
         # triggers maestro::print_objects
         await self._exec_maestro_command("print_objects")
 
-    async def clear_results_dir(self,out_dir='./tmp') :
+    async def clear_results_dir(self,out_dir=None) :
+
+        if out_dir is None:
+            out_dir = DIRECTORY_TMP
 
         if not os.path.isabs(out_dir):
             out_dir = os.path.join(os.getcwd(),out_dir)
@@ -571,7 +597,10 @@ class CloudSendLightProvider(CloudSendProvider,ABC):
             await self._exec_maestro_command("clear_results_dir",maestro_dir)
 
 
-    async def fetch_results(self,out_dir='./tmp',run_session=None,use_cached=True):
+    async def fetch_results(self,out_dir=None,run_session=None,use_cached=True):
+
+        if out_dir is None:
+            out_dir = DIRECTORY_TMP
 
         # out_dir is local
         if not os.path.isabs(out_dir):
@@ -608,7 +637,8 @@ class CloudSendLightProvider(CloudSendProvider,ABC):
         session_out_dir_remote = self._get_session_out_dir(maestro_dir,run_session,self._maestro)
 
         # fetch the results on the maestro
-        session_out_dir_remote = await self._exec_maestro_command("fetch_results",maestro_dir)
+        args = [ maestro_dir , run_session.get_number() , run_session.get_id() ]
+        session_out_dir_remote = await self._exec_maestro_command("fetch_results",args)
 
         # get the tar file of the results
         stdout , stderr , ssh_conn , ftp_client = await self._exec_maestro_command_simple(None,None,"cd " + session_out_dir_remote + " && tar -cvf "+maestro_tar_path+" .")
@@ -665,5 +695,11 @@ class CloudSendLightProvider(CloudSendProvider,ABC):
     # needed by CloudSendProvider::_wait_for_instance 
     def serialize_state(self):
         pass
+
+    def get_run_session(self,session_number,session_id):
+        return CloudSendRunSessionProxy( session_number , session_id )
+
+    def get_instance(self,instance_name):
+        return CloudSendInstanceProxy( instance_name )
 
 

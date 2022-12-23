@@ -18,6 +18,7 @@ STREAM_RESULT    = '__RESULT__:'
 PROVIDER_CONFIG  = 'state.config.json'
 
 DIRECTORY_TMP_AUTO_STOP = './tmp-auto_stop'
+DIRECTORY_TMP = './tmp'
 
 class CloudSendProvider(ABC):
 
@@ -438,10 +439,11 @@ class CloudSendProvider(ABC):
         return self._get_resource_file(os.sep.join(('remote_files',file)))
     
     def _get_session_out_dir(self,out_dir,run_session,instance=None):
+        file_name = 'session-'+str(run_session.get_number())+'-'+run_session.get_id()
         if not instance:
-            return os.path.join(out_dir,'session-'+str(run_session.get_number()))        
+            return os.path.join(out_dir,file_name)        
         else:
-            return instance.path_join(out_dir,'session-'+str(run_session.get_number()))        
+            return instance.path_join(out_dir,file_name)        
 
     def get_key_filename(self,profile_name,region):
         userid = profile_name
@@ -596,7 +598,15 @@ class CloudSendProvider(ABC):
         config['environments'] = []
         config['jobs']         = []
 
-        self._init(config)        
+        self._init(config)  
+
+    @abstractmethod
+    async def get_run_session(self,session_number,session_id):
+        pass
+
+    @abstractmethod
+    async def get_instance(self,instance_name):
+        pass
 
     @abstractmethod
     async def deploy(self):
@@ -627,11 +637,11 @@ class CloudSendProvider(ABC):
         pass
 
     @abstractmethod
-    async def clear_results_dir(self,directory='./tmp'):
+    async def clear_results_dir(self,directory=None):
         pass
 
     @abstractmethod
-    async def fetch_results(self,directory='./tmp',run_session=None,use_cached=True):
+    async def fetch_results(self,directory=None,run_session=None,use_cached=True):
         pass
 
     @abstractmethod

@@ -247,7 +247,8 @@ def compute_job_hash(job_config):
     return hash[0:12]
 
 def generate_unique_id():
-    return str(uuid.uuid4())
+    #return str(uuid.uuid4())
+    return uuid.uuid4().hex # a little simpler ...
 
 def compute_job_command(instance,script_dir,job_config):
     script_command = ''

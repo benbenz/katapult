@@ -295,6 +295,11 @@ class CloudSendInstance():
         # return "{0}: ID = {1} , NAME = {2} , IP = {3} , CPUS = {4}".format(type(self).__name__,self._id,self._name,self._ip_addr,self.get_cpus())
         return "{0}: NAME = {1} , IP = {2}".format(type(self).__name__,self._name,self._ip_addr)
 
+class CloudSendInstanceProxy(CloudSendInstance):
+
+    def __init__(self,name):
+        self._name = name
+
 
 class CloudSendEnvironment():
 
@@ -595,6 +600,7 @@ class CloudSendRunSession():
 
     def __init__(self,number):
         self._number  = number 
+        self._id      = cloudsendutils.generate_unique_id()
         self._batches = []
 
     def create_batch(self):
@@ -611,6 +617,9 @@ class CloudSendRunSession():
 
     def get_number(self):
         return self._number
+
+    def get_id(self):
+        return self._id
 
     # return the processes that have been run for each job
     # (kinda last_processes but through a different view point)
@@ -646,6 +655,11 @@ class CloudSendRunSession():
         
         return instances.values()
 
+class CloudSendRunSessionProxy(CloudSendRunSession):
+
+    def __init__(self,number,session_id):
+        self._number = number
+        self._id     = session_id
 
 class CloudSendBatch():
 
