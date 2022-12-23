@@ -5,8 +5,10 @@ import psutil
 import subprocess
 import multiprocessing 
 import time
+import copy
 from cloudsend.maestroserver import main as server_main
 from cloudsend.maestroclient import maestro_client
+from cloudsend.provider import COMMAND_ARGS_SEP , ARGS_SEP
 
 # if [[ $(ps aux | grep "cloudsend.maestroserver" | grep -v 'grep') ]] ; then
 #     echo "CloudSend server already running"
@@ -84,9 +86,16 @@ def main():
         print("python3 -m cloudsend.cli CMD [ARGS]")
         sys.exit()
 
-    command = sys.argv[1]
+    args = copy.deepcopy(sys.argv)
+    args.pop(0) #trash
+    command = args.pop(0)
+    
+    if len(args)>0:
+        the_command =  COMMAND_ARGS_SEP.join( [ command , COMMAND_ARGS_SEP.join(args) ] )
+    else:
+        the_command = command
 
-    cli(command)
+    cli(the_command)
 
 
 if __name__ == '__main__':     

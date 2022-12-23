@@ -170,6 +170,7 @@ class ServerContext:
                 await self.cs_client.start(reset)
 
             elif command == 'cfg_add_instances':
+                config = None
                 if args and len(args)==1:
                     config = args[0]
                 else:
@@ -179,6 +180,7 @@ class ServerContext:
                 await self.cs_client.cfg_add_instances(config)
 
             elif command == 'cfg_add_environments':
+                config = None
                 if args and len(args)==1:
                     config = args[0]
                 else:
@@ -188,6 +190,7 @@ class ServerContext:
                 await self.cs_client.cfg_add_environments(config)
 
             elif command == 'cfg_add_jobs':
+                config = None
                 if args and len(args)==1:
                     config = args[0]
                 else:
@@ -197,6 +200,7 @@ class ServerContext:
                 await self.cs_client.cfg_add_jobs(config)
 
             elif command == 'cfg_add_config':
+                config = None
                 if args and len(args)==1:
                     config = json.loads( args[0] )
                 else:
