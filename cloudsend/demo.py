@@ -34,7 +34,7 @@ async def mainloop(cs_client,reset=False):
     # run the scripts and get a process back
     run_session = await cs_client.run()
 
-    await cs_client.kill( run_session.get_id() )
+    #await cs_client.kill( run_session.get_id() )
 
     print("\n== WAIT ==\n")
 
