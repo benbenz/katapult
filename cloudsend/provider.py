@@ -617,6 +617,10 @@ class CloudSendProvider(ABC):
         pass
 
     @abstractmethod
+    async def kill(self,identifier):
+        pass
+
+    @abstractmethod
     async def wait(self,job_state,run_session=None):
         pass
 

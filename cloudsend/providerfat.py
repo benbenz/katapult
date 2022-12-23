@@ -197,7 +197,7 @@ class CloudSendFatProvider(CloudSendProvider,ABC):
 
             # change dir to global dir (should be done once)
             await ftp_client.chdir(global_path)
-            for file in ['config.py','bootstrap.sh','run.sh','microrun.sh','state.sh','tail.sh','getpid.sh','reset.sh']:
+            for file in ['config.py','bootstrap.sh','run.sh','microrun.sh','state.sh','tail.sh','getpid.sh','reset.sh','kill.sh']:
                 await self.sftp_put_remote_file(ftp_client,file) 
 
             self.debug(1,"Installing PyYAML for newly created instance ...")
@@ -592,6 +592,13 @@ class CloudSendFatProvider(CloudSendProvider,ABC):
         if run_session:
             run_session.mark_aborted(instance,state_mask,reason) # mark ABORTED 
 
+    def _mark_aborted_processes(self,processes,state_mask,reason=None):
+        for p in processes:
+            if p.get_state() & state_mask:
+                p.set_state(CloudSendProcessState.ABORTED)
+                if reason:
+                    p.set_aborted_reason(reason)
+
     async def get_log(self,process,ssh_conn):
         uid   = process.get_uid()
         job   = process.get_job() # dpl job
@@ -752,9 +759,9 @@ class CloudSendFatProvider(CloudSendProvider,ABC):
             cmd_run_pre = cmd_run_pre + "rm -f " + pid_file + " && "
             cmd_run_pre = cmd_run_pre + "mkdir -p " + run_path + " && "
             if is_first: # first sequential script is waiting for bootstrap to be done by default
-                cmd_run_pre = cmd_run_pre + "echo 'wait' > " + state_file + "\n"
+                cmd_run_pre = cmd_run_pre + "echo 'wait(40)' > " + state_file + "\n"
             else: # all other scripts will be queued
-                cmd_run_pre = cmd_run_pre + "echo 'queue' > " + state_file + "\n"
+                cmd_run_pre = cmd_run_pre + "echo 'queue(40)' > " + state_file + "\n"
 
             uid = process.get_uid()
 
@@ -868,6 +875,84 @@ class CloudSendFatProvider(CloudSendProvider,ABC):
         #       not sure why but this causes the GatheringFuture to fail
         await self._ensure_watch()
 
+    def _get_processes(self,identifier):
+        parent = None
+        # try sessions
+        for session in self._run_sessions:
+            if session.get_id() == identifier:
+                return session.get_active_processes()
+
+        # try batches
+        for session in self._run_sessions:
+            batch = session.get_batch(identifier)
+            if batch:
+                return batch.get_active_processes()
+        # try jobs
+        for job in self._jobs:
+            if job.get_hash() == identifier:
+                return job.get_active_processes()
+        # try processes
+        for session in self._run_sessions:
+            for process in session.get_active_processes():
+                if process.get_uid() == identifier:
+                    return [ process ]
+        
+        return None
+
+    async def kill(self,identifier):
+
+        # get the processes under the identifier umbrella
+        processes = self._get_processes(identifier)
+
+        # organize processes by instance
+        instances_processes = dict()
+        for p in processes:
+            instance = p.get_instance()
+            if instance not in instances_processes:
+                instances_processes[instance] = []
+            instances_processes[instance].append(p)
+
+        # actually kill the processes on the runners
+        jobs = []
+        for instance , i_processes in instances_processes.items():
+            jobs.append( self._kill( instance , i_processes ) )
+        
+        await asyncio.gather( *jobs )
+
+        # mark all the process aborted (except the ones that finished - too late to kill them)
+        self._mark_aborted_processes(processes,CloudSendProcessState.ANY - CloudSendProcessState.DONE,'killed')
+
+    
+    async def _kill(self, instance, processes):
+
+        instanceid,ssh_conn,ftp_client = await self._wait_and_connect(instance)
+
+        # nothing to kill
+        if not processes or len(processes)==0:
+            return 
+    
+        global_path = instance.get_global_dir()
+        kill_sh     = instance.path_join( global_path , 'kill.sh' )
+        processinfo = " ".join( [ p.get_uid() for p in processes ] )
+        cmd         =  kill_sh + " " + processinfo
+        
+        self.debug(2,"PROCESSES sent for kill.sh",processes)
+        self.debug(2,"Executing command",cmd)
+        
+        attempts = 0 
+        while True:
+            try:
+                stdout, stderr = await self._exec_command(ssh_conn,cmd)
+                break
+            except (OSError, asyncssh.Error):
+                self.debug(1,"SSH connection error while sending kill.sh command")
+                ssh_conn = await self._handle_instance_disconnect(None,instance,False,"could not kill processes for instance. SSH connection lost with")
+                if ssh_conn is None:
+                    return 
+                attempts += 1
+            if attempts > 5:
+                self.debug(1,"TOO MANY ATTEMPTS",color=bcolors.FAIL)
+                return 
 
     def print_jobs_summary(self,run_session=None,instance=None):
         if not self._state & CloudSendProviderState.STARTED:
@@ -1366,8 +1451,8 @@ class CloudSendFatProvider(CloudSendProvider,ABC):
                 # this helps with the demo which runs a wait() and a get() sequentially ...
                 if self._auto_stop:
                     try:
-                        # wait 2 mins so the demo works smoothly 
-                        await asyncio.sleep(60*2)
+                        # wait 1 mins so the demo works smoothly 
+                        await asyncio.sleep(60*1)
                     except asyncio.CancelledError as cerr:
                         raise cerr
                     try:
@@ -1375,9 +1460,6 @@ class CloudSendFatProvider(CloudSendProvider,ABC):
                         self.stop_instance(instance)
                     except:
                         pass
-                    #if not any_watching:
-                    #    self.debug(1,"Stopping the fat client (maestro) because all instances have ran the jobs",color=bcolors.WARNING)
-                    #    os.system("sudo shutdown -h now")
 
         except Exception as e:
             # make sure we catch any exception and unlock those variables

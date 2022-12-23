@@ -19,14 +19,21 @@ run_path="$HOME/run/$env_name/$job_hash/$uid"
 pid_file="$run_path/pid"
 cmd_file="$run_path/cmd"
 
+# the job has been marked as cancelled by kill.sh
+if [[ $(grep -s "$uid" $HOME/run/cancelled) ]]; then
+  echo "Job has been cancelled by kill command"
+  echo 'aborted(10)' > $run_path/state # used to check the state of a process
+  exit 1
+fi
+
 # TODO: check if existing PID and PID running ... and throw warning, exit or do something ?
 # we print the mother PID in the PID file (it used to be the one from microrun)
 printf '%s,%s\n' $uid $$ > $pid_file
 
 printf '%s\n%s\n' $thecommand $input_file > $cmd_file
 
-echo 'wait' > $run_path/state # used to check the state of a process
-rm -f output_file
+echo 'wait(20)' > $run_path/state # used to check the state of a process
+rm -f $output_file
 
 waittime=0
 while [[ $(< $env_path/state) != "bootstraped" ]] || ! [ -f $env_path/state ]

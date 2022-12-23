@@ -461,6 +461,15 @@ class CloudSendJob():
                 count = count + 1
         return last_process
 
+    def get_active_processes(self):
+        if not self._deployed or len(self._deployed)==0:
+            return []
+        res = []
+        for dpl_job in self._deployed:
+            for process in dpl_job.get_active_processes():
+                res.append(process)
+        return res
+
     def set_instance(self,instance):
         self._instance = instance
         instance.append_job(self)
@@ -587,6 +596,9 @@ class CloudSendProcess():
     def get_job(self):
         return self._job 
 
+    def get_instance(self):
+        return self._job.get_instance()
+
     def str_simple(self):
         if self._batch:
             if self._aborted_reason:
@@ -664,6 +676,12 @@ class CloudSendRunSession():
                 instances[instance] = instance 
         
         return instances.values()
+
+    def get_batch(self,identifier):
+        for batch in self._batches:
+            if batch.get_uid() == identifier:
+                return batch
+        return None
 
 class CloudSendRunSessionProxy(CloudSendRunSession):
 

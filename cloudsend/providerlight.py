@@ -536,6 +536,10 @@ class CloudSendLightProvider(CloudSendProvider,ABC):
             self._current_session = self.get_run_session(run_session_number,run_session_id)
         return self._current_session
 
+    async def kill(self,identifier):
+        # triggers maestro::kill
+        await self._exec_maestro_command("kill",identifier)
+
     async def wakeup(self):
         await self.start()
         # triggers maestro::wakeup

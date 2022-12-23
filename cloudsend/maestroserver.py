@@ -219,6 +219,12 @@ class ServerContext:
 
                 print(STREAM_RESULT+str(run_session.get_number())+' '+run_session.get_id())
             
+            elif command == 'kill':
+
+                if args and len(args)==1:
+                    identifier = args[0].strip()
+                    await self.cs_client.kill(identifier)
+            
             elif command == 'wait':
 
                 job_state   = CloudSendProcessState.DONE|CloudSendProcessState.ABORTED
