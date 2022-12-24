@@ -198,6 +198,8 @@ class CloudSendLightProvider(CloudSendProvider,ABC):
                     await ftp_client.put(file_info['local'],remote_file)
                 except FileNotFoundError as fnfe:
                     self.debug(1,"You have specified a file that does not exist:",fnfe,color=bcolors.FAIL)
+                except asyncssh.sftp.SFTPNoSuchFile as nsf:
+                    self.debug(1,"You have specified a file that does not exist:",nsf,remote_dir,file_info,color=bcolors.FAIL)
         return config 
 
     def _translate_config_for_maestro(self):
@@ -229,7 +231,7 @@ class CloudSendLightProvider(CloudSendProvider,ABC):
             run_script = job.get_config('run_script')  
             ref_file0  = run_script
             args       = ref_file0.split(' ')
-            if args:
+            if args and len(args)>0:
                 ref_file0 = args[0]
             #for attr,use_ref in [ ('run_script',False) , ('upload_files',True) , ('input_file',True) , ('output_file',True) ] :
             for attr,use_ref in [ ('run_script',False) , ('upload_files',True) , ('input_file',True) ] :
