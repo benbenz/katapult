@@ -56,6 +56,8 @@ async def mainloop(cs_client,reset=False):
 
     await cs_client.fetch_results()
 
+    print("\n== FINALIZE ==\n")
+
     await cs_client.finalize()
 
     print("\n== DONE ==\n")
@@ -82,6 +84,8 @@ async def waitloop(cs_client):
     print("\n== FETCH RESULTS ==\n")
 
     await cs_client.fetch_results()
+
+    print("\n== FINALIZE ==\n")
 
     # we have to wait for the watcher daemon here
     # otherwise the program will exit and the daemon will have a CancelledError 
