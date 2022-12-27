@@ -2,6 +2,7 @@ import hashlib , os , subprocess , json
 import jcs , yaml
 import uuid
 import os
+import re
 from cloudsend.core import K_COMPUTED
 
 # keys used for hash computation
@@ -279,19 +280,15 @@ def resolve_paths(instance,the_file,ref_file,remote_ref_dir,mutualize=True):
         ref_args        = ref_file.split()
         ref_abs_path    = os.path.abspath(ref_args[0])
         ref_abs_dir     = os.path.dirname(ref_abs_path)
-        if os.path.isabs(the_file):
-            local_abs_path   = the_file
-        else:
-            local_abs_path   = os.path.join(ref_abs_dir,the_file)
-        file_abs_dir    = os.path.dirname(local_abs_path)
     else:
         ref_abs_path    = os.path.abspath(os.getcwd())
         ref_abs_dir     = ref_abs_path #os.path.dirname(ref_abs_path)
-        if os.path.isabs(the_file):
-            local_abs_path   = the_file
-        else:
-            local_abs_path   = os.path.join(ref_abs_dir,the_file)
-        file_abs_dir    = os.path.dirname(local_abs_path)
+        
+    if os.path.isabs(the_file):
+        local_abs_path   = the_file
+    else:
+        local_abs_path   = os.path.join(ref_abs_dir,the_file)
+    file_abs_dir    = os.path.dirname(local_abs_path)
     
     # this is a subdir: we have to respect the structure
     if file_abs_dir.startswith(ref_abs_dir):
@@ -317,12 +314,18 @@ def resolve_paths(instance,the_file,ref_file,remote_ref_dir,mutualize=True):
 
     # use the first case if you want to leave stuff in the job's directory
     if not mutualize:
-        remote_abs_path = instance.path_join(remote_ref_dir,rel_path)
-        remote_rel_path = rel_path
+        # convert the rel_path
+        rel_path_ = instance.path_sep().join(rel_path.split(os.sep)) # change separator
+        remote_abs_path = instance.path_join(remote_ref_dir,rel_path_)
+        remote_rel_path = rel_path_
     # use the second case if you want to mutualize uploads
     else:
         remote_abs_path = local_abs_path # always use full path in one target directory
-        if remote_abs_path.startswith(os.sep):
+        # convert it 
+        remote_abs_path = re.sub(r'\s*([a-zA-Z]+):',r'\1',remote_abs_path) # make drive into path  C:\ >> C\ 
+        remote_abs_path = instance.path_sep().join(remote_abs_path.split(os.sep)) # change separator
+
+        if remote_abs_path.startswith(instance.path_sep()):
             remote_abs_path = remote_abs_path[1:] # make relative
         remote_rel_path = remote_abs_path
         remote_abs_path = instance.path_join(remote_ref_dir,remote_abs_path)

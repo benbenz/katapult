@@ -336,7 +336,7 @@ class CloudSendFatProvider(CloudSendProvider,ABC):
             
             mkdir_cmd = ""
             for in_file in input_files:
-                local_path , rel_path , abs_path , rel_remote_path , external = self._resolve_dpl_job_paths(in_file,dpl_job)
+                local_path , local_rel_path , abs_path , rel_remote_path , external = self._resolve_dpl_job_paths(in_file,dpl_job)
                 dirname = instance.path_dirname(abs_path)
                 if dirname:
                     mkdir_cmd = mkdir_cmd + (" && " if mkdir_cmd else "") + "mkdir -p " + dirname 
@@ -384,7 +384,7 @@ class CloudSendFatProvider(CloudSendProvider,ABC):
                     if isinstance( files,str):
                         files = [ files ] 
                     for upfile in files:
-                        local_path , rel_path , abs_path , rel_remote_path , external = self._resolve_dpl_job_paths(upfile,dpl_job)
+                        local_path , local_rel_path , abs_path , rel_remote_path , external = self._resolve_dpl_job_paths(upfile,dpl_job)
                                 
                         # check if the remote path has already been uploaded ...
                         if abs_path in file_uploaded:
@@ -403,7 +403,7 @@ class CloudSendFatProvider(CloudSendProvider,ABC):
                             print(e)
                 if job.get_config('input_file'):
 
-                    local_path , rel_path , abs_path , rel_remote_path , external = self._resolve_dpl_job_paths(job.get_config('input_file'),dpl_job)
+                    local_path , local_rel_path , abs_path , rel_remote_path , external = self._resolve_dpl_job_paths(job.get_config('input_file'),dpl_job)
 
                     if abs_path in file_uploaded:
                         self.debug(2,"skipping upload of file",upfile,"for job#",job.get_rank(),"(file has already been uploaded)")
@@ -1191,10 +1191,10 @@ class CloudSendFatProvider(CloudSendProvider,ABC):
         if dpl_job.get_config('input_file'):
             files_to_ln.append(dpl_job.get_config('input_file'))
         for upfile in files_to_ln:
-            local_path , rel_path , abs_path , rel_remote_path , external = self._resolve_dpl_job_paths(upfile,dpl_job)
+            local_path , local_rel_path , abs_path , rel_remote_path , external = self._resolve_dpl_job_paths(upfile,dpl_job)
             filename    = instance.path_basename(abs_path)
             filedir_abs = instance.path_dirname(abs_path)
-            filedir_rel = instance.path_dirname(rel_path)
+            filedir_rel = instance.path_dirname(rel_remote_path) #local_rel_path)
             if filedir_rel and filedir_rel != instance.path_sep() :
                 fulldir   = instance.path_join(dpl_job.get_path() , uid , filedir_rel)
                 uploaddir = instance.path_join(dpl_job.get_path() , filedir_rel )
