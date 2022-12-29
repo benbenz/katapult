@@ -176,10 +176,12 @@ class CloudSendInstance():
         return self.path_join( self.get_home_dir() , 'run' )
 
     def path_join(self,*args):
-        if self._platform == CloudSendPlatform.LINUX or self._platform == CloudSendPlatform.WINDOWS_WSL:
-            return '/'.join(args)
-        elif self._platform == CloudSendPlatform.WINDOWS:
-            return '\\'.join(args)
+        sep = self.path_sep()
+        first = True
+        fargs = []
+        for arg in args:
+            fargs.append( arg.rstrip(sep) if first else arg.strip(sep) )
+        return sep.join(fargs)
 
     def path_dirname(self,path):
         #return os.path.dirname(path)

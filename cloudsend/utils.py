@@ -316,6 +316,7 @@ def resolve_paths(instance,the_file,ref_file,remote_ref_dir,mutualize=True):
     if not mutualize:
         # convert the rel_path
         rel_path_ = instance.path_sep().join(rel_path.split(os.sep)) # change separator
+        # compose paths
         remote_abs_path = instance.path_join(remote_ref_dir,rel_path_)
         remote_rel_path = rel_path_
     # use the second case if you want to mutualize uploads
@@ -323,8 +324,8 @@ def resolve_paths(instance,the_file,ref_file,remote_ref_dir,mutualize=True):
         remote_abs_path = local_abs_path # always use full path in one target directory
         # convert it 
         remote_abs_path = re.sub(r'\s*([a-zA-Z]+):',r'\1',remote_abs_path) # make drive into path  C:\ >> C\ 
-        remote_abs_path = instance.path_sep().join(remote_abs_path.split(os.sep)) # change separator
-
+        remote_abs_path = remote_abs_path.replace(os.sep,instance.path_sep()) # change separator
+        # compose paths
         if remote_abs_path.startswith(instance.path_sep()):
             remote_abs_path = remote_abs_path[1:] # make relative
         remote_rel_path = remote_abs_path

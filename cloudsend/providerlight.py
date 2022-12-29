@@ -190,6 +190,7 @@ class CloudSendLightProvider(CloudSendProvider,ABC):
         # execute the mkdir_cmd
         if mkdir_cmd:
             stdout , stderr , ssh_conn , ftp_client = await self._exec_maestro_command_simple(ssh_conn,ftp_client,mkdir_cmd)
+            await stdout.read()
         for remote_dir , files_infos in files_to_upload_per_dir.items():
             await ftp_client.chdir(remote_dir)
             for file_info in files_infos:
