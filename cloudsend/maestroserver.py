@@ -73,7 +73,7 @@ class ServerContext:
                 if not cmd_line:
                     break
                 cmd_line = cmd_line.decode('utf-8').strip()
-                print(cmd_line)
+                #print(cmd_line)
 
                 # OLD SERIALIZATION METHOD (cf. provider.py too)
                 # cmd_args = cmd_line.split(COMMAND_ARGS_SEP)

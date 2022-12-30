@@ -395,8 +395,7 @@ class CloudSendLightProvider(CloudSendProvider,ABC):
 
     async def _exec_maestro_command(self,maestro_command,raw_args=None):
 
-        args = None
-
+        # args = None
         # if maestro_command != "init":
         #     if raw_args:
         #         args = []
@@ -410,7 +409,7 @@ class CloudSendLightProvider(CloudSendProvider,ABC):
         # else:
         #     args = raw_args
 
-        args = stream_dump(args)
+        args = stream_dump(raw_args)
 
         the_command = make_client_command(maestro_command,args)
 

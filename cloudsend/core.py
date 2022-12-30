@@ -249,7 +249,7 @@ class CloudSendInstance():
         self._jobs = []
     
     def reset_envs(self):
-        self._envs = []
+        self._envs = dict()
 
     def append_job(self,job):
         for j in self._jobs:
@@ -489,7 +489,7 @@ class CloudSendJob():
         instance.append_job(self)
 
     def str_simple(self):
-        return "{0}: HASH = {1} , ENV = {2}".format(type(self).__name__,self.get_hash(),self.get_env().get_name() if self.get_env() else None)
+        return "{0}: HASH = {1} , ENV = {2}: {3}".format(type(self).__name__,self.get_hash(),self.get_env().get_name() if self.get_env() else None,self.get_config('command'))
 
     def __repr__(self):
         return "{0}: HASH = {1} , INSTANCE = {2} , ENV = {3}".format(type(self).__name__,self.get_hash(),self.get_instance(),self.get_env().get_name() if self.get_env() else None)

@@ -483,16 +483,16 @@ class CloudSendFatProvider(CloudSendProvider,ABC):
 
             except FileNotFoundError as fne:
                 self.debug(1,fne)
-                self.debug(1,"Filename = ",fne.filename)
-                self.debug(1,"Error while deploying")
+                self.debug(1,"File NOT FOUND = ",fne.filename,color=bcolors.FAIL)
+                self.debug(1,"Error while deploying",color=bcolors.FAIL)
                 #sys.exit() # this only kills the thread
                 #os.kill(os.getpid(), signal.SIGINT)
                 os._exit(1)
                 raise fne
 
             except Exception as e:
-                self.debug(1,e)
-                self.debug(1,"Error while deploying")
+                self.debug(1,e,color=bcolors.FAIL)
+                self.debug(1,"Error while deploying",color=bcolors.FAIL)
                 #sys.exit() # this only kills the thread
                 #os.kill(os.getpid(), signal.SIGINT)
                 os._exit(1)
