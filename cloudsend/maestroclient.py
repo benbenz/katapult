@@ -23,7 +23,7 @@ def maestro_client(command):
                             break
                         print(line.strip())
                 except ConnectionResetError as cre:
-                    sock_pipe.readline()
+                    #sock_pipe.readline()
                     #print(line.strip())
                     sock_pipe.flush()
                     sock_pipe.close()
