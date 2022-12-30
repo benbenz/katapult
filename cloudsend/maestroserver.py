@@ -93,7 +93,7 @@ class ServerContext:
                 break # one-shot command
             except ConnectionResetError as cre:
                 try:
-                    sys.stdout = old_stdout
+                    sys.stdout = self.old_stdout
                     print(cre)
                     print("DISCONNECTION")
                 except:
@@ -101,7 +101,7 @@ class ServerContext:
                 break    
             except Exception as e:
                 try:
-                    sys.stdout = old_stdout
+                    sys.stdout = self.old_stdout
                     print(e)
                     traceback.print_exc(e)
                 except:
@@ -153,6 +153,7 @@ class ServerContext:
 
     async def process_command(self,command,args,writer):
         #sock = writer.transport.get_extra_info('socket')
+        
         string_writer = ByteStreamWriter(writer)
         sys.stdout = string_writer
         sys.stderr = string_writer

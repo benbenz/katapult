@@ -825,7 +825,7 @@ def escape_arg_for_send(args):
         args_escaped.append(arg)
     return args_escaped  
 
-def make_client_command(maestro_command,args):
+def make_client_command(maestro_command,args,escape=True):
 
     # OLD SERIALIZATION METHOD (cf. maestroserver.py too)
 
@@ -839,7 +839,9 @@ def make_client_command(maestro_command,args):
 
     if args and not isinstance(args,list):
         args = [ args ]
-    the_command = "\""+json.dumps({'cmd':maestro_command,'args':args}).replace("\"","\\\"")+"\""
+    the_command = json.dumps({'cmd':maestro_command,'args':args})
+    if escape:
+        the_command = "\""+the_command.replace("\"","\\\"")+"\""
 
     return the_command
 

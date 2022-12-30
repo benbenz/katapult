@@ -72,7 +72,7 @@
             "program": "${workspaceFolder}/cloudsend/maestroclient.py",
             "console": "integratedTerminal",
             "cwd": "${workspaceFolder}",
-            "args": ["-u","start"],
+            "args": ["start"],
             "env": {
                 "PYTHONPATH":"${workspaceRoot}:$PYTHONPATH"
             }
@@ -84,7 +84,7 @@
             "program": "${workspaceFolder}/cloudsend/cli.py",
             "console": "integratedTerminal",
             "cwd": "${workspaceFolder}",
-            "args": ["-u","start"],
+            "args": ["start"],
             "env": {
                 "PYTHONPATH":"${workspaceRoot}:$PYTHONPATH"
             }

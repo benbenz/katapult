@@ -8,7 +8,7 @@ import time
 import copy
 from cloudsend.maestroserver import main as server_main
 from cloudsend.maestroclient import maestro_client
-from cloudsend.provider import make_client_command
+from cloudsend.provider import make_client_command , stream_dump  
 
 # if [[ $(ps aux | grep "cloudsend.maestroserver" | grep -v 'grep') ]] ; then
 #     echo "CloudSend server already running"
@@ -79,6 +79,124 @@ def start_server():
         #p.daemon = True
         #p.start()
 
+def cli_translate(command,args):
+    if command == 'init':
+        return args
+
+    elif command == 'wakeup':
+        return args
+
+    elif command == 'start':
+        if not args:
+            return [False]
+        elif len(args)==1:
+            return [args[0].strip().lower() == "true"]
+        else:
+            return [False]
+
+    elif command == 'cfg_add_instances':
+        return args
+
+    elif command == 'cfg_add_environments':
+        return args
+
+    elif command == 'cfg_add_jobs':
+        return args
+
+    elif command == 'cfg_add_config':
+        return args
+
+    elif command == 'cfg_reset':
+        return args
+
+    elif command == 'deploy':
+        return args
+
+    elif command == 'run':
+        return args
+
+    elif command == 'kill':
+        return args
+    
+    elif command == 'wait':
+        new_args = []
+        if args and len(args) >= 1:
+            job_state = int(args[0])
+            new_args.append(job_state)
+        if args and len(args) >= 3:
+            run_session = CloudSendRunSessionProxy( int(args[1]) , args[2] )
+            new_args.append( stream_dump(run_session) )
+        return new_args 
+
+    elif command == 'get_num_active_processes':
+
+        new_args = []
+        if args and len(args) >= 2:
+            run_session = CloudSendRunSessionProxy( int(args[0]) , args[1] )
+            new_args.append( stream_dump(run_session) )
+        return new_args 
+
+    elif command == 'get_num_instances':
+        return args
+
+    elif command == 'get_states':
+        new_args = []
+        if args and len(args) >= 2:
+            run_session = CloudSendRunSessionProxy( int(args[0]) , args[1] )
+            new_args.append( stream_dump(run_session) )
+        return new_args 
+
+    elif command == 'print_summary' or command == 'print':
+        new_args = []
+        if args and len(args) >= 2:
+            run_session = CloudSendRunSessionProxy( int(args[0]) , args[1] )
+            new_args.append( stream_dump(run_session) )
+        if args and len(args) >= 3:
+            instance = CloudSendInstanceProxy( args[2] )
+            new_args.append( stream_dump(instance) )
+        return new_args 
+
+    elif command == 'print_aborted':
+        new_args = []
+        if args and len(args) >= 2:
+            run_session = CloudSendRunSessionProxy( int(args[0]) , args[1] )
+            new_args.append( stream_dump(run_session) )
+        if args and len(args) >= 3:
+            instance = CloudSendInstanceProxy( args[2] )
+            new_args.append( stream_dump(instance) )
+        return new_args 
+        
+    elif command == 'print_objects':
+        return args
+
+    elif command == 'clear_results_dir':
+        return args
+
+    elif command == 'fetch_results':
+
+        new_args = []
+        if args and len(args)>=1:
+            directory = args[0].strip()
+            if directory.lower() == 'none':
+                directory = None
+            new_args.append(directory)
+        if args and len(args)>=3:
+            run_session = CloudSendRunSessionProxy( int(args[1]) , args[2] )
+            new_args.append( stream_dump(run_session) )
+        return new_args
+
+    elif command == 'finalize':
+        return args
+
+    elif command == 'shutdown':
+        return args
+
+    elif command == 'test':
+        return args
+    
+    else:
+        return None
+
 def main():
     multiprocessing.set_start_method('spawn')
 
@@ -89,13 +207,15 @@ def main():
     args = copy.deepcopy(sys.argv)
     args.pop(0) #trash
     command = args.pop(0)
-    
+
+    ser_args = cli_translate(command,args)
     # if len(args)>0:
     #     the_command =  COMMAND_ARGS_SEP.join( [ command , COMMAND_ARGS_SEP.join(args) ] )
     # else:
     #     the_command = command
-    the_command = make_client_command( command , args )
 
+    # lets not escape the command, we're not sending it to a stream
+    the_command = make_client_command( command , ser_args , False)
     cli(the_command)
 
 
