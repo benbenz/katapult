@@ -44,7 +44,7 @@ def is_cloudsend_process(p,name='maestroserver'):
         return False
 
 def cli(command):
-    start_server() # locally we use python to start the server. maximizes the chance to be Windows complatible
+    #start_server() # locally we use python to start the server. maximizes the chance to be Windows complatible
     maestro_client(command)
 
 def start_server():

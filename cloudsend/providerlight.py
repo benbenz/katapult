@@ -182,16 +182,16 @@ class CloudSendLightProvider(CloudSendProvider,ABC):
         self.debug(1,"initialize server with config")
         await self._exec_maestro_command("init","config.json")
 
-    async def _deploy_config(self,ssh_conn,ftp_client,config_filename='config.json',**kwargs):
+    async def _deploy_config(self,ssh_conn,ftp_client,config_filename='config.json'):
 
         config , mkdir_cmd , files_to_upload_per_dir = self._translate_config_for_maestro()
 
         # we can add some keyed arguments to the config ...
         # useful to serialize some arguments between light client and fat client
-        if kwargs and len(kwargs)>0:
-            config['_kwargs'] = dict()
-            for k,v in kwargs.items():
-                config['_kwargs'][k] = stream_dump(v)
+        # if kwargs and len(kwargs)>0:
+        #     config['_kwargs'] = dict()
+        #     for k,v in kwargs.items():
+        #         config['_kwargs'][k] = stream_dump(v)
 
         # serialize the config and send it to the maestro
         await ftp_client.chdir(self._get_cloudsend_dir())
@@ -509,29 +509,30 @@ class CloudSendLightProvider(CloudSendProvider,ABC):
 
     async def _cfg_add_objects(self,conf,coroutine,name,**kwargs):
         # complement self._config
-        await coroutine(conf,kwargs)
+        await coroutine(conf,**kwargs)
         # wait for maestro to be ready
         instanceid , ssh_conn , ftp_client = await self._wait_and_connect(self._maestro)
         # config_name
         config_name = 'config_add-' + cloudsendutils.generate_unique_id() + '.json'
         # deploy the new config to the maestro (every time)
         # (this ensures the deployment of dependent files)
-        translated_config = await self._deploy_config(ssh_conn,ftp_client,config_name,kwargs)
+        translated_config = await self._deploy_config(ssh_conn,ftp_client,config_name)
         # triggers maestro::add_* : use string dump or config file name (either way)
         #await self._exec_maestro_command(name,config_name)
-        return await self._exec_maestro_command(name,translated_config)
+        args = [ translated_config , kwargs ]
+        return await self._exec_maestro_command(name,args)
 
-    async def cfg_add_instances(self,conf):
-        return await self._cfg_add_objects(conf,super().cfg_add_instances,"cfg_add_instances")
+    async def cfg_add_instances(self,conf,**kwargs):
+        return await self._cfg_add_objects(conf,super().cfg_add_instances,"cfg_add_instances",**kwargs)
 
-    async def cfg_add_environments(self,conf):
-        return await self._cfg_add_objects(conf,super().cfg_add_environments,"cfg_add_environments")
+    async def cfg_add_environments(self,conf,**kwargs):
+        return await self._cfg_add_objects(conf,super().cfg_add_environments,"cfg_add_environments",**kwargs)
 
     async def cfg_add_jobs(self,conf,**kwargs):
-        return await self._cfg_add_objects(conf,super().cfg_add_jobs,"cfg_add_jobs",kwargs)
+        return await self._cfg_add_objects(conf,super().cfg_add_jobs,"cfg_add_jobs",**kwargs)
 
     async def cfg_add_config(self,conf,**kwargs):
-        return await self._cfg_add_objects(conf,super().cfg_add_config,"cfg_add_config",kwargs)
+        return await self._cfg_add_objects(conf,super().cfg_add_config,"cfg_add_config",**kwargs)
 
     async def cfg_reset(self):
         # triggers maestro::reset

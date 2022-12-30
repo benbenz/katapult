@@ -343,6 +343,9 @@ class CloudSendEnvironment():
         _env_obj = cloudsendutils.compute_environment_object(self._config)
         return _env_obj 
 
+    def get_hash(self):
+        return self._hash
+
     def json(self):
         return json.dumps(self.get_env_obj())          
 

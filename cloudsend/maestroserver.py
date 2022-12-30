@@ -138,18 +138,6 @@ class ServerContext:
             return None
         return instance
 
-    def load_kwargs(self,config_list_obj):
-
-        config = self.cs_client.resolve_config(config_list_obj)
-
-        if '_kwargs' not in config:
-            return None
-        kwargs = config['_kwargs']
-        result = dict()
-        for k,v in kwargs.items():
-            result[k] = stream_load(self.cs_client,v)
-        return result
-
     def send_result(self,result):
         print(STREAM_RESULT+json.dumps(stream_dump(result)))
 
@@ -196,51 +184,62 @@ class ServerContext:
 
             elif command == 'cfg_add_instances':
                 config = None
-                kwargs = None
-                if args and len(args)==1:
+                kwargs = dict()
+                if args and len(args)>=1:
                     config = args[0]
-                    kwargs = self.load_kwargs(config)
+                elif args and len(args)>=2:
+                    config = args[0]
+                    kwargs = stream_load(self.cs_client,args[1])
                 else:
                     print("Error: you need to send a JSON stream for config")
                     await writer.drain()
                     return
-                added_objects = await self.cs_client.cfg_add_instances(config,kwargs)
+                added_objects = await self.cs_client.cfg_add_instances(config,**kwargs)
                 self.send_result(added_objects)
 
-            elif command == 'cfg_add_environments':
+            elif command == 'cfg_add_en((vironments':
                 config = None
-                if args and len(args)==1:
+                kwargs = dict()
+                if args and len(args)>=1:
                     config = args[0]
-                    kwargs = self.load_kwargs(config)
+                elif args and len(args)>=2:
+                    config = args[0]
+                    kwargs = stream_load(self.cs_client,args[1])
                 else:
                     print("Error: you need to send a JSON stream for config")
                     await writer.drain()
                     return
-                added_objects = await self.cs_client.cfg_add_environments(config,kwargs)
+                added_objects = await self.cs_client.cfg_add_environments(config,**kwargs)
                 self.send_result(added_objects)
 
             elif command == 'cfg_add_jobs':
                 config = None
-                if args and len(args)==1:
+                kwargs = dict()
+                if args and len(args)>=1:
                     config = args[0]
-                    kwargs = self.load_kwargs(config)                    
+                elif args and len(args)>=2:
+                    config = args[0]
+                    kwargs = stream_load(self.cs_client,args[1])
                 else:
                     print("Error: you need to send a JSON stream for config")
                     await writer.drain()
                     return
-                added_objects = await self.cs_client.cfg_add_jobs(config,kwargs)
+                added_objects = await self.cs_client.cfg_add_jobs(config,**kwargs)
                 self.send_result(added_objects)
 
             elif command == 'cfg_add_config':
                 config = None
-                if args and len(args)==1:
+                kwargs = dict()
+                if args and len(args)>=1:
                     config = args[0]
-                    kwargs = self.load_kwargs(config)
+                elif args and len(args)>=2:
+                    config = args[0]
+                    kwargs = stream_load(self.cs_client,args[1])
                 else:
                     print("Error: you need to send a JSON stream for config")
                     await writer.drain()
                     return
-                added_objects = await self.cs_client.cfg_add_config(config,kwargs)
+                added_objects = await self.cs_client.cfg_add_config(config,**kwargs)
                 self.send_result(added_objects)
 
             elif command == 'cfg_reset':

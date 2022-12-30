@@ -86,18 +86,18 @@ class CloudSendFatProvider(CloudSendProvider,ABC):
         self._save_config() 
 
     async def _cfg_add_objects(self,conf,method,**kwargs):
-        await method(conf,kwargs)
+        await method(conf,**kwargs)
         added_objects = self._config_manager.load()
         old_state = self._state
 
         self.set_state( self._state & (CloudSendProviderState.NEW|CloudSendProviderState.STARTED))
         if self._state & CloudSendProviderState.STARTED:
             await self.start()
-        if oldstate & CloudSendProviderState.DEPLOYED:
+        if old_state & CloudSendProviderState.DEPLOYED:
             await self.deploy()
-        elif oldstate & CloudSendProviderState.ASSIGNED:
+        elif old_state & CloudSendProviderState.ASSIGNED:
             await self._assign()
-        if oldstate & CloudSendProviderState.RUNNING:
+        if old_state & CloudSendProviderState.RUNNING:
             if kwargs.get('run_session'):
                 run_session = kwargs['run_session']
             else:
@@ -110,16 +110,16 @@ class CloudSendFatProvider(CloudSendProvider,ABC):
         return added_objects
 
     async def cfg_add_instances(self,conf,**kwargs):
-        return await self._cfg_add_objects(conf,super().cfg_add_instances,kwargs)
+        return await self._cfg_add_objects(conf,super().cfg_add_instances,**kwargs)
 
     async def cfg_add_environments(self,conf,**kwargs):
-        return await self._cfg_add_objects(conf,super().cfg_add_environments,kwargs)
+        return await self._cfg_add_objects(conf,super().cfg_add_environments,**kwargs)
 
     async def cfg_add_jobs(self,conf,**kwargs):
-        return await self._cfg_add_objects(conf,super().cfg_add_jobs,kwargs)
+        return await self._cfg_add_objects(conf,super().cfg_add_jobs,**kwargs)
 
-    async def cfg_add_config(self,conf,run_session=None):
-        return await self._cfg_add_objects(conf,super().cfg_add_config,kwargs)
+    async def cfg_add_config(self,conf,**kwargs):
+        return await self._cfg_add_objects(conf,super().cfg_add_config,**kwargs)
 
     async def cfg_reset(self):
         # remove the state file

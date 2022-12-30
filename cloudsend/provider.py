@@ -584,18 +584,18 @@ class CloudSendProvider(ABC):
             self._save_config()
 
     async def cfg_add_instances(self,config,**kwargs):
-        CloudSendProvider._cfg_add_objects(self,'instances',config,True,kwargs)
+        CloudSendProvider._cfg_add_objects(self,'instances',config,True,**kwargs)
 
     async def cfg_add_environments(self,config,**kwargs):
-        CloudSendProvider._cfg_add_objects(self,'environments',config,True,kwargs)
+        CloudSendProvider._cfg_add_objects(self,'environments',config,True,**kwargs)
 
     async def cfg_add_jobs(self,config,**kwargs):
-        CloudSendProvider._cfg_add_objects(self,'jobs',config,True,kwargs)
+        CloudSendProvider._cfg_add_objects(self,'jobs',config,True,**kwargs)
 
     async def cfg_add_config(self,config,**kwargs):
-        CloudSendProvider._cfg_add_objects(self,'instances',config,False,kwargs)
-        CloudSendProvider._cfg_add_objects(self,'environments',config,False,kwargs)
-        CloudSendProvider._cfg_add_objects(self,'jobs',config,False,kwargs)
+        CloudSendProvider._cfg_add_objects(self,'instances',config,False,**kwargs)
+        CloudSendProvider._cfg_add_objects(self,'environments',config,False,**kwargs)
+        CloudSendProvider._cfg_add_objects(self,'jobs',config,False,**kwargs)
         self._save_config()
 
     async def cfg_reset(self):
