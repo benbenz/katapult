@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "cloudsend"
-version = "0.1.0"
+version = "0.5.6"
 description = "CloudSend is a Python package that allows you to run any script on a cloud service (for now AWS only)."
 authors = ["Your Name <you@example.com>"]
 license = "MIT"
@@ -13,11 +13,14 @@ bcrypt = "3.1.5"
 cryptography =  "3.1.1"
 protobuf = "^3.20"
 boto3 = "1.23.10"
-jcs = "^0.2.1"
+jcs = "^0.2"
 pyyaml = "^6.0"
-paramiko = "^2.12.0"
 asyncssh = "~2.12.0"
 ortools = "9.0.9048"
+scriptflow = {version = "^0.2.5", optional = true}
+
+[tool.poetry.extras]
+scriptflow = ["scriptflow"]
 
 [build-system]
 requires = ["poetry-core"]

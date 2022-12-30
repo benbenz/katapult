@@ -8,7 +8,7 @@ import time
 import copy
 from cloudsend.maestroserver import main as server_main
 from cloudsend.maestroclient import maestro_client
-from cloudsend.provider import COMMAND_ARGS_SEP , ARGS_SEP
+from cloudsend.provider import make_client_command
 
 # if [[ $(ps aux | grep "cloudsend.maestroserver" | grep -v 'grep') ]] ; then
 #     echo "CloudSend server already running"
@@ -90,10 +90,11 @@ def main():
     args.pop(0) #trash
     command = args.pop(0)
     
-    if len(args)>0:
-        the_command =  COMMAND_ARGS_SEP.join( [ command , COMMAND_ARGS_SEP.join(args) ] )
-    else:
-        the_command = command
+    # if len(args)>0:
+    #     the_command =  COMMAND_ARGS_SEP.join( [ command , COMMAND_ARGS_SEP.join(args) ] )
+    # else:
+    #     the_command = command
+    the_command = make_client_command( command , args )
 
     cli(the_command)
 

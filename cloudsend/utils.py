@@ -53,7 +53,6 @@ def update_requirements_path(env_dict,path):
         for k,v in env_dict.items():
             env_dict[k] = update_requirements_path(v,path)
         
-
     elif isinstance(env_dict,list):
         for i,v in enumerate(env_dict):
             env_dict[i] = update_requirements_path(v,path)

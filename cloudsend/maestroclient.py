@@ -24,7 +24,7 @@ def maestro_client(command):
                         print(line.strip())
                 except ConnectionResetError as cre:
                     sock_pipe.readline()
-                    print(line.strip())
+                    #print(line.strip())
                     sock_pipe.flush()
                     sock_pipe.close()
                 except Exception as e:
@@ -43,6 +43,8 @@ def main():
     if len(sys.argv)<2:
         print("python3 -m cloudsend.maestroclient CMD [IP_ADDR]")
         sys.exit()
+
+    #print(sys.argv)
 
     if len(sys.argv)>3:
         ip_addr = sys.argv[len(sys.argv)-1]

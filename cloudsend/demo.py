@@ -41,7 +41,7 @@ async def mainloop(cs_client,reset=False):
     print("Waiting for DONE or ABORTED ...")
     # now that we have 'watch' before 'wait' , this will exit instantaneously
     # because watch includes 'wait' mode intrinsiquely
-    await cs_client.wait(CloudSendProcessState.DONE|CloudSendProcessState.ABORTED)
+    await cs_client.wait(CloudSendProcessState.DONE|CloudSendProcessState.ABORTED,run_session)
 
     print("\n== SUMMARY ==\n")
 

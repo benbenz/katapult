@@ -11,7 +11,6 @@ from enum import IntFlag
 import asyncio
 import asyncssh
 
-
 COMMAND_ARGS_SEP = '__:__'
 ARGS_SEP         = '__,__'
 STREAM_RESULT    = '__RESULT__:'
@@ -442,8 +441,10 @@ class CloudSendProvider(ABC):
         if not instance:
             return os.path.join(out_dir,file_name)        
         else:
-            return instance.path_join(out_dir,file_name)        
+            return instance.path_join(out_dir,file_name)    
 
+    # Cloud Stuff
+          
     def get_key_filename(self,profile_name,region):
         userid = profile_name
         if not userid:
@@ -518,6 +519,12 @@ class CloudSendProvider(ABC):
         pass
 
     @abstractmethod
+    def get_suggested_image(self,region):
+        pass
+
+    # Core API 
+
+    @abstractmethod
     async def wakeup(self):
         pass
 
@@ -529,7 +536,7 @@ class CloudSendProvider(ABC):
         with open(PROVIDER_CONFIG,'w') as config_file:
             config_file.write( json.dumps(self._config,indent=4) )
 
-    def _cfg_add_objects(self,key_name,config_list_obj,save=True):
+    def resolve_config(self,config_list_obj):
         # config could be a file path
         if isinstance(config_list_obj,str) and os.path.isfile(config_list_obj):
             config = get_config(config_list_obj)
@@ -551,6 +558,12 @@ class CloudSendProvider(ABC):
         # other cases
         else:
             config = dict()
+    
+        return config
+
+    def _cfg_add_objects(self,key_name,config_list_obj,save=True,**kwargs):
+
+        config = self.resolve_config(config_list_obj)
 
         self.debug(2,"ADDING objects",config)
         
@@ -562,7 +575,7 @@ class CloudSendProvider(ABC):
             self._config[key_name] = []
 
         for cfg in config[key_name]:
-            cfg[K_LOADED] =False # make sure we mark it as not-loaded
+            cfg[K_LOADED] = False # make sure we mark it as not-loaded
             self._config[key_name].append( cfg )
 
         # no need, this only plays with global vars...
@@ -570,19 +583,19 @@ class CloudSendProvider(ABC):
         if save:
             self._save_config()
 
-    async def cfg_add_instances(self,config):
-        CloudSendProvider._cfg_add_objects(self,'instances',config)
+    async def cfg_add_instances(self,config,**kwargs):
+        CloudSendProvider._cfg_add_objects(self,'instances',config,True,kwargs)
 
-    async def cfg_add_environments(self,config):
-        CloudSendProvider._cfg_add_objects(self,'environments',config)
+    async def cfg_add_environments(self,config,**kwargs):
+        CloudSendProvider._cfg_add_objects(self,'environments',config,True,kwargs)
 
-    async def cfg_add_jobs(self,config):
-        CloudSendProvider._cfg_add_objects(self,'jobs',config)
+    async def cfg_add_jobs(self,config,**kwargs):
+        CloudSendProvider._cfg_add_objects(self,'jobs',config,True,kwargs)
 
-    async def cfg_add_config(self,config):
-        CloudSendProvider._cfg_add_objects(self,'instances',config,False)
-        CloudSendProvider._cfg_add_objects(self,'environments',config,False)
-        CloudSendProvider._cfg_add_objects(self,'jobs',config,False)
+    async def cfg_add_config(self,config,**kwargs):
+        CloudSendProvider._cfg_add_objects(self,'instances',config,False,kwargs)
+        CloudSendProvider._cfg_add_objects(self,'environments',config,False,kwargs)
+        CloudSendProvider._cfg_add_objects(self,'jobs',config,False,kwargs)
         self._save_config()
 
     async def cfg_reset(self):
@@ -607,6 +620,18 @@ class CloudSendProvider(ABC):
     async def get_instance(self,instance_name):
         pass
 
+    @abstractmethod
+    async def get_environment(self,env_hash):
+        pass
+
+    @abstractmethod
+    async def get_job(self,job_rank,job_hash):
+        pass
+
+    @abstractmethod
+    async def get_num_active_processes(self,run_session=None):
+        pass
+        
     @abstractmethod
     async def deploy(self):
         pass
@@ -649,11 +674,59 @@ class CloudSendProvider(ABC):
 
     @abstractmethod
     async def finalize(self):
-        pass
-          
-    @abstractmethod
-    def get_suggested_image(self,region):
-        pass
+        pass 
+
+# COMM between light and fat client
+def stream_dump(obj):
+    if isinstance(obj,list):
+        strdump = []
+        for v in obj:
+            strdump.append(stream_dump(v))
+        return strdump
+    elif isinstance(obj,dict):
+        strdump = {}
+        for k,v in obj.items():
+            strdump[k] = stream_dump(v)
+        return strdump
+    elif isinstance(obj,CloudSendRunSession):
+        return { 'class': type(obj).__name__ , 'number':obj.get_number() , 'id': obj.get_id() }
+    elif isinstance(obj,CloudSendInstance):
+        return { 'class': type(obj).__name__ , 'name':obj.get_name() }
+    elif isinstance(obj,CloudSendEnvironment):
+        return { 'class': type(obj).__name__ , 'hash':obj.get_hash() }
+    elif isinstance(obj,CloudSendJob):
+        return { 'class': type(obj).__name__ , 'rank':obj.get_rank() , 'hash':obj.get_hash() }
+    else:
+        return obj      
+
+def stream_load(cs_client,jsondata):
+    if isinstance(jsondata,list):
+        result = []
+        for v in jsondata:
+            result.append(stream_load(cs_client,v))
+        return result
+    elif isinstance(jsondata,dict):
+        if jsondata['class'] in [ 'CloudSendRunSession' , 'CloudSendRunSessionProxy' ]:
+            session_number = int(jsondata['number'])
+            session_id     = jsondata['id'].strip()
+            return cs_client.get_run_session(session_number,session_id)
+        elif jsondata['class'] in [ 'CloudSendInstance' , 'CloudSendInstanceProxy' ]:
+            instance_name = jsondata['name'].strip()
+            return cs_client.get_instance(instance_name)    
+        elif jsondata['class'] in [ 'CloudSendEnvironment' , 'CloudSendEnvironmentProxy' ]:
+            env_hash = jsondata['hash'].strip()
+            return cs_client.get_environment(env_hash)    
+        elif jsondata['class'] in [ 'CloudSendJob' , 'CloudSendJobProxy' ]:
+            job_rank = int(jsondata['rank'].strip())
+            job_hash = jsondata['hash'].strip()
+            return cs_client.get_job(job_rank,job_hash)    
+        else:        
+            result = {}
+            for k,v in jsondata.items():
+                result[k] = stream_load(cs_client,v)
+            return result
+    else:
+        return jsondata             
 
 def get_config(path):
     config_file = path
@@ -753,13 +826,21 @@ def escape_arg_for_send(args):
     return args_escaped  
 
 def make_client_command(maestro_command,args):
-    if not args:
-        the_command = maestro_command
-    else:
-        if not isinstance(args,list):
-            args = [ args ]
-        args = escape_arg_for_send(args)
-        the_command = COMMAND_ARGS_SEP.join( [ maestro_command , ARGS_SEP.join(args) ] )
+
+    # OLD SERIALIZATION METHOD (cf. maestroserver.py too)
+
+    # if not args:
+    #     the_command = maestro_command
+    # else:
+    #     if not isinstance(args,list):
+    #         args = [ args ]
+    #     args = escape_arg_for_send(args)
+    #     the_command = COMMAND_ARGS_SEP.join( [ maestro_command , ARGS_SEP.join(args) ] )
+
+    if args and not isinstance(args,list):
+        args = [ args ]
+    the_command = "\""+json.dumps({'cmd':maestro_command,'args':args}).replace("\"","\\\"")+"\""
+
     return the_command
 
 DBG_LVL=1

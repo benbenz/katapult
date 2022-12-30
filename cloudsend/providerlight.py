@@ -1,6 +1,6 @@
 
 from abc import ABC , abstractmethod
-from cloudsend.provider import CloudSendProvider , line_buffered , make_client_command , STREAM_RESULT, DIRECTORY_TMP
+from cloudsend.provider import CloudSendProvider , stream_load , stream_dump , line_buffered , make_client_command , STREAM_RESULT, DIRECTORY_TMP
 from cloudsend.core import *
 import copy , io
 from zipfile import ZipFile
@@ -182,8 +182,17 @@ class CloudSendLightProvider(CloudSendProvider,ABC):
         self.debug(1,"initialize server with config")
         await self._exec_maestro_command("init","config.json")
 
-    async def _deploy_config(self,ssh_conn,ftp_client,config_filename='config.json'):
+    async def _deploy_config(self,ssh_conn,ftp_client,config_filename='config.json',**kwargs):
+
         config , mkdir_cmd , files_to_upload_per_dir = self._translate_config_for_maestro()
+
+        # we can add some keyed arguments to the config ...
+        # useful to serialize some arguments between light client and fat client
+        if kwargs and len(kwargs)>0:
+            config['_kwargs'] = dict()
+            for k,v in kwargs.items():
+                config['_kwargs'][k] = stream_dump(v)
+
         # serialize the config and send it to the maestro
         await ftp_client.chdir(self._get_cloudsend_dir())
         await self.sftp_put_string(ftp_client,config_filename,json.dumps(config))
@@ -384,7 +393,22 @@ class CloudSendLightProvider(CloudSendProvider,ABC):
                     break     
         return None,None,ssh_conn,ftp_client 
 
-    async def _exec_maestro_command(self,maestro_command,args=None):
+    async def _exec_maestro_command(self,maestro_command,raw_args=None):
+
+        args = None
+
+        if maestro_command != "init":
+            if raw_args:
+                args = []
+                if isinstance(raw_args,list):
+                    for arg in raw_args:
+                        # we dont dump the array cause we want to use the separators __,__
+                        # so we dump the individual array elements
+                        args.append( stream_dump(arg) ) 
+                else:
+                    args = stream_dump(raw_args)
+        else:
+            args = raw_args
 
         the_command = make_client_command(maestro_command,args)
 
@@ -411,7 +435,7 @@ class CloudSendLightProvider(CloudSendProvider,ABC):
                             line = line.replace(STREAM_RESULT,'')
                             line = line.strip()
                             self.debug(2,"Got RESULT",line,color=bcolors.OKCYAN)
-                            return line # result is printed last...
+                            return stream_load(self,json.loads(line)) # result is printed last...
                         else:
                             self.debug(1,line,end='')
                 except asyncssh.misc.ConnectionLost:
@@ -482,30 +506,31 @@ class CloudSendLightProvider(CloudSendProvider,ABC):
         # triggers maestro::start
         await self._exec_maestro_command("start",reset)
 
-    async def _cfg_add_objects(self,conf,coroutine,name):
+    async def _cfg_add_objects(self,conf,coroutine,name,**kwargs):
         # complement self._config
-        await coroutine(conf)
+        await coroutine(conf,kwargs)
         # wait for maestro to be ready
         instanceid , ssh_conn , ftp_client = await self._wait_and_connect(self._maestro)
         # config_name
         config_name = 'config_add-' + cloudsendutils.generate_unique_id() + '.json'
-        # deploy the new config to the maestro (every time) (including dependent files)
-        translated_config = await self._deploy_config(ssh_conn,ftp_client,config_name)
+        # deploy the new config to the maestro (every time)
+        # (this ensures the deployment of dependent files)
+        translated_config = await self._deploy_config(ssh_conn,ftp_client,config_name,kwargs)
         # triggers maestro::add_* : use string dump or config file name (either way)
         #await self._exec_maestro_command(name,config_name)
-        await self._exec_maestro_command(name,json.dumps(translated_config))
+        return await self._exec_maestro_command(name,translated_config)
 
     async def cfg_add_instances(self,conf):
-        await self._cfg_add_objects(conf,super().cfg_add_instances,"cfg_add_instances")
+        return await self._cfg_add_objects(conf,super().cfg_add_instances,"cfg_add_instances")
 
     async def cfg_add_environments(self,conf):
-        await self._cfg_add_objects(conf,super().cfg_add_environments,"cfg_add_environments")
+        return await self._cfg_add_objects(conf,super().cfg_add_environments,"cfg_add_environments")
 
-    async def cfg_add_jobs(self,conf):
-        await self._cfg_add_objects(conf,super().cfg_add_jobs,"cfg_add_jobs")
+    async def cfg_add_jobs(self,conf,**kwargs):
+        return await self._cfg_add_objects(conf,super().cfg_add_jobs,"cfg_add_jobs",kwargs)
 
-    async def cfg_add_config(self,conf):
-        await self._cfg_add_objects(conf,super().cfg_add_config,"cfg_add_config")
+    async def cfg_add_config(self,conf,**kwargs):
+        return await self._cfg_add_objects(conf,super().cfg_add_config,"cfg_add_config",kwargs)
 
     async def cfg_reset(self):
         # triggers maestro::reset
@@ -531,12 +556,8 @@ class CloudSendLightProvider(CloudSendProvider,ABC):
 
     async def run(self):
         # triggers maestro::run
-        run_session_number_id = await self._exec_maestro_command("run")
-        if run_session_number_id is not None:
-            values = run_session_number_id.split(' ')            
-            run_session_number = int(values[0])
-            run_session_id     = values[1]
-            self._current_session = self.get_run_session(run_session_number,run_session_id)
+        run_session = await self._exec_maestro_command("run")
+        self._current_session = run_session
         return self._current_session
 
     async def kill(self,identifier):
@@ -550,7 +571,7 @@ class CloudSendLightProvider(CloudSendProvider,ABC):
 
     async def wait(self,job_state,run_session=None):
         if run_session is not None:
-            args = [ int(job_state) , run_session.get_number() , run_session.get_id() ]
+            args = [ int(job_state) , run_session ]
         else:
             args = [ int(job_state) ]
         # triggers maestro::wait
@@ -558,7 +579,7 @@ class CloudSendLightProvider(CloudSendProvider,ABC):
 
     async def get_jobs_states(self,run_session=None):
         if run_session is not None:
-            args = [ run_session.get_number() , run_session.get_id() ]
+            args = [ run_session ]
         else:
             args = None
         # triggers maestro::get_jobs_states
@@ -566,7 +587,7 @@ class CloudSendLightProvider(CloudSendProvider,ABC):
 
     async def print_jobs_summary(self,run_session=None,instance=None):
         if run_session is not None:
-            args = [ run_session.get_number() , run_session.get_id() ]
+            args = [ run_session ]
         else:
             args = []
         if instance is not None:
@@ -577,7 +598,7 @@ class CloudSendLightProvider(CloudSendProvider,ABC):
 
     async def print_aborted_logs(self,run_session=None,instance=None):
         if run_session is not None:
-            args = [ run_session.get_number() , run_session.get_id() ]
+            args = [ run_session ]
         else:
             args = []
         if instance is not None:
@@ -644,7 +665,7 @@ class CloudSendLightProvider(CloudSendProvider,ABC):
         session_out_dir_remote = self._get_session_out_dir(maestro_dir,run_session,self._maestro)
 
         # fetch the results on the maestro
-        args = [ maestro_dir , run_session.get_number() , run_session.get_id() ]
+        args = [ maestro_dir , run_session ]
         session_out_dir_remote = await self._exec_maestro_command("fetch_results",args)
 
         # get the tar file of the results
@@ -708,5 +729,24 @@ class CloudSendLightProvider(CloudSendProvider,ABC):
 
     def get_instance(self,instance_name):
         return CloudSendInstanceProxy( instance_name )
+
+    def get_environment(self,env_hash):
+        return CloudSendEnvironmentProxy( env_hash )
+
+    def get_job(self,job_rank,job_hash):
+        return CloudSendJobProxy( job_rank , job_hash )
+
+    async def get_num_active_processes(self,run_session=None):
+        if run_session is None:
+            run_session = self._current_session
+        if not run_session:
+            return 0
+        args = [ run_session ]
+        num_processes = await self._exec_maestro_command("get_num_active_processes",args)
+        return int(num_processes)
+
+    async def get_num_instances(self):
+        num_instances = await self._exec_maestro_command("get_num_instances")
+        return int(num_instances)
 
 

@@ -20,15 +20,22 @@ class ConfigManager():
         self._jobs = jobs
 
     def load(self):
-        self._load_objects()
+        added_objects = self._load_objects()
         self._preprocess_jobs()
         self._sanity_checks()
+        return added_objects
 
     def _load_objects(self):
         projectName = self._config.get('project')
         inst_cfgs   = self._config.get('instances')
         env_cfgs    = self._config.get('environments')
         job_cfgs    = self._config.get('jobs')
+
+        added_objects = {
+            'instances' : [] ,
+            'environments' : [] ,
+            'jobs' : []
+        }
 
         #self._instances = [ ]
         if inst_cfgs:
@@ -63,6 +70,7 @@ class ConfigManager():
                         # let's put some dummy instances for now ...
                         instance = CloudSendInstance( real_inst_cfg , None, None )
                         self._instances.append( instance )
+                        added_objects['instances'].append(instance)
                     else:
                         total_inst_cpus = inst_cfg.get('cpus',1)
                         if type(total_inst_cpus) != int and type(total_inst_cpus) != float:
@@ -109,6 +117,7 @@ class ConfigManager():
                             # let's put some dummy instances for now ...
                             instance = CloudSendInstance( real_inst_cfg , None, None )
                             self._instances.append( instance )
+                            added_objects['instances'].append(instance)
 
                             cpus_created = cpus_created + inst_cpus
 
@@ -126,6 +135,7 @@ class ConfigManager():
                 env_cfg['dev']  = self._config.get('dev',False)
                 env = CloudSendEnvironment(projectName,env_cfg)
                 self._environments.append(env)
+                added_objects['environments'].append(env)
 
                 env_cfg[K_LOADED] = True
 
@@ -139,9 +149,12 @@ class ConfigManager():
                 for j in range(job_cfg.get('repeat',1)):
                     job = CloudSendJob(job_cfg,rank)
                     self._jobs.append(job)
+                    added_objects['jobs'].append(job)
                     rank = rank + 1
                 
                 job_cfg[K_LOADED] = True
+
+        return added_objects
 
     def _load_other_instance_info(self,real_inst_cfg):
         # [!important!] also copy global information that are used for the name generation ...

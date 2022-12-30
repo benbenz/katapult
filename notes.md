@@ -116,14 +116,16 @@
   - [x] switch back to asyncio
   - [x] bugs: 1) not writing aborted 2) when not writing aborted, the UNKNOWN is not being fetch either ...
   - [ ] do not terminate maestro when the key is not working >> filter by name + PUBLIC KEY ???? or fragment of private key ?
+  - [ ] write pytests (unit tests)
   - [ ] add CLI:
      - [x] shutdown
-     - [ ] add_instances
-     - [ ] add_environments
-     - [ ] add_jobs
-     - [ ] reset
-     - [ ] stop (all, batch, etc)
+     - [x] add_instances
+     - [x] add_environments
+     - [x] add_jobs
+     - [x] reset
+     - [x] stop (all, batch, etc)
      - [ ] help
+     - [ ] clean (clean instances)
 
 4) local mode:
   - [x] handle new config 

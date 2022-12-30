@@ -85,24 +85,41 @@ class CloudSendFatProvider(CloudSendProvider,ABC):
 
         self._save_config() 
 
-    async def _cfg_add_objects(self,conf,method):
-        await method(conf)
-        self._config_manager.load()    
+    async def _cfg_add_objects(self,conf,method,**kwargs):
+        await method(conf,kwargs)
+        added_objects = self._config_manager.load()
+        old_state = self._state
+
         self.set_state( self._state & (CloudSendProviderState.NEW|CloudSendProviderState.STARTED))
         if self._state & CloudSendProviderState.STARTED:
             await self.start()
+        if oldstate & CloudSendProviderState.DEPLOYED:
+            await self.deploy()
+        elif oldstate & CloudSendProviderState.ASSIGNED:
+            await self._assign()
+        if oldstate & CloudSendProviderState.RUNNING:
+            if kwargs.get('run_session'):
+                run_session = kwargs['run_session']
+            else:
+                run_session = self._current_session
+            if run_session:
+                # continue on this run session
+                await self._run(run_session,None,True,False)
+            else:
+                await self.run()
+        return added_objects
 
-    async def cfg_add_instances(self,conf):
-        await self._cfg_add_objects(conf,super().cfg_add_instances)
+    async def cfg_add_instances(self,conf,**kwargs):
+        return await self._cfg_add_objects(conf,super().cfg_add_instances,kwargs)
 
-    async def cfg_add_environments(self,conf):
-        await self._cfg_add_objects(conf,super().cfg_add_environments)
+    async def cfg_add_environments(self,conf,**kwargs):
+        return await self._cfg_add_objects(conf,super().cfg_add_environments,kwargs)
 
-    async def cfg_add_jobs(self,conf):
-        await self._cfg_add_objects(conf,super().cfg_add_jobs)
+    async def cfg_add_jobs(self,conf,**kwargs):
+        return await self._cfg_add_objects(conf,super().cfg_add_jobs,kwargs)
 
-    async def cfg_add_config(self,conf):
-        await self._cfg_add_objects(conf,super().cfg_add_config)
+    async def cfg_add_config(self,conf,run_session=None):
+        return await self._cfg_add_objects(conf,super().cfg_add_config,kwargs)
 
     async def cfg_reset(self):
         # remove the state file
@@ -1179,6 +1196,29 @@ class CloudSendFatProvider(CloudSendProvider,ABC):
             if instance.get_name() == instance_name:
                 return instance
         return None
+
+    def get_environment( self , env_hash ):
+        for env in self._environments:
+            if env.get_hash() == env_hash:
+                return env
+        return None
+
+    def get_job( self , rank , job_hash ):
+        for job in self._jobs:
+            if job.get_rank() == rank and job.get_hash() == job_hash:
+                return job
+        return None
+
+
+    async def get_num_active_processes(self,run_session=None):
+        if run_session is None:
+            run_session = self._current_session
+        if not run_session:
+            return 0
+        return len(run_session.get_active_processes())
+
+    async def get_num_instances(self):
+        return len(self._instances)        
 
     def _get_ln_command(self,dpl_job,uid):
         files_to_ln = []

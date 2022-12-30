@@ -1,5 +1,5 @@
 from cloudsend import provider as cs
-from cloudsend.provider import COMMAND_ARGS_SEP , ARGS_SEP , STREAM_RESULT , debug
+from cloudsend.provider import COMMAND_ARGS_SEP , ARGS_SEP , STREAM_RESULT , debug , stream_load , stream_dump
 import asyncio , os , sys , time
 from cloudsend.core import CloudSendProcessState , bcolors , CloudSendRunSession , CloudSendRunSessionProxy
 import traceback
@@ -73,13 +73,21 @@ class ServerContext:
                 if not cmd_line:
                     break
                 cmd_line = cmd_line.decode('utf-8').strip()
-                cmd_args = cmd_line.split(COMMAND_ARGS_SEP)
-                if len(cmd_args)>=2:
-                    cmd  = cmd_args[0].strip()
-                    args = cmd_args[1].split(ARGS_SEP)
-                else:
-                    cmd  = cmd_line
-                    args = None
+
+                # OLD SERIALIZATION METHOD (cf. provider.py too)
+                # cmd_args = cmd_line.split(COMMAND_ARGS_SEP)
+                # if len(cmd_args)>=2:
+                #     cmd  = cmd_args[0].strip()
+                #     args = cmd_args[1].split(ARGS_SEP)
+                # else:
+                #     cmd  = cmd_line
+                #     args = None
+
+                cmd_json = json.loads(cmd_line)
+                # DO NOT UNCOMMENT ! THIS CAUSES A LOCKS
+                #print("JSON COMMAND",cmd_json)
+                cmd  = cmd_json['cmd']
+                args = cmd_json['args'] 
 
                 await self.process_command(cmd,args,writer)
                 break # one-shot command
@@ -95,6 +103,7 @@ class ServerContext:
                 try:
                     sys.stdout = old_stdout
                     print(e)
+                    traceback.print_exc(e)
                 except:
                     pass
                 break  
@@ -107,10 +116,8 @@ class ServerContext:
         except:
             pass
 
-    def get_run_session(self,label,arg_number,arg_id,allow_proxied=False):
-        session_number = int(arg_number)
-        session_id     = arg_id.strip()
-        run_session    = self.cs_client.get_run_session(session_number,session_id)
+    def get_run_session(self,label,session_arg,allow_proxied=False):
+        run_session = stream_load(self.cs_client,session_arg)
         if run_session is None:
             err_level = bcolors.FAIL if not allow_proxied else bcolors.WARNING
             debug(1,label,"This session object has expired and can not be found in the server anymore",arg_number,arg_id,color=err_level)
@@ -122,12 +129,27 @@ class ServerContext:
                 return None
         return run_session
 
-    def get_instance(self,label,arg):
-        instance = self.cs_client.get_instance(arg)
+    def get_instance(self,label,instance_arg):
+        instance = stream_load(self.cs_client,instance_arg)
         if instance is None:
             debug(1,label,"This instance object has expired and can not be found in the server anymore",arg,color=bcolors.FAIL)
             return None
         return instance
+
+    def load_kwargs(self,config_list_obj):
+
+        config = self.cs_client.resolve_config(config_list_obj)
+
+        if '_kwargs' not in config:
+            return None
+        kwargs = config['_kwargs']
+        result = dict()
+        for k,v in kwargs.items():
+            result[k] = stream_load(self.cs_client,v)
+        return result
+
+    def send_result(self,result):
+        print(STREAM_RESULT+json.dumps(stream_dump(result)))
 
     async def process_command(self,command,args,writer):
         #sock = writer.transport.get_extra_info('socket')
@@ -147,7 +169,7 @@ class ServerContext:
                 if not args:
                     config_ = None
                 elif len(args)==1:
-                    config_ = args[0].strip()
+                    config_ = args[0].strip() 
                 else:
                     config_ = None
                 self.cs_client  = cs.get_client(config_)
@@ -163,7 +185,7 @@ class ServerContext:
                 if not args:
                     reset = False
                 elif len(args)==1:
-                    reset = args[0].strip().lower() == "true"
+                    reset = args[0] #args[0].strip().lower() == "true"
                 else:
                     reset = False
 
@@ -171,43 +193,52 @@ class ServerContext:
 
             elif command == 'cfg_add_instances':
                 config = None
+                kwargs = None
                 if args and len(args)==1:
                     config = args[0]
+                    kwargs = self.load_kwargs(config)
                 else:
                     print("Error: you need to send a JSON stream for config")
                     await writer.drain()
                     return
-                await self.cs_client.cfg_add_instances(config)
+                added_objects = await self.cs_client.cfg_add_instances(config,kwargs)
+                self.send_result(added_objects)
 
             elif command == 'cfg_add_environments':
                 config = None
                 if args and len(args)==1:
                     config = args[0]
+                    kwargs = self.load_kwargs(config)
                 else:
                     print("Error: you need to send a JSON stream for config")
                     await writer.drain()
                     return
-                await self.cs_client.cfg_add_environments(config)
+                added_objects = await self.cs_client.cfg_add_environments(config,kwargs)
+                self.send_result(added_objects)
 
             elif command == 'cfg_add_jobs':
                 config = None
                 if args and len(args)==1:
                     config = args[0]
+                    kwargs = self.load_kwargs(config)                    
                 else:
                     print("Error: you need to send a JSON stream for config")
                     await writer.drain()
                     return
-                await self.cs_client.cfg_add_jobs(config)
+                added_objects = await self.cs_client.cfg_add_jobs(config,kwargs)
+                self.send_result(added_objects)
 
             elif command == 'cfg_add_config':
                 config = None
                 if args and len(args)==1:
-                    config = json.loads( args[0] )
+                    config = args[0]
+                    kwargs = self.load_kwargs(config)
                 else:
                     print("Error: you need to send a JSON stream for config")
                     await writer.drain()
                     return
-                await self.cs_client.cfg_add_config(config)
+                added_objects = await self.cs_client.cfg_add_config(config,kwargs)
+                self.send_result(added_objects)
 
             elif command == 'cfg_reset':
 
@@ -221,7 +252,7 @@ class ServerContext:
 
                 run_session = await self.cs_client.run()
 
-                print(STREAM_RESULT+str(run_session.get_number())+' '+run_session.get_id())
+                self.send_result(run_session)
             
             elif command == 'kill':
 
@@ -234,17 +265,29 @@ class ServerContext:
                 job_state   = CloudSendProcessState.DONE|CloudSendProcessState.ABORTED
                 run_session = None
                 if args and len(args) >= 1:
-                    job_state = int(args[0].strip())
-                if args and len(args) >= 3:
-                    run_session = self.get_run_session("WAIT:",args[1],args[2])
+                    job_state = int(args[0])
+                if args and len(args) >= 2:
+                    run_session = self.get_run_session("WAIT:",args[1])
 
                 await self.cs_client.wait(job_state,run_session)
+
+            elif command == 'get_num_active_processes':
+
+                run_session = None
+                if args and len(args) >= 1:
+                    run_session = self.get_run_session("GET_NUM_ACTIVE_PROCESSES:",args[0])
+
+                await self.cs_client.get_num_active_processes(run_session)                
+
+            elif command == 'get_num_instances':
+
+                await self.cs_client.get_num_instances()                
 
             elif command == 'get_states':
 
                 run_session = None
-                if args and len(args) == 2:
-                    run_session = self.get_run_session("GET STATES:",args[0],args[1])
+                if args and len(args) == 1:
+                    run_session = self.get_run_session("GET STATES:",args[0])
 
                 await self.cs_client.get_jobs_states(run_session)
 
@@ -252,10 +295,10 @@ class ServerContext:
 
                 run_session = None
                 instance    = None
+                if args and len(args) >= 1:
+                    run_session = self.get_run_session("PRINT_SUMMARY:",args[0])
                 if args and len(args) >= 2:
-                    run_session = self.get_run_session("PRINT_SUMMARY:",args[0],args[1])
-                if args and len(args) >= 3:
-                    instance = self.get_instance("PRINT_SUMMARY:",args[2])
+                    instance = self.get_instance("PRINT_SUMMARY:",args[1])
 
                 debug(2,run_session,instance)
 
@@ -265,10 +308,10 @@ class ServerContext:
 
                 run_session = None
                 instance    = None
+                if args and len(args) >= 1:
+                    run_session = self.get_run_session("PRINT_SUMMARY:",args[0])
                 if args and len(args) >= 2:
-                    run_session = self.get_run_session("PRINT_SUMMARY:",args[0],args[1])
-                if args and len(args) >= 3:
-                    instance = self.get_instance("PRINT_SUMMARY:",args[2])
+                    instance = self.get_instance("PRINT_SUMMARY:",args[1])
 
                 debug(2,run_session,instance)
 
@@ -295,12 +338,12 @@ class ServerContext:
                     directory = args[0].strip()
                     if directory.lower() == 'none':
                         directory = None
-                if args and len(args)>=3:
-                    run_session = self.get_run_session("FETCH_RESULTS",args[1],args[2],True) # allow shallow object return
+                if args and len(args)>=2:
+                    run_session = self.get_run_session("FETCH_RESULTS",args[1],True) # allow shallow object return
 
                 out_dir = await self.cs_client.fetch_results(directory,run_session)
                 
-                print(STREAM_RESULT+str(out_dir))
+                self.send_result(out_dir)
 
             elif command == 'finalize':
                 
@@ -320,6 +363,7 @@ class ServerContext:
         
         except Exception as e:
             print(e)
+            traceback.print_exc(e)
             await writer.drain()
             #writer.close()
             self.restore_stdio()
@@ -342,8 +386,8 @@ def main():
 
     try:
         asyncio.run( mainloop(ctxt) )
-    except RuntimeError:
-        pass
+    except RuntimeError as re:
+        print(re)
 
 if __name__ == '__main__':
     main()    

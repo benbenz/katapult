@@ -348,6 +348,11 @@ class CloudSendEnvironment():
     def __str__(self):
         return "{0}: NAME = {1} , HASH = {2}".format(type(self).__name__,self._name,self._hash)
 
+class CloudSendEnvironmentProxy(CloudSendEnvironment):
+
+    def __init__(self,hash):
+        self._hash = hash
+
 
 # "Temporary" objects used when starting scripts      
 
@@ -484,6 +489,13 @@ class CloudSendJob():
          
     def __str__(self):
         return "{0}: HASH = {1} , INSTANCE = {2} , ENV = {3}".format(type(self).__name__,self.get_hash(),self.get_instance(),self.get_env().get_name() if self.get_env() else None)
+
+
+class CloudSendJobProxy(CloudSendJob):
+
+    def __init__(self,rank,hash):
+        self._rank = rank 
+        self._hash = hash
 
 
 # "Temporary" objects used when starting scripts     
