@@ -73,6 +73,7 @@ class ServerContext:
                 if not cmd_line:
                     break
                 cmd_line = cmd_line.decode('utf-8').strip()
+                print(cmd_line)
 
                 # OLD SERIALIZATION METHOD (cf. provider.py too)
                 # cmd_args = cmd_line.split(COMMAND_ARGS_SEP)
@@ -103,6 +104,7 @@ class ServerContext:
                 try:
                     sys.stdout = self.old_stdout
                     print(e)
+                    traceback.format_exc()
                     traceback.print_exc(e)
                 except:
                     pass
@@ -369,6 +371,7 @@ class ServerContext:
             #writer.close()
             self.restore_stdio()
             print(e)
+            traceback.format_exc()
             raise e
 
         await writer.drain()

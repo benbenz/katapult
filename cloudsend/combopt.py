@@ -12,6 +12,8 @@ def multiple_knapsack_assignation(jobs,instances,method='mip'):
 
     for i,job in enumerate(jobs):
         if job.get_instance() is not None:
+            # re-add the job (we cleared the instance before)
+            job.get_instance().append_job(job)
             assigned[i] = True
 
     while True:

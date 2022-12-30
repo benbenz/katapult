@@ -78,6 +78,18 @@
             }
         }   ,
         {
+            "name": "CLI Init",
+            "type": "python",
+            "request": "launch",
+            "program": "${workspaceFolder}/cloudsend/cli.py",
+            "console": "integratedTerminal",
+            "cwd": "${workspaceFolder}",
+            "args": ["init","config.py"],
+            "env": {
+                "PYTHONPATH":"${workspaceRoot}:$PYTHONPATH"
+            }
+        }     ,
+        {
             "name": "CLI Start",
             "type": "python",
             "request": "launch",

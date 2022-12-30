@@ -205,7 +205,9 @@ def main():
         sys.exit()
 
     args = copy.deepcopy(sys.argv)
-    args.pop(0) #trash
+    cmd_arg = args.pop(0) #trash
+    while 'cli' not in cmd_arg:
+        cmd_arg = args.pop(0)
     command = args.pop(0)
 
     ser_args = cli_translate(command,args)

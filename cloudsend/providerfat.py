@@ -165,11 +165,13 @@ class CloudSendFatProvider(CloudSendProvider,ABC):
 
         for instance in self._instances:
             instance.reset_jobs()
+            instance.reset_envs()
         
         # DUMMY algorithm 
         if assignation=='random':
             for job in self._jobs:
                 if job.get_instance():
+                    job.get_instance().append_job(job)
                     self.debug(2,"Job already has an instance",job)
                     continue
                 

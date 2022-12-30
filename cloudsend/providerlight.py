@@ -397,18 +397,20 @@ class CloudSendLightProvider(CloudSendProvider,ABC):
 
         args = None
 
-        if maestro_command != "init":
-            if raw_args:
-                args = []
-                if isinstance(raw_args,list):
-                    for arg in raw_args:
-                        # we dont dump the array cause we want to use the separators __,__
-                        # so we dump the individual array elements
-                        args.append( stream_dump(arg) ) 
-                else:
-                    args = stream_dump(raw_args)
-        else:
-            args = raw_args
+        # if maestro_command != "init":
+        #     if raw_args:
+        #         args = []
+        #         if isinstance(raw_args,list):
+        #             for arg in raw_args:
+        #                 # we dont dump the array cause we want to use the separators __,__
+        #                 # so we dump the individual array elements
+        #                 args.append( stream_dump(arg) ) 
+        #         else:
+        #             args = stream_dump(raw_args)
+        # else:
+        #     args = raw_args
+
+        args = stream_dump(args)
 
         the_command = make_client_command(maestro_command,args)
 

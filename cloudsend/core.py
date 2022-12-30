@@ -247,8 +247,15 @@ class CloudSendInstance():
 
     def reset_jobs(self):
         self._jobs = []
+    
+    def reset_envs(self):
+        self._envs = []
 
     def append_job(self,job):
+        for j in self._jobs:
+            if j == job:
+                debug(1,"job already added to instance",job,color=bcolors.WARNING)
+                return
         self._jobs.append(job)
         env = job.get_env()
         self._envs[env.get_name()] = env 
