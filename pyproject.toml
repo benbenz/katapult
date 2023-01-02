@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "cloudsend"
-version = "0.5.8"
+version = "0.5.9"
 description = "CloudSend is a Python package that allows you to run any script on a cloud service (for now AWS only)."
 authors = ["Your Name <you@example.com>"]
 license = "MIT"
