@@ -4,7 +4,7 @@ from cloudsend.provider import CloudSendProvider , stream_load , stream_dump , l
 from cloudsend.core import *
 import copy , io
 from zipfile import ZipFile
-import os , fnmatch
+import sys , os , fnmatch
 import re , json
 from os.path import basename
 import pkg_resources
