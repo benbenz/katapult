@@ -153,6 +153,8 @@ class CloudSendLightProvider(CloudSendProvider,ABC):
         commands = [
             { 'cmd' : 'chmod +x ' + sh_files , 'out' : True } ,
         ]
+        if 'win' in sys.platform:
+            commands.append({ 'cmd': "sed -i -e 's/\r$//' "+sh_files , 'out' : True} )
         await self._run_ssh_commands(self._maestro,ssh_conn,commands) 
 
 

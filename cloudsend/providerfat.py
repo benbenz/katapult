@@ -225,10 +225,14 @@ class CloudSendFatProvider(CloudSendProvider,ABC):
             self.debug(2, "Errors")
             self.debug(2,await stderr.read())
 
+            sh_files = instance.path_join(global_path,"*.sh")
+
             commands = [ 
                 # make bootstrap executable
-                { 'cmd': "chmod +x "+instance.path_join(global_path,"*.sh"), 'out' : True },              
+                { 'cmd': "chmod +x "+sh_files, 'out' : True },              
             ]
+            if 'win' in sys.platform:
+                commands.append({ 'cmd': "sed -i -e 's/\r$//' "+sh_files , 'out' : True} )
 
             await self._run_ssh_commands(instance,ssh_conn,commands)
 
