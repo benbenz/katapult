@@ -748,6 +748,7 @@ class CloudSendFatProvider(CloudSendProvider,ABC):
         cmd_run     = ""
         cmd_run_pre = "" 
         cmd_pid     = ""
+        sep = "\n" # " && "
 
         for job in instance.get_jobs():
 
@@ -784,8 +785,8 @@ class CloudSendFatProvider(CloudSendProvider,ABC):
             state_file  = instance.path_join( run_path , 'state' )
 
             is_first = (cmd_run_pre=="")
-            cmd_run_pre = cmd_run_pre + "rm -f " + pid_file + " && "
-            cmd_run_pre = cmd_run_pre + "mkdir -p " + run_path + " && "
+            cmd_run_pre = cmd_run_pre + "rm -f " + pid_file + sep
+            cmd_run_pre = cmd_run_pre + "mkdir -p " + run_path + sep
             if is_first: # first sequential script is waiting for bootstrap to be done by default
                 cmd_run_pre = cmd_run_pre + "echo 'wait(40)' > " + state_file + "\n"
             else: # all other scripts will be queued
@@ -1239,6 +1240,7 @@ class CloudSendFatProvider(CloudSendProvider,ABC):
         files_to_ln = []
         upload_files = dpl_job.get_config('upload_files')
         lnstr = ""
+        sep = "\n" # " && "
         instance = dpl_job.get_instance()
         if upload_files:
             for up_file in upload_files:
@@ -1254,14 +1256,14 @@ class CloudSendFatProvider(CloudSendProvider,ABC):
                 fulldir   = instance.path_join(dpl_job.get_path() , uid , filedir_rel)
                 uploaddir = instance.path_join(dpl_job.get_path() , filedir_rel )
                 full_file_path = instance.path_join( fulldir , filename )
-                lnstr = lnstr + (" && " if lnstr else "") + "mkdir -p " + fulldir + " && ln -sf " + abs_path + " " +  full_file_path
+                lnstr = lnstr + (sep if lnstr else "") + "mkdir -p " + fulldir + sep + "ln -sf " + abs_path + " " +  full_file_path
             else:
                 fulldir   = instance.path_join( dpl_job.get_path() , uid )
                 fulldir2  = dpl_job.get_path() # let's also put symbolic links by the file itself ... 
                 uploaddir = dpl_job.get_path()
                 full_file_path  = instance.path_join( fulldir  , filename )
                 full_file_path2 = instance.path_join( fulldir2 , filename )
-                lnstr = lnstr + (" && " if lnstr else "") + "ln -sf " + abs_path + " " + full_file_path + " && ln -sf " + abs_path + " " + full_file_path2
+                lnstr = lnstr + (sep if lnstr else "") + "ln -sf " + abs_path + " " + full_file_path + sep + "ln -sf " + abs_path + " " + full_file_path2
 
         return lnstr
 
