@@ -2,7 +2,7 @@ import boto3
 import os , sys
 from .utils import *
 from cloudsend.core     import CloudSendError , CloudSendInstance , CloudSendInstanceState , CloudSendPlatform
-from cloudsend.core     import cs_keypairName , cs_secGroupName , cs_secGroupNameMaestro , cs_bucketName , cs_vpcName , cs_maestroRoleName , cs_maestroProfileName, cs_maestroPolicyName , init_instance_name
+from cloudsend.core     import bcolors , cs_keypairName , cs_secGroupName , cs_secGroupNameMaestro , cs_bucketName , cs_vpcName , cs_maestroRoleName , cs_maestroProfileName, cs_maestroPolicyName , init_instance_name
 from cloudsend.provider import debug
 from cloudsend.providerfat import CloudSendFatProvider
 from cloudsend.providerlight import CloudSendLightProvider
