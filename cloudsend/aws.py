@@ -802,7 +802,7 @@ def aws_get_suggested_image(session,region):
     debug(2,'Getting suggested image ID')
 
     flt_creation = []
-    for month in range(1):
+    for month in range(2):
         date_x_months_ago = datetime.now() - relativedelta(months=month)
         flt = str(date_x_months_ago.year) + '-' + str(date_x_months_ago.month) + '*'
         flt_creation.append(flt)

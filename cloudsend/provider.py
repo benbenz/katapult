@@ -753,6 +753,8 @@ def get_config(path):
             config = None
         except:
             config = None
+    else:
+        return None
     return config
 
 def get_client(config_=None):

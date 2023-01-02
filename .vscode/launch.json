@@ -18,6 +18,18 @@
             }
         },
         {
+            "name": "Demo Kyel",
+            "type": "python",
+            "request": "launch",
+            "program": "${workspaceFolder}/cloudsend/demo.py",
+            "console": "integratedTerminal",
+            "cwd": "${workspaceFolder}",
+            "args": ["./kyel/config-montecarlo-10-1.py","reset"],
+            "env": {
+                "PYTHONPATH":"${workspaceFolder}${pathSeparator}${env:PYTHONPATH}"
+            }
+        },
+        {
             "name": "Demo (w/ reset)",
             "type": "python",
             "request": "launch",
