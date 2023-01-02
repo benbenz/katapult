@@ -824,12 +824,9 @@ class CloudSendFatProvider(CloudSendProvider,ABC):
                     eol_command = get_EOL_conversion(instance,batch_pid_file)
                     commands.append({'cmd':eol_command,'out':True})
                 # run
-                commands.append([ 
-                    { 'cmd': "chmod +x "+batch_run_file+" "+batch_pid_file, 'out' : True } ,  # important to wait for it >> True !!!
-                    # execute main script (spawn) (this will wait for bootstraping)
-                    { 'cmd': batch_run_file , 'out' : False } 
-                ])
-                
+                commands.append({ 'cmd': "chmod +x "+batch_run_file+" "+batch_pid_file, 'out' : True }) # important to wait for it >> True !!!
+                # execute main script (spawn) (this will wait for bootstraping)
+                commands.append({ 'cmd': batch_run_file , 'out' : False })
                 await self._run_ssh_commands(instance,ssh_conn,commands)
                 tryagain = False
             except Exception as e:
