@@ -546,9 +546,12 @@ class CloudSendLightProvider(CloudSendProvider,ABC):
         if ssh_conn is not None:
             await self.sftp_put_remote_file(ftp_client,'resetmaestro.sh')
             resetmaestro_sh = self._maestro.path_join( self._maestro.get_home_dir() , 'resetmaestro.sh' )
-            commands = [
+            commands = []
+            if 'win' in sys.platform:
+                commands.append({ 'cmd': "sed -i -e 's/\r$//' "+resetmaestro_sh , 'out' : True} )
+            commands.append(
                { 'cmd' : 'chmod +x '+resetmaestro_sh+' && ' + resetmaestro_sh , 'out' : True }
-            ]
+            )
             await self._run_ssh_commands(instance,ssh_conn,commands)
             #ftp_client.close()
             ssh_conn.close()
