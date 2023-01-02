@@ -1254,13 +1254,15 @@ class CloudSendFatProvider(CloudSendProvider,ABC):
             filedir_rel = instance.path_dirname(rel_remote_path) #local_rel_path)
             if filedir_rel and filedir_rel != instance.path_sep() :
                 fulldir   = instance.path_join(dpl_job.get_path() , uid , filedir_rel)
-                uploaddir = instance.path_join(dpl_job.get_path() , filedir_rel )
                 full_file_path = instance.path_join( fulldir , filename )
                 lnstr = lnstr + (sep if lnstr else "") + "mkdir -p " + fulldir + sep + "ln -sf " + abs_path + " " +  full_file_path
+                # let's also put symbolic links by the script itself ... 
+                fulldir2   = instance.path_join(dpl_job.get_path() , filedir_rel)
+                full_file_path2 = instance.path_join( fulldir2 , filename )
+                lnstr = lnstr + (sep if lnstr else "") + "mkdir -p " + fulldir2 + sep + "ln -sf " + abs_path + " " +  full_file_path2
             else:
                 fulldir   = instance.path_join( dpl_job.get_path() , uid )
                 fulldir2  = dpl_job.get_path() # let's also put symbolic links by the file itself ... 
-                uploaddir = dpl_job.get_path()
                 full_file_path  = instance.path_join( fulldir  , filename )
                 full_file_path2 = instance.path_join( fulldir2 , filename )
                 lnstr = lnstr + (sep if lnstr else "") + "ln -sf " + abs_path + " " + full_file_path + sep + "ln -sf " + abs_path + " " + full_file_path2
