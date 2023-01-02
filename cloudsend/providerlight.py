@@ -1,6 +1,6 @@
 
 from abc import ABC , abstractmethod
-from cloudsend.provider import CloudSendProvider , stream_load , stream_dump , line_buffered , make_client_command , STREAM_RESULT, DIRECTORY_TMP
+from cloudsend.provider import CloudSendProvider , stream_load , stream_dump , line_buffered , make_client_command , STREAM_RESULT, DIRECTORY_TMP , get_EOL_conversion
 from cloudsend.core import *
 import copy , io
 from zipfile import ZipFile
