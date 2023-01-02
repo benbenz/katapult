@@ -124,6 +124,7 @@ fi # FILE_PYPI
 
 
 if [ -f "$FILE_JULIA" ]; then
+  echo "Installing Julia packages ..."
   julia $FILE_JULIA
   echo "Julia packages installed"
 fi

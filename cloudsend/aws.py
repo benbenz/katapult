@@ -534,6 +534,10 @@ def aws_create_instance(session,instance_config,vpc,subnet,secGroup,keypair_name
             for image in images['Images']:
                 debug(1,"{0} - {1}".format(image['ImageId'],image['Name']))
             sys.exit()
+        elif 'Unsupported' in errmsg:
+            debug(1,"Your account doesnt allow to create this type of instance",color=bcolors.FAIL)
+            debug(1,errmsg,color=bcolors.FAIL)
+            sys.exit()
         else:
             debug(1,"An error occured while trying to create this instance",errmsg)
         raise CloudSendError()

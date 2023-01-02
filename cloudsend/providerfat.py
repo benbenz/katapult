@@ -816,12 +816,19 @@ class CloudSendFatProvider(CloudSendProvider,ABC):
                 await ftp_client.chdir(global_path)
                 await self.sftp_put_string(ftp_client,batch_run_file,cmd_run_pre+cmd_run)
                 await self.sftp_put_string(ftp_client, batch_pid_file,cmd_pid)
+                commands = []
+
+                eol_command = get_EOL_conversion(instance,batch_run_file)
+                if eol_command:
+                    commands.append({'cmd':eol_command,'out':True})
+                    eol_command = get_EOL_conversion(instance,batch_pid_file)
+                    commands.append({'cmd':eol_command,'out':True})
                 # run
-                commands = [ 
+                commands.append([ 
                     { 'cmd': "chmod +x "+batch_run_file+" "+batch_pid_file, 'out' : True } ,  # important to wait for it >> True !!!
                     # execute main script (spawn) (this will wait for bootstraping)
                     { 'cmd': batch_run_file , 'out' : False } 
-                ]
+                ])
                 
                 await self._run_ssh_commands(instance,ssh_conn,commands)
                 tryagain = False
