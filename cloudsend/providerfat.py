@@ -231,8 +231,9 @@ class CloudSendFatProvider(CloudSendProvider,ABC):
                 # make bootstrap executable
                 { 'cmd': "chmod +x "+sh_files, 'out' : True },              
             ]
-            if 'win' in sys.platform:
-                commands.append({ 'cmd': "sed -i -e 's/\r$//' "+sh_files , 'out' : True} )
+            eol_command = get_EOL_conversion(instance,sh_files)
+            if eol_command:
+                commands.append({'cmd':eol_command,'output':True)
 
             await self._run_ssh_commands(instance,ssh_conn,commands)
 

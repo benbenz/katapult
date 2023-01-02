@@ -153,8 +153,10 @@ class CloudSendLightProvider(CloudSendProvider,ABC):
         commands = [
             { 'cmd' : 'chmod +x ' + sh_files , 'out' : True } ,
         ]
-        if 'win' in sys.platform:
-            commands.append({ 'cmd': "sed -i -e 's/\r$//' "+sh_files , 'out' : True} )
+        eol_command = get_EOL_conversion(self._maestro,sh_files)
+        if eol_command:
+            commands.append(eol_command)
+
         await self._run_ssh_commands(self._maestro,ssh_conn,commands) 
 
 
@@ -547,8 +549,9 @@ class CloudSendLightProvider(CloudSendProvider,ABC):
             await self.sftp_put_remote_file(ftp_client,'resetmaestro.sh')
             resetmaestro_sh = self._maestro.path_join( self._maestro.get_home_dir() , 'resetmaestro.sh' )
             commands = []
-            if 'win' in sys.platform:
-                commands.append({ 'cmd': "sed -i -e 's/\r$//' "+resetmaestro_sh , 'out' : True} )
+            eol_command = get_EOL_conversion(instance,resetmaestro_sh)
+            if eol_command:
+                commands.append({'cmd':eol_command,'output':True)
             commands.append(
                { 'cmd' : 'chmod +x '+resetmaestro_sh+' && ' + resetmaestro_sh , 'out' : True }
             )

@@ -877,6 +877,20 @@ def debug(level,*args,**kwargs):
         except:
             pass
 
+def get_EOL_conversion(instance,files_path):
+    if 'win' in sys.platform.lower():
+        this_platform = CloudSendPlatform.WINDOWS
+    else:
+        this_platform = CloudSendPlatform.LINUX
+    
+    if this_platform != instance.get_platform():
+        if this_platform == CloudSendPlatform.WINDOWS:
+            return "sed -i -e 's/\r$//' "+files_path 
+        else:
+            raise Error("not implemented yet")
+    else:
+        return None
+
 def convert_EOL(instance,file_content):
     WINDOWS_LINE_ENDING = b'\r\n'
     UNIX_LINE_ENDING = b'\n'
