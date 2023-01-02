@@ -155,7 +155,7 @@ class CloudSendLightProvider(CloudSendProvider,ABC):
         ]
         eol_command = get_EOL_conversion(self._maestro,sh_files)
         if eol_command:
-            commands.append({'cmd':eol_command,'output':True})
+            commands.append({'cmd':eol_command,'out':True})
 
         await self._run_ssh_commands(self._maestro,ssh_conn,commands) 
 
@@ -551,7 +551,7 @@ class CloudSendLightProvider(CloudSendProvider,ABC):
             commands = []
             eol_command = get_EOL_conversion(instance,resetmaestro_sh)
             if eol_command:
-                commands.append({'cmd':eol_command,'output':True})
+                commands.append({'cmd':eol_command,'out':True})
             commands.append(
                { 'cmd' : 'chmod +x '+resetmaestro_sh+' && ' + resetmaestro_sh , 'out' : True }
             )

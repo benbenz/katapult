@@ -233,7 +233,7 @@ class CloudSendFatProvider(CloudSendProvider,ABC):
             ]
             eol_command = get_EOL_conversion(instance,sh_files)
             if eol_command:
-                commands.append({'cmd':eol_command,'output':True})
+                commands.append({'cmd':eol_command,'out':True})
 
             await self._run_ssh_commands(instance,ssh_conn,commands)
 
