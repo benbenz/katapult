@@ -541,7 +541,7 @@ class CloudSendFatProvider(CloudSendProvider,ABC):
         if ssh_conn is not None:
             await self.sftp_put_remote_file(ftp_client,'reset.sh')
             reset_file = instance.path_join( instance.get_home_dir() , 'reset.sh' )
-            commnads = []
+            commands = []
             eol_command = get_EOL_conversion(instance,reset_file)
             if eol_command:
                 commands.append({'cmd':eol_command,'out':True})
