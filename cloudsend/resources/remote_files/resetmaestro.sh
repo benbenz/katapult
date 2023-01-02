@@ -1,4 +1,4 @@
-#!/usr/bin/env bash
+#!/usr/bin/bash
 
 if [[ $(ps -ef | awk '/[m]aestroserver/{print $2}') ]] ; then
     ps -ef | awk '/[m]aestroserver/{print $2}' | xargs kill 

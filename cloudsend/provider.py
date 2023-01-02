@@ -876,3 +876,18 @@ def debug(level,*args,**kwargs):
             sys.stderr.flush()
         except:
             pass
+
+def convert_EOL(instance,file_content):
+    WINDOWS_LINE_ENDING = b'\r\n'
+    UNIX_LINE_ENDING = b'\n'
+    
+    if 'win' in sys.platform.lower():
+        this_platform = CloudSendPlatform.WINDOWS
+    else:
+        this_platform = CloudSendPlatform.LINUX
+    
+    if this_platform != instance.get_platform():
+        origin = WINDOWS_LINE_ENDING if this_platform==CloudSendPlatform.WINDOWS else UNIX_LINE_ENDING
+        dest   = WINDOWS_LINE_ENDING if instance.get_platform()==CloudSendPlatform.WINDOWS else UNIX_LINE_ENDING
+        file_content = file_content.replace(origin, dest)
+        return file_content

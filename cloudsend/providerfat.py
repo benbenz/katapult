@@ -9,7 +9,7 @@ from io import BytesIO
 import csv , io
 import pkg_resources
 from cloudsend.core import *
-from cloudsend.provider import CloudSendProvider , CloudSendProviderState , debug , PROVIDER_CONFIG , DIRECTORY_TMP_AUTO_STOP , DIRECTORY_TMP
+from cloudsend.provider import CloudSendProvider , CloudSendProviderState , debug , PROVIDER_CONFIG , DIRECTORY_TMP_AUTO_STOP , DIRECTORY_TMP , convert_EOL
 from cloudsend.config_state import ConfigManager , StateSerializer , STATE_FILE
 from enum import IntFlag
 from threading import current_thread
