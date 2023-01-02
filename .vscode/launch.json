@@ -24,7 +24,7 @@
             "program": "${workspaceFolder}/cloudsend/demo.py",
             "console": "integratedTerminal",
             "cwd": "${workspaceFolder}",
-            "args": ["./kyel/config-montecarlo-10-1.py","reset"],
+            "args": ["./kyel/config-montecarlo10-1.py","reset"],
             "env": {
                 "PYTHONPATH":"${workspaceFolder}${pathSeparator}${env:PYTHONPATH}"
             }
