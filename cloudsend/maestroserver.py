@@ -122,11 +122,17 @@ class ServerContext:
         run_session = stream_load(self.cs_client,session_arg)
         if run_session is None:
             err_level = bcolors.FAIL if not allow_proxied else bcolors.WARNING
-            debug(1,label,"This session object has expired and can not be found in the server anymore",arg_number,arg_id,color=err_level)
+            debug(1,label,"This session object has expired and can not be found in the server anymore",session_arg,color=err_level)
             if allow_proxied:
                 debug(1,label,"Using CloudSendRunSessionProxy as argument",color=bcolors.WARNING)
-                run_session = CloudSendRunSessionProxy(session_number,session_id)
-                return run_session
+                try:
+                    session_number = int(session_arg['number'])
+                    session_id     = session_arg['id'].strip()
+                    run_session    = CloudSendRunSessionProxy(session_number,session_id)
+                    return run_session
+                except:
+                    debug(1,label,"Could not create proxied session",session_arg,color=bcolors.FAIL)
+                    return None
             else:
                 return None
         return run_session
