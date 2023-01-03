@@ -815,4 +815,7 @@ def init_instance_name(instance_config):
         #     return cs_instanceMaestro
 
         # ultimately, the maestro will be shared across projects... (to save $)
-        return cs_instanceMaestro
+        if instance_config.get('_maestro_name_proj',False)==True:
+            return cs_instanceMaestro + '-' + instance_config['project'] 
+        else:
+            return cs_instanceMaestro

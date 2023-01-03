@@ -63,7 +63,8 @@ class CloudSendLightProvider(CloudSendProvider,ABC):
                     'type'         : img_type , 
                     'dev'          : self._config.get('dev',False) ,
                     'project'      : self._config.get('project',None) ,
-                    'region'       : region
+                    'region'       : region ,
+                    '_maestro_name_proj' : self._config.get('_maestro_name_proj',False)
                 }
                 self._maestro = CloudSendInstance(maestro_cfg,None)
 
