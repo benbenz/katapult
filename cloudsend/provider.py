@@ -262,7 +262,13 @@ class CloudSendProvider(ABC):
             self.debug(1,"KeyPair not found locally, we will have to regenerate it ...",color=bcolors.WARNING)
             #self.create_keypair(region)
             await self._refresh_instance_key(instance)
-        k = asyncssh.read_private_key(keypair_filename)
+        try:
+            k = asyncssh.read_private_key(keypair_filename)
+        except:
+            # key file exists but is invalid >> try again
+            await self._refresh_instance_key(instance)
+            k = asyncssh.read_private_key(keypair_filename)
+
         self.debug(1,"connecting to",instance.get_name(),"@",instance.get_ip_addr())
         retrys = 0 
         retrys_key = 0
@@ -531,6 +537,10 @@ class CloudSendProvider(ABC):
     def get_suggested_image(self,region):
         pass
 
+    @abstractmethod
+    def version(self):
+        pass
+
     # Core API 
 
     @abstractmethod
@@ -788,6 +798,8 @@ def get_client(config_=None):
 
             client = craws.aws.AWSCloudSendFatProvider(config)
 
+            print("Using VERSION",client.version())
+
             return client
 
         else:
@@ -795,6 +807,8 @@ def get_client(config_=None):
             craws  = __import__("cloudsend.aws")
 
             client = craws.aws.AWSCloudSendLightProvider(config)
+
+            print("Using VERSION",client.version())
 
             return client
 

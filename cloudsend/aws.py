@@ -48,30 +48,35 @@ def aws_retrieve_keypair(session,region,keypair_name,key_filename):
     ec2 = session.resource('ec2')
 
     try:
-        keypairs = ec2_client.describe_key_pairs(KeyNames=[keypair_name])
+        keypairs = ec2_client.describe_key_pairs(KeyNames=[keypair_name],IncludePublicKey=True)
     except ClientError as e:
         errmsg = str(e)
         if 'InvalidKeyPair.NotFound' in errmsg:
             keypair , kcreated = aws_create_keypair(session,region,keypair_name,key_filename)
             return kcreated # created
 
-    # delete / create instead ... 
-    # ISSUE: this will invalidate clients on other computers ... 
-    ec2_client.delete_key_pair(KeyName=keypair_name,KeyPairId=keypairs['KeyPairs'][0]['KeyPairId'])
-    keypair , kcreated = aws_create_keypair(session,region,keypair_name,key_filename)
-    return kcreated
+    keypair_retrieve_working = False
+
+    if not keypair_retrieve_working:
+        # delete / create instead ... 
+        # ISSUE: this will invalidate clients on other computers ... 
+        ec2_client.delete_key_pair(KeyName=keypair_name,KeyPairId=keypairs['KeyPairs'][0]['KeyPairId'])
+        keypair , kcreated = aws_create_keypair(session,region,keypair_name,key_filename)
+        return kcreated
 
     # this is sadly not working: ec2.KeyPair returns a KeyPairInfo and not a KeyPair ... :/
     # TODO: make code commented below work
     #
-    # keypair = ec2.KeyPair(keypair_name)
-    # fpath   = key_filename
-    # pemfile = open(fpath, "w")
-    # pemfile.write(keypair.key_material) # save the private key in the directory (we will use it with SSH client)
-    # pemfile.close()
-    # os.chmod(fpath, 0o600) # change permission to use with ssh (for debugging)
+    else:
+        key_pair = ec2.KeyPair(keypair_name)
+        #keypair = boto3.resource('ec2').KeyPair(keypair_name)
+        fpath   = key_filename
+        pemfile = open(fpath, "w")
+        pemfile.write(key_pair.key_material) # save the private key in the directory (we will use it with SSH client)
+        pemfile.close()
+        os.chmod(fpath, 0o600) # change permission to use with ssh (for debugging)
 
-    return False 
+        return False 
 
 def aws_create_keypair(session,region,keypair_name,key_filename):
     debug(1,"Creating KEYPAIR ...")
@@ -904,13 +909,19 @@ class AWSCloudSendProviderImpl():
             region = obj
         else:
             region = obj.get_region()
-        return aws_get_session(self._profile_name,region)        
+        return aws_get_session(self._profile_name,region)   
+
+    def version(self):
+        return boto3.__version__     
 
 
 class AWSCloudSendFatProvider(CloudSendFatProvider,AWSCloudSendProviderImpl):
 
     def __init__(self, conf):
         CloudSendFatProvider.__init__(self,conf)
+
+    def version(self):
+        return AWSCloudSendProviderImpl.version(self)
 
     def find_instance(self,config):
         return AWSCloudSendProviderImpl.find_instance(self,config)
@@ -962,6 +973,9 @@ class AWSCloudSendLightProvider(CloudSendLightProvider,AWSCloudSendProviderImpl)
 
     def __init__(self, conf):
         CloudSendLightProvider.__init__(self,conf)
+
+    def version(self):
+        return AWSCloudSendProviderImpl.version(self)
 
     def find_instance(self,config):
         return AWSCloudSendProviderImpl.find_instance(self,config)

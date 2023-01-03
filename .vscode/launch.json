@@ -14,7 +14,7 @@
             "cwd": "${workspaceFolder}",
             "args": ["config.py"],
             "env": {
-                "PYTHONPATH":"${workspaceRoot}:$PYTHONPATH"
+                "PYTHONPATH":"${workspaceRoot}:${workspaceRoot}/.venv/lib/python3.9/site-packages:$PYTHONPATH"
             }
         },
         {
@@ -112,6 +112,18 @@
             "env": {
                 "PYTHONPATH":"${workspaceRoot}:$PYTHONPATH"
             }
-        }  
+        }  ,
+        {
+            "name": "Test KeyPair",
+            "type": "python",
+            "request": "launch",
+            "program": "${workspaceFolder}/test_keypair.py",
+            "console": "integratedTerminal",
+            "cwd": "${workspaceFolder}",
+            "args": ["config.py"],
+            "env": {
+                "PYTHONPATH":"${workspaceRoot}:$PYTHONPATH"
+            
+        },
     ]
 }
