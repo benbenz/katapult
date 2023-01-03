@@ -347,19 +347,22 @@ class CloudSendFatProvider(CloudSendProvider,ABC):
             dpl_env  = env.deploy(instance) # "deploy" the environment to the instance and get a DeployedEnvironment
             dpl_job  = job.deploy(dpl_env,False) # do not add this dpl_job permanently (only use for utility here)
 
-            input_files = []
-            if job.get_config('upload_files'):
-                upload_files = job.get_config('upload_files')
-                if isinstance(upload_files,str):
-                    input_files.append(upload_files)
-                else:
-                    for upf in upload_files:
-                        input_files.append(upf)
-            if job.get_config('input_file'):
-                input_files.append(job.get_config('input_file'))
-            
+            # input_files = []
+            # if job.get_config('upload_files'):
+            #     upload_files = job.get_config('upload_files')
+            #     if isinstance(upload_files,str):
+            #         input_files.append(upload_files)
+            #     else:
+            #         for upf in upload_files:
+            #             input_files.append(upf)
+            # if job.get_config('input_file'):
+            #     input_files.append(job.get_config('input_file'))
+
+            input_files = self._get_files(dpl_job)            
+
             mkdir_cmd = ""
-            for in_file in input_files:
+            for in_file_ in input_files:
+                in_file = in_file_['file']
                 local_path , local_rel_path , abs_path , rel_remote_path , external = self._resolve_dpl_job_paths(in_file,dpl_job)
                 dirname = instance.path_dirname(abs_path)
                 if dirname:
@@ -387,57 +390,89 @@ class CloudSendFatProvider(CloudSendProvider,ABC):
                 global_path = instance.get_global_dir()
                 files_dir = instance.path_join( global_path , 'files' )
 
-                # change to job hash dir
-                await ftp_client.chdir(dpl_job.get_path())
-                if job.get_config('run_script'):
-                    script_args = job.get_config('run_script').split()
-                    script_file = script_args[0]
-                    filename = os.path.basename(script_file)
-                    try:
-                        await ftp_client.put(os.path.abspath(script_file),filename)
-                    except:
-                        self.debug(1,"You defined a script that is not available",job.get_config('run_script'))
+                #files = self._get_files(dpl_job)
 
-                # NEW ! WE now go to 
-                # COMMENT THIS IF YOU WANT TO PUT FILES in relation to the jobs' dir
-                if self._mutualize_uploads:
-                    await ftp_client.chdir(files_dir)
+                for upfile_ in input_files:
 
-                if job.get_config('upload_files'):
-                    files = job.get_config('upload_files')
-                    if isinstance( files,str):
-                        files = [ files ] 
-                    for upfile in files:
-                        local_path , local_rel_path , abs_path , rel_remote_path , external = self._resolve_dpl_job_paths(upfile,dpl_job)
-                                
-                        # check if the remote path has already been uploaded ...
-                        if abs_path in file_uploaded:
-                            self.debug(2,"skipping upload of file",upfile,"for job#",job.get_rank(),"(file has already been uploaded)")
-                            continue
-                        file_uploaded[abs_path] = True
-                        
-                        try:
-                            try:
-                                await ftp_client.put(local_path,rel_remote_path) #os.path.basename(upfile))
-                            except Exception as e:
-                                self.debug(1,"You defined an upload file that is not available",upfile)
-                                self.debug(1,e)
-                        except Exception as e:
-                            print("Error while uploading file",upfile)
-                            print(e)
-                if job.get_config('input_file'):
-
-                    local_path , local_rel_path , abs_path , rel_remote_path , external = self._resolve_dpl_job_paths(job.get_config('input_file'),dpl_job)
-
+                    upfile = upfile_['file']
+                    local_path , local_rel_path , abs_path , rel_remote_path , external = self._resolve_dpl_job_paths(upfile,dpl_job)
+                            
+                    # check if the remote path has already been uploaded ...
                     if abs_path in file_uploaded:
                         self.debug(2,"skipping upload of file",upfile,"for job#",job.get_rank(),"(file has already been uploaded)")
-                    else:
-                        file_uploaded[abs_path] = True
-                        #filename = os.path.basename(job.get_config('input_file'))
+                        continue
+                    file_uploaded[abs_path] = True
+                    
+                    try:
                         try:
-                            await ftp_client.put(local_path,rel_remote_path) #job.get_config('input_file')) #filename)
-                        except:
-                            self.debug(1,"You defined an input file that is not available:",job.get_config('input_file'))
+                            await ftp_client.put(local_path,abs_path) #os.path.basename(upfile))
+                        except FileNotFoundError as fne:
+                            if upfile_['type'] == 'upload':
+                                self.debug(1,"You defined an upload file that is not available",upfile)
+                            elif upfile_['type'] == 'input':
+                                self.debug(1,"You defined an input file that is not available:",upfile)
+                            elif upfile_['type'] == 'script':
+                                self.debug(1,"You defined a script that is not available",upfile)
+                            self.debug(1,fne)
+                        except Exception as e:
+                            self.debug(1,"Error while uploading",upfile)
+                            self.debug(1,e)
+
+                    except Exception as e:
+                        print("Error while uploading file",upfile)
+                        print(e)                
+
+                # # change to job hash dir
+                # await ftp_client.chdir(dpl_job.get_path())
+                # if job.get_config('run_script'):
+                #     script_args = job.get_config('run_script').split()
+                #     script_file = script_args[0]
+                #     filename = os.path.basename(script_file)
+                #     try:
+                #         await ftp_client.put(os.path.abspath(script_file),filename)
+                #     except:
+                #         self.debug(1,"You defined a script that is not available",job.get_config('run_script'))
+
+                # # NEW ! WE now go to 
+                # # COMMENT THIS IF YOU WANT TO PUT FILES in relation to the jobs' dir
+                # if self._mutualize_uploads:
+                #     await ftp_client.chdir(files_dir)
+
+                # if job.get_config('upload_files'):
+                #     files = job.get_config('upload_files')
+                #     if isinstance( files,str):
+                #         files = [ files ] 
+                #     for upfile in files:
+                #         local_path , local_rel_path , abs_path , rel_remote_path , external = self._resolve_dpl_job_paths(upfile,dpl_job)
+                                
+                #         # check if the remote path has already been uploaded ...
+                #         if abs_path in file_uploaded:
+                #             self.debug(2,"skipping upload of file",upfile,"for job#",job.get_rank(),"(file has already been uploaded)")
+                #             continue
+                #         file_uploaded[abs_path] = True
+                        
+                #         try:
+                #             try:
+                #                 await ftp_client.put(local_path,rel_remote_path) #os.path.basename(upfile))
+                #             except Exception as e:
+                #                 self.debug(1,"You defined an upload file that is not available",upfile)
+                #                 self.debug(1,e)
+                #         except Exception as e:
+                #             print("Error while uploading file",upfile)
+                #             print(e)
+                # if job.get_config('input_file'):
+
+                #     local_path , local_rel_path , abs_path , rel_remote_path , external = self._resolve_dpl_job_paths(job.get_config('input_file'),dpl_job)
+
+                #     if abs_path in file_uploaded:
+                #         self.debug(2,"skipping upload of file",upfile,"for job#",job.get_rank(),"(file has already been uploaded)")
+                #     else:
+                #         file_uploaded[abs_path] = True
+                #         #filename = os.path.basename(job.get_config('input_file'))
+                #         try:
+                #             await ftp_client.put(local_path,rel_remote_path) #job.get_config('input_file')) #filename)
+                #         except:
+                #             self.debug(1,"You defined an input file that is not available:",job.get_config('input_file'))
                 
                 # used to check if everything is uploaded
                 await ftp_client.chdir(dpl_job.get_path())
@@ -1234,20 +1269,34 @@ class CloudSendFatProvider(CloudSendProvider,ABC):
         return len(run_session.get_active_processes())
 
     async def get_num_instances(self):
-        return len(self._instances)        
+        return len(self._instances)   
+
+    def _get_files(self,dpl_job):   
+        files = []
+        upload_files = dpl_job.get_config('upload_files')
+        if upload_files:
+            if isinstance(upload_files,str):
+                upload_files = [ upload_files ]
+            for up_file in upload_files:
+                files.append({ 'file':up_file , 'type':'upload'})
+        if dpl_job.get_config('input_file'):
+            files.append({ 'file' : dpl_job.get_config('input_file') , 'type' : 'input' } )
+        
+        # we now do the same for the script file !
+        script_args = dpl_job.get_config('run_script').split()
+        script_file = script_args[0]
+        files.append( { 'file' : script_file , 'type' : 'script' } )    
+
+        return files      
 
     def _get_ln_command(self,dpl_job,uid):
-        files_to_ln = []
-        upload_files = dpl_job.get_config('upload_files')
         lnstr = ""
         sep = "\n" # " && "
         instance = dpl_job.get_instance()
-        if upload_files:
-            for up_file in upload_files:
-                files_to_ln.append(up_file)
-        if dpl_job.get_config('input_file'):
-            files_to_ln.append(dpl_job.get_config('input_file'))
+        files_to_ln = self._get_files(dpl_job)
+        
         for upfile in files_to_ln:
+            upfile = upfile['file']
             local_path , local_rel_path , abs_path , rel_remote_path , external = self._resolve_dpl_job_paths(upfile,dpl_job)
             filename    = instance.path_basename(abs_path)
             filedir_abs = instance.path_dirname(abs_path)

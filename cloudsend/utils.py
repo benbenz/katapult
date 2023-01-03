@@ -284,31 +284,40 @@ def resolve_paths(instance,the_file,ref_file,remote_ref_dir,mutualize=True):
         ref_abs_dir     = ref_abs_path #os.path.dirname(ref_abs_path)
         
     if os.path.isabs(the_file):
-        local_abs_path   = the_file
+        local_abs_path   = os.path.normpath(the_file)
     else:
-        local_abs_path   = os.path.join(ref_abs_dir,the_file)
+        local_abs_path   = os.path.normpath(os.path.join(ref_abs_dir,the_file))
     file_abs_dir    = os.path.dirname(local_abs_path)
     
     # this is a subdir: we have to respect the structure
     if file_abs_dir.startswith(ref_abs_dir):
-        rel_path = local_abs_path.replace(ref_abs_dir,"")
-        if rel_path.startswith(os.sep):
-            rel_path = rel_path[1:]
-        external = False
-    # this is not a subdir ! we gotta create a virtual subdir that 
-    else:
-        #rel_path = local_abs_path.replace(os.sep,'_')
-        # we gotta have to handle Windows situation here and transform the drive as a path bite
-        rel_path = local_abs_path # LETS USE THE ABS PATH as a REL PATH !
-        if rel_path.startswith(os.sep):
-            rel_path = rel_path[1:]
-        drive , path = os.path.splitdrive(rel_path)
-        if drive:
-            rel_path = os.path.join( drive.replace(':','') , path ) 
-            if rel_path.startswith('//'): # //network_drive
-                rel_path = rel_path[2:]
-            elif rel_path.startswith(os.sep): # /absolute
+        if ref_file:
+            rel_path = local_abs_path.replace(ref_abs_dir,"")
+            if rel_path.startswith(os.sep):
                 rel_path = rel_path[1:]
+        else: # we dont have a ref_file this means upfile is the ref file...
+            # the reference file should not have a directory in its relative path
+            rel_path = os.path.basename(local_abs_path)
+        external = False
+    # this is not a subdir ! we gotta create a virtual subdir  
+    else:
+        if ref_file: 
+            #rel_path = local_abs_path.replace(os.sep,'_')
+            # we gotta have to handle Windows situation here and transform the drive as a path bite
+            rel_path = local_abs_path # LETS USE THE ABS PATH as a REL PATH !
+            if rel_path.startswith(os.sep):
+                rel_path = rel_path[1:]
+            drive , path = os.path.splitdrive(rel_path)
+            if drive:
+                rel_path = os.path.join( drive.replace(':','') , path ) 
+                if rel_path.startswith('//'): # //network_drive
+                    rel_path = rel_path[2:]
+                elif rel_path.startswith(os.sep): # /absolute
+                    rel_path = rel_path[1:]
+        else: # we dont have a ref_file this means upfile is the ref file...
+            # the reference file should not have a directory in its relative path
+            # directory = './'
+            rel_path = os.path.basename(local_abs_path)
         external = True
 
     # convert the rel_path

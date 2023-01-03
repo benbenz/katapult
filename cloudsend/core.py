@@ -4,6 +4,7 @@ import cloudsend.utils as cloudsendutils
 import json
 import copy
 import os
+import ntpath , posixpath
 
 cs_keypairName         = 'cloudsend-keypair'
 cs_secGroupName        = 'cloudsend-sec-group-allow-ssh'
@@ -175,38 +176,56 @@ class CloudSendInstance():
     def get_global_dir(self):
         return self.path_join( self.get_home_dir() , 'run' )
 
-    def path_join(self,*args):
-        sep = self.path_sep()
-        first = True
-        fargs = []
-        for arg in args:
-            fargs.append( arg.rstrip(sep) if first else arg.strip(sep) )
-        return sep.join(fargs)
+    def path(self):
+        if self._platform == CloudSendPlatform.LINUX or self._platform == CloudSendPlatform.WINDWS_WSL:
+            return posixpath
+        elif self._platform == CloudSendPlatform.WINDWS:
+            return ntpath
 
+    def path_join(self,*args):
+        return self.path().join(*args)
+    
     def path_dirname(self,path):
-        #return os.path.dirname(path)
-        sep = self.path_sep()
-        path_expl = path.split(sep)
-        if len(path_expl)>2:
-            return sep.join( path_expl[:-1] )
-        else:
-            return ''
+        return self.path().dirname(path)
     
     def path_basename(self,path):
-        #return os.path.basename(path)
-        sep = self.path_sep()
-        path_expl = path.split(sep)
-        if len(path_expl)>1:
-            return path_expl[-1]
-        else:
-            return ''
-
-
+        return self.path().basename(path)
+    
     def path_sep(self):
-        if self._platform == CloudSendPlatform.LINUX or self._platform == CloudSendPlatform.WINDWS_WSL:
-            return '/'
-        elif self._platform == CloudSendPlatform.WINDWS:
-            return '\\'
+        return self.path().sep
+
+    # def path_join(self,*args):
+    #     sep = self.path_sep()
+    #     first = True
+    #     fargs = []
+    #     for arg in args:
+    #         fargs.append( arg.rstrip(sep) if first else arg.strip(sep) )
+    #     return sep.join(fargs)
+
+    # def path_dirname(self,path):
+    #     #return os.path.dirname(path)
+    #     sep = self.path_sep()
+    #     path_expl = path.split(sep)
+    #     if len(path_expl)>2:
+    #         return sep.join( path_expl[:-1] )
+    #     else:
+    #         return ''
+    
+    # def path_basename(self,path):
+    #     #return os.path.basename(path)
+    #     sep = self.path_sep()
+    #     path_expl = path.split(sep)
+    #     if len(path_expl)>1:
+    #         return path_expl[-1]
+    #     else:
+    #         return ''
+
+
+    # def path_sep(self):
+    #     if self._platform == CloudSendPlatform.LINUX or self._platform == CloudSendPlatform.WINDWS_WSL:
+    #         return '/'
+    #     elif self._platform == CloudSendPlatform.WINDWS:
+    #         return '\\'
 
     def set_ip_addr(self,value):
         self._ip_addr = value
