@@ -38,6 +38,10 @@ rm -f $output_file
 waittime=0
 while [[ $(< $env_path/state) != "bootstraped" ]] || ! [ -f $env_path/state ]
 do
+  if [[ $(< $env_path/state) == "failed" ]]; then
+    echo "Environment bootstraping has FAILED"
+    exit 97
+  fi
   if [[ $(ps aux | grep "bootstrap.sh" | grep "$env_name" | grep -v 'grep') ]]; then
     echo "Waiting on environment to be bootstraped"
     sleep 15 # sleep 15 seconds

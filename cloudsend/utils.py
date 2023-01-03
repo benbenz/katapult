@@ -4,6 +4,7 @@ import uuid
 import os
 import re
 from cloudsend.core import K_COMPUTED
+import pkg_resources
 
 # keys used for hash computation
 # Note: we include market options (SPOT ON|OFF e.g.) for the instance because it defines how the 'hardware' will run 
@@ -166,6 +167,11 @@ def compute_environment_object(env_config):
 
             with open(env_pypi, "r") as txtFile:
                 pipDeps = txtFile.read().split('\n')
+                #pipDeps = pkg_resources.parse_requirements(txtFile.read())
+                #res = []
+                #for pipDep in pipDeps:
+                #    print(pipDep)
+                #exit()
                 environment_obj['env_pypi'] = pipDeps
             
         elif isinstance(env_pypi,str) and os.path.isdir(env_pypi):

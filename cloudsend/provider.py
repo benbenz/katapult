@@ -369,7 +369,7 @@ class CloudSendProvider(ABC):
                         output = instance.path_join( instance.get_home_dir() , 'run' , 'out.log' )
                     else:
                         output = command['output']
-                    await ssh_conn.create_process(command['cmd'] + " 1>"+output+" 2>&1 &")
+                    await ssh_conn.create_process("rm " + output + ";" + command['cmd'] + " 1>"+output+" 2>&1 &")
             except (OSError, asyncssh.Error) as sshe:
                 self.debug(1,'SSH connection failed: ' + str(sshe),color=bcolors.FAIL)
                 #self.debug(1,"The SSH Client has been disconnected!")

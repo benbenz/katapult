@@ -22,6 +22,14 @@ echo "bootstraping" > "$HOME/run/$env_name/state"
 
 rm -f "$HOME/run/$env_name/ready"
 
+printf "\n\n\n"
+echo "********************************************************"
+echo "********************************************************"
+echo "              BOOTSTRAPING $env_name"
+echo "********************************************************"
+echo "********************************************************"
+printf "\n\n\n"
+
 if [ -f "$FILE_SH" ]; then
   (cd "$HOME/run/$env_name/"; "$FILE_SH")
 fi
@@ -113,7 +121,7 @@ if ([ -f "$FILE_PYPI" ] && ! [ -f "$FILE_CONDA" ]); then
     echo "virtual environment not found"
     virtualenv ".$env_name"
     source ".$env_name/bin/activate"
-    .$env_name/bin/pip install -r requirements.txt
+    .$env_name/bin/pip install -r "$FILE_PYPI"
   else
     echo "virtual environment exists"
     # we activate in run.sh now
@@ -129,9 +137,8 @@ if [ -f "$FILE_JULIA" ]; then
   echo "Julia packages installed"
 fi
 
+cd $HOME/run/$env_name && /usr/bin/python3 $HOME/run/env_check.py
 
-echo "bootstraped" > "$HOME/run/$env_name/state"
+#echo "bootstraped" > "$HOME/run/$env_name/state"
 
-echo "" > "$HOME/run/$env_name/ready"
-
-#python3 $HOME/run_remote.py
+#echo "" > "$HOME/run/$env_name/ready"
