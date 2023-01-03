@@ -600,11 +600,12 @@ def aws_terminate_instance(session,instance):
     ec2_client = session.client("ec2")
     #ec2_client = boto3.client("ec2", config=aws_get_config(instance.get_region()))
 
-    ec2_client.terminate_instances(InstanceIds=[instance.get_id()])
-
     if instance.get_data('SpotInstanceRequestId'):
 
         ec2_client.cancel_spot_instance_requests(SpotInstanceRequestIds=[instance.get_data('SpotInstanceRequestId')]) 
+
+    ec2_client.terminate_instances(InstanceIds=[instance.get_id()])
+
 
 def aws_reboot_instance(session,instance):
     region  = instance.get_region()
