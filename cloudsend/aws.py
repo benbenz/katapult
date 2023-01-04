@@ -912,7 +912,7 @@ class AWSCloudSendProviderImpl():
         return aws_get_session(self._profile_name,region)   
 
     def version(self):
-        return boto3.__version__     
+        return "BOTO3 version {0}".format(boto3.__version__)
 
 
 class AWSCloudSendFatProvider(CloudSendFatProvider,AWSCloudSendProviderImpl):

@@ -13,7 +13,7 @@ fi
 
 cd $run_path
 
-echo 'running' > $run_path/state
+echo 'running(running normally)' > $run_path/state
 
 # { $thecommand >$uid-run.log && echo "done" > $run_path/state && cp "$out_file" "$uid-$out_file" 2>/dev/null; }
-{ $thecommand >run.log && echo "done" > $run_path/state 2>&1; } 2>>run.log
+{ $thecommand >run.log && echo 'done(completed normally)' > $run_path/state 2>&1; } 2>>run.log

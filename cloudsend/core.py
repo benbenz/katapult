@@ -603,6 +603,7 @@ class CloudSendProcess():
         self._state = CloudSendProcessState.UNKNOWN
         self._active = True
         self._aborted_reason = None
+        self._substate = None
         self._job.attach_process(self)
      
     def get_uid(self):
@@ -630,6 +631,9 @@ class CloudSendProcess():
     def set_state(self,value):
         self._state = value
 
+    def set_substate(self,substate):
+        self._substate = substate
+
     def set_aborted_reason(self,reason):
         self._aborted_reason = reason 
 
@@ -643,14 +647,18 @@ class CloudSendProcess():
         return self._job.get_instance()
 
     def str_simple(self):
+        if self._state != CloudSendProcessState.DONE and self._state != CloudSendProcessState.RUNNING:
+            details = self._aborted_reason if self._aborted_reason else self._substate
+        else:
+            details = None
         if self._batch:
-            if self._aborted_reason:
-                return "CloudSendProcess: UID = {0} , PID = {1} , BATCH = {2} , STATE = {3} ({4})".format(self._uid,str(self._pid).rjust(5),self._batch.get_uid(),self._state.name,self._aborted_reason)
+            if details:
+                return "CloudSendProcess: UID = {0} , PID = {1} , BATCH = {2} , STATE = {3} ({4})".format(self._uid,str(self._pid).rjust(5),self._batch.get_uid(),self._state.name,details)
             else:
                 return "CloudSendProcess: UID = {0} , PID = {1} , BATCH = {2} , STATE = {3}".format(self._uid,str(self._pid).rjust(5),self._batch.get_uid(),self._state.name)
         else:
-            if self._aborted_reason:
-                return "CloudSendProcess: UID = {0} , PID = {1} , STATE = {2} ({3})".format(self._uid,str(self._pid).rjust(5),self._state.name,self._aborted_reason)
+            if details:
+                return "CloudSendProcess: UID = {0} , PID = {1} , STATE = {2} ({3})".format(self._uid,str(self._pid).rjust(5),self._state.name,details)
             else:
                 return "CloudSendProcess: UID = {0} , PID = {1} , STATE = {2}".format(self._uid,str(self._pid).rjust(5),self._state.name)
 

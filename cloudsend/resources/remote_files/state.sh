@@ -15,7 +15,7 @@ while [ $job_hash ]
 do
 
     if [[ "$job_hash" == "None" ]]; then
-        thestate="unknown(0)"
+        thestate="unknown(no job hash provided)"
         #exit
     fi
 
@@ -25,26 +25,28 @@ do
         cd $run_path 
 
         # this is running (by UID)
+        # https://stackoverflow.com/questions/3601515/how-to-check-if-a-variable-is-set-in-bash
+        # ${thestate+x} evaluates empty var 'thestate'
         if [ -z ${thestate+x} ] && [[ $uid != "None" ]]; then
             if [ -f "state" ]; then
-                if [[ $(< state) == "running" ]] && ! [[ $(ps aux | grep "$uid" | grep -v 'grep' | grep -v 'state.sh') ]]; then
+                if [[ $(< state) =~ ^running.*$ ]] && ! [[ $(ps aux | grep "$uid" | grep -v 'grep' | grep -v 'state.sh') ]]; then
                     # it says its running but we didnt find the UID, the PID nor the command name >> this has been aborted
-                    thestate="aborted(1)"
+                    thestate="aborted(script exited abnormally [1])"
                     #exit
                 # if state is done but we dont have the out file, this is probably aborted
                 # anyhow we cant do anything because we dont have an output file
-                elif [[ $(< state) == "done" ]] && ! [ -f "$out_file" ] ; then
-                    thestate="aborted(2)" 
+                elif [[ $(< state) =~ ^done.*$ ]] && ! [ -f "$out_file" ] ; then
+                    thestate="aborted(script exited abnormally [2])" 
                     #exit
                 else
                     # just display this state
                     thestate=$(< state)
-                    thestate="$thestate(0)"
+                    thestate="$thestate"
                     #tail state
                     #exit
                 fi
             elif [[ $(ps aux | grep "$uid" | grep -v 'grep' | grep -v 'state.sh') ]] ; then
-                thestate="running(1)"
+                thestate="running(running normally [1])"
                 #exit
             fi
         fi
@@ -53,11 +55,11 @@ do
     # this is running (by PID)
     if [ -z ${thestate+x} ] && [[ $pid != "None" ]] && ! [[ $pid -eq 0 ]]; then
         if [[ $(ps -p $pid | tail +2) ]] ; then
-            thestate="running(2)"
+            thestate="running(running normally [2])"
             #exit
         fi
         if [[ $(ps --ppid $pid | tail +2) ]]; then #usually this is the one that will hit positive (when using PID)
-            thestate="running(3)"
+            thestate="running(running normally [3])"
             #exit
         fi
     fi
@@ -92,7 +94,7 @@ do
     # fi
 
     if [ -z ${thestate+x} ] ; then
-        thestate="unknown(1)"
+        thestate="unknown(no process info)"
         #exit
     fi
 

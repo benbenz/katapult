@@ -22,7 +22,7 @@ cmd_file="$run_path/cmd"
 # the job has been marked as cancelled by kill.sh
 if [[ $(grep -s "$uid" $HOME/run/cancelled) ]]; then
   echo "Job has been cancelled by kill command"
-  echo 'aborted(10)' > $run_path/state # used to check the state of a process
+  echo 'aborted(cancelled by kill)' > $run_path/state # used to check the state of a process
   exit 1
 fi
 
@@ -32,7 +32,7 @@ printf '%s,%s\n' $uid $$ > $pid_file
 
 printf '%s\n%s\n' $thecommand $input_file > $cmd_file
 
-echo 'wait(20)' > $run_path/state # used to check the state of a process
+echo 'wait(waiting for environment)' > $run_path/state # used to check the state of a process
 rm -f $output_file
 
 waittime=0
@@ -40,6 +40,7 @@ while [[ $(< $env_path/state) != "bootstraped" ]] || ! [ -f $env_path/state ]
 do
   if [[ $(< $env_path/state) == "failed" ]]; then
     echo "Environment bootstraping has FAILED"
+    echo 'aborted(environment has failed)' > $run_path/state # used to check the state of a process
     exit 97
   fi
   if [[ $(ps aux | grep "bootstrap.sh" | grep "$env_name" | grep -v 'grep') ]]; then
@@ -48,16 +49,18 @@ do
     ((waittime=waittime+15))
     if [ $waittime -gt 3600 ]; then
       echo "Waited too long for bootstraped environment\nexiting"
+      echo 'aborted(waited too long for environment)' > $run_path/state
       exit 99
     fi
   else
     echo "Bootstraping has stopped without success, exiting"
+    echo 'aborted(bootstraping has failed)' > $run_path/state
     exit 98
   fi
 done
 echo "Environment is bootstraped"
 
-echo 'idle' > $run_path/state # used to check the state of a process
+echo 'idle(about to start)' > $run_path/state # used to check the state of a process
 
 FILE_CONDA="$HOME/run/$env_name/environment.yml"
 FILE_PYPI="$HOME/run/$env_name/requirements.txt"
@@ -79,7 +82,7 @@ fi
 #exit
 
 cd $run_path
-echo 'running' > $run_path/state
+echo 'running(running normally)' > $run_path/state
 #exec nohup $thecommand >run.log 2>&1  
 #exec $thecommand >run.log
 #$( exec $thecommand >run.log && echo 'done' > $run_path/state) & printf '%s\n' $(jobs -p) >  "${pid_file}2"

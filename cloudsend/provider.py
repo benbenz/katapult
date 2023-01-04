@@ -798,7 +798,7 @@ def get_client(config_=None):
 
             client = craws.aws.AWSCloudSendFatProvider(config)
 
-            print("Using VERSION",client.version())
+            print("Using",client.version())
 
             return client
 
@@ -808,7 +808,7 @@ def get_client(config_=None):
 
             client = craws.aws.AWSCloudSendLightProvider(config)
 
-            print("Using VERSION",client.version())
+            print("Using",client.version())
 
             return client
 

@@ -823,9 +823,9 @@ class CloudSendFatProvider(CloudSendProvider,ABC):
             cmd_run_pre = cmd_run_pre + "rm -f " + pid_file + sep
             cmd_run_pre = cmd_run_pre + "mkdir -p " + run_path + sep
             if is_first: # first sequential script is waiting for bootstrap to be done by default
-                cmd_run_pre = cmd_run_pre + "echo 'wait(40)' > " + state_file + "\n"
+                cmd_run_pre = cmd_run_pre + "echo 'wait(scheduled)' > " + state_file + "\n"
             else: # all other scripts will be queued
-                cmd_run_pre = cmd_run_pre + "echo 'queue(40)' > " + state_file + "\n"
+                cmd_run_pre = cmd_run_pre + "echo 'queue(scheduled)' > " + state_file + "\n"
 
             uid = process.get_uid()
 
@@ -1447,7 +1447,8 @@ class CloudSendFatProvider(CloudSendProvider,ABC):
             statestr = line.strip() 
             self.debug(2,"State=",statestr,"IP=",instance.get_ip_addr())
             stateinfo = statestr.split(',')
-            statestr  = re.sub(r'\([0-9]+\)','',stateinfo[2])
+            statestr  = re.sub(r'\([^\)]+\)','',stateinfo[2])
+            substate  = re.sub(r'[^\(]+\(([^\)]+)\)', r'\g<1>', stateinfo[2])
             uid       = stateinfo[0]
             pid       = stateinfo[1]
 
@@ -1471,12 +1472,14 @@ class CloudSendFatProvider(CloudSendProvider,ABC):
                     # we prefer to keep this ...
                     if not (process.get_state() == CloudSendProcessState.ABORTED and state == CloudSendProcessState.UNKNOWN):
                         process.set_state(state)
+                    if substate:
+                        process.set_substate(substate)
                     self.debug(2,process)
                     # SUPER IMPORTANT TO TEST with retrieved (remote) state !
                     # if we tested with curernt state we could test against all ABORTED jobs and the wait() function would cancel...
                     # this could potentially happen though
                     # instead, the retrieved state is actually UNKNOWN
-                    self.debug(2,'The state is ',uid,state)
+                    self.debug(2,'The state is ',uid,state,substate)
                 except Exception as e:
                     debug(1,"\nUnhandled state received by state.sh!!!",statestr,"\n")
                     debug(2,e)
