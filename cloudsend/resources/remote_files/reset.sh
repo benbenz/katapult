@@ -1,5 +1,16 @@
 #!/usr/bin/bash
 
+# for pid in `ps -ef | grep 'run.sh' | awk '{print $2}'` ; do
+#     microrun_pid=$(pgrep -P $pid)
+#     if ! [ -z ${microrun_pid+x} ] ; then
+#         script_pid=$(pgrep -P $microrun_pid)
+#         if ! [ -z ${script_pid+x} ] ; then
+#             kill $script_pid
+#         fi
+#         kill $microrun_pid
+#     fi
+# done
+
 if [[ $(ps -ef | awk '/[b]ootstrap/{print $2}') ]] ; then
     ps -ef | awk '/[b]ootstrap/{print $2}' | xargs kill 
 fi

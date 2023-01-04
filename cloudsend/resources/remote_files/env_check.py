@@ -120,3 +120,5 @@ else:
         print(error)
     with open('state','w') as file_state:
         file_state.write('failed')
+    with open('errors','w') as file_errors:
+        json.dump( errors , file_errors )

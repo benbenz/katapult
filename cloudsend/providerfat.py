@@ -15,6 +15,7 @@ from enum import IntFlag
 from threading import current_thread
 import shutil
 import asyncio , asyncssh
+import traceback 
 
 random.seed()
 
@@ -216,7 +217,7 @@ class CloudSendFatProvider(CloudSendProvider,ABC):
 
             # change dir to global dir (should be done once)
             await ftp_client.chdir(global_path)
-            for file in ['env_check.py','config.py','bootstrap.sh','run.sh','microrun.sh','state.sh','tail.sh','getpid.sh','reset.sh','kill.sh']:
+            for file in ['env_check.py','env_state.sh','config.py','bootstrap.sh','run.sh','microrun.sh','state.sh','tail.sh','getpid.sh','reset.sh','kill.sh']:
                 await self.sftp_put_remote_file(ftp_client,file) 
 
             self.debug(1,"Installing PyYAML for newly created instance ...")
@@ -525,6 +526,7 @@ class CloudSendFatProvider(CloudSendProvider,ABC):
                 self.debug(1,fne)
                 self.debug(1,"File NOT FOUND = ",fne.filename,color=bcolors.FAIL)
                 self.debug(1,"Error while deploying",color=bcolors.FAIL)
+                traceback.format_exception(fne)
                 #sys.exit() # this only kills the thread
                 #os.kill(os.getpid(), signal.SIGINT)
                 os._exit(1)
@@ -535,6 +537,7 @@ class CloudSendFatProvider(CloudSendProvider,ABC):
                 self.debug(1,"Error while deploying",color=bcolors.FAIL)
                 #sys.exit() # this only kills the thread
                 #os.kill(os.getpid(), signal.SIGINT)
+                traceback.format_exception(e)
                 os._exit(1)
                 raise e
             
@@ -1045,6 +1048,8 @@ class CloudSendFatProvider(CloudSendProvider,ABC):
             self.debug(1,"Not ready to get logs. Call 'start' first",color=bcolors.WARNING)
             return
 
+        envs_infos = dict()
+
         instances = self._instances if instance is None else [ instance ]
         for _instance in instances:
             ssh_conn   = None
@@ -1063,8 +1068,30 @@ class CloudSendFatProvider(CloudSendProvider,ABC):
                     log = await self.get_log(process,ssh_conn)
                     self.debug(1,"----------------------------------------------------------------------",color=bcolors.WARNING)
                     self.debug(1,"Job #",job.get_rank(),"has ABORTED with errors:",color=bcolors.WARNING)
+                    self.debug(1,"COMMAND =",job.get_config('run_script') or job.get_config('run_command'),color=bcolors.WARNING)
                     self.debug(1,log,color=bcolors.WARNING)
                     self.debug(1,process,color=bcolors.WARNING)
+
+                    substate = process.get_substate()
+
+                    # we have a script error caused by the environment...
+                    if substate and ('environment' in substate or 'bootstrap' in substate):
+                        dpl_job = process.get_job()
+                        dpl_env = dpl_job.get_env()
+                        env_info_key = _instance.get_name()+':'+dpl_env.get_name_with_hash()
+                        if env_info_key in envs_infos:
+                            env_info = envs_infos[env_info_key]
+                        else:
+                            env_info = await self._fetch_env_state(_instance,dpl_env,ssh_conn)
+                            envs_infos[env_info_key] = env_info
+                        ecolor = bcolors.OKCYAN if env_info['state'] == 'bootstraped' else bcolors.FAIL
+                        self.debug(1,"......................................................................",color=ecolor)
+                        self.debug(1,"ENV '{0}' bootstraping status: '{1}'".format(env_info['name'],env_info['state'].upper()),color=ecolor)
+                        if env_info.get('errors'):
+                            self.debug(1,"ENV '{0}' bootstraping errors:".format(env_info['name']),color=bcolors.FAIL)
+                            for error in env_info.get('errors'):
+                                self.debug(1,"- {0}".format(error),color=bcolors.FAIL)
+
             if ssh_conn:
                 # ftp_client.close()
                 ssh_conn.close()   
@@ -1377,6 +1404,37 @@ class CloudSendFatProvider(CloudSendProvider,ABC):
 
         return ssh_conn 
 
+    async def _fetch_env_state( self, instance , dpl_env , ssh_conn ):
+
+        # nothing to fetch
+        if not dpl_env:
+            return None
+    
+        global_path = instance.get_global_dir()
+        state_sh    = instance.path_join( global_path , 'env_state.sh' )
+        envinfo     = dpl_env.get_name_with_hash()
+        cmd         =  state_sh + " " + envinfo
+        
+        self.debug(2,"ENV sent for env_state.sh",dpl_env)
+        self.debug(2,"Executing command",cmd)
+        
+        attempts = 0 
+        while True:
+            try:
+                stdout, stderr = await self._exec_command(ssh_conn,cmd)
+                data = await stdout.read()
+                break
+            except (OSError, asyncssh.Error):
+                self.debug(1,"SSH connection error while sending env_state.sh command")
+                attempts += 1
+            if attempts > 5:
+                self.debug(1,"TOO MANY ATTEMPTS",color=bcolors.FAIL)
+                return fetched , None                
+
+        env_info = json.loads(data)
+
+        return env_info        
+
     def _get_instances_processes(self,processes):
         instances_processes = dict()
         for p in processes:
@@ -1395,10 +1453,11 @@ class CloudSendFatProvider(CloudSendProvider,ABC):
             shash       = job.get_hash()
             uid         = process.get_uid()
             pid         = process.get_pid()
+            pid_child  = process.get_pid_child()
             if jobsinfo:
-                jobsinfo = jobsinfo + " " + dpl_env.get_name_with_hash() + " " + str(shash) + " " + str(uid) + " " + str(pid) + " \"" + str(job.get_config('output_file')) + "\""
+                jobsinfo = jobsinfo + " " + dpl_env.get_name_with_hash() + " " + str(shash) + " " + str(uid) + " " + str(pid) + " " + str(pid_child) + " \"" + str(job.get_config('output_file')) + "\""
             else:
-                jobsinfo = dpl_env.get_name_with_hash() + " " + str(shash) + " " + str(uid) + " " + str(pid) + " \"" + str(job.get_config('output_file')) + "\""
+                jobsinfo = dpl_env.get_name_with_hash() + " " + str(shash) + " " + str(uid) + " " + str(pid) + " " + str(pid_child) + " \"" + str(job.get_config('output_file')) + "\""
             
         return jobsinfo 
     
@@ -1444,13 +1503,16 @@ class CloudSendFatProvider(CloudSendProvider,ABC):
         for line in data.splitlines():      
             if not line or line.strip()=="":
                 break     
-            statestr = line.strip() 
-            self.debug(2,"State=",statestr,"IP=",instance.get_ip_addr())
-            stateinfo = statestr.split(',')
+            state_line = line.strip() 
+            self.debug(2,"State=",state_line,"IP=",instance.get_ip_addr())
+            stateinfo = state_line.split(',')
             statestr  = re.sub(r'\([^\)]+\)','',stateinfo[2])
             substate  = re.sub(r'[^\(]+\(([^\)]+)\)', r'\g<1>', stateinfo[2])
             uid       = stateinfo[0]
             pid       = stateinfo[1]
+            pid_child = None
+            if len(stateinfo)>=4:
+                pid_child = stateinfo[3].strip()
 
             process = None
             for p in processes:
@@ -1463,6 +1525,13 @@ class CloudSendFatProvider(CloudSendProvider,ABC):
                 # let's take the opportunity to update it here...
                 if process.get_pid() is None and pid != "None":
                     process.set_pid( int(pid) )
+                
+                # always update those
+                if pid_child and pid_child != "None" :
+                    try:
+                        process.set_pid_child( int(pid_child) )
+                    except:
+                        pass
                 try:
                     state = CloudSendProcessState[statestr.upper()]
                     # let's keep as much history as we know 

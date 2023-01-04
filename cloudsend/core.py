@@ -599,6 +599,7 @@ class CloudSendProcess():
         self._job   = dpl_job
         self._uid   = cloudsendutils.generate_unique_id() 
         self._pid   = pid
+        self._pid_child    = None
         self._batch = batch
         self._state = CloudSendProcessState.UNKNOWN
         self._active = True
@@ -611,6 +612,9 @@ class CloudSendProcess():
 
     def get_pid(self):
         return self._pid
+
+    def get_pid_child(self):
+        return self._pid_child
 
     def get_batch(self):
         return self._batch 
@@ -634,11 +638,17 @@ class CloudSendProcess():
     def set_substate(self,substate):
         self._substate = substate
 
+    def get_substate(self):
+        return self._substate
+
     def set_aborted_reason(self,reason):
         self._aborted_reason = reason 
 
     def set_pid(self,value):
         self._pid = value 
+
+    def set_pid_child(self,value):
+        self._pid_child = value 
 
     def get_job(self):
         return self._job 
@@ -651,16 +661,17 @@ class CloudSendProcess():
             details = self._aborted_reason if self._aborted_reason else self._substate
         else:
             details = None
+
         if self._batch:
             if details:
-                return "CloudSendProcess: UID = {0} , PID = {1} , BATCH = {2} , STATE = {3} ({4})".format(self._uid,str(self._pid).rjust(5),self._batch.get_uid(),self._state.name,details)
+                return "CloudSendProcess: UID = {0} , PID = {1} , PID(child) = {2} , BATCH = {3} , STATE = {4} ({5})".format(self._uid,str(self._pid).rjust(5),str(self._pid_child).rjust(5),self._batch.get_uid(),self._state.name,details)
             else:
-                return "CloudSendProcess: UID = {0} , PID = {1} , BATCH = {2} , STATE = {3}".format(self._uid,str(self._pid).rjust(5),self._batch.get_uid(),self._state.name)
+                return "CloudSendProcess: UID = {0} , PID = {1} , PID(child) = {2} , BATCH = {3} , STATE = {4}".format(self._uid,str(self._pid).rjust(5),str(self._pid_child).rjust(5),self._batch.get_uid(),self._state.name)
         else:
             if details:
-                return "CloudSendProcess: UID = {0} , PID = {1} , STATE = {2} ({3})".format(self._uid,str(self._pid).rjust(5),self._state.name,details)
+                return "CloudSendProcess: UID = {0} , PID = {1} , PID(child) = {2} , STATE = {3} ({4})".format(self._uid,str(self._pid).rjust(5),str(self._pid_child).rjust(5),self._state.name,details)
             else:
-                return "CloudSendProcess: UID = {0} , PID = {1} , STATE = {2}".format(self._uid,str(self._pid).rjust(5),self._state.name)
+                return "CloudSendProcess: UID = {0} , PID = {1} , PID(child) = {2} , STATE = {3}".format(self._uid,str(self._pid).rjust(5),str(self._pid_child).rjust(5),self._state.name)
 
     def __repr__(self):
         return "CloudSendProcess: job = {0} , UID = {1} , PID = {2} , STATE = {3}".format(self._job,self._uid,str(self._pid).rjust(5),self._state.name)

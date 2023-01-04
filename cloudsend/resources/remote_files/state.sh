@@ -8,6 +8,7 @@ else
     job_hash="$1"; shift
     uid="$1"; shift
     pid=$1; shift
+    pid_child=$1; shift
     out_file="$1"; shift
 fi
 
@@ -30,13 +31,18 @@ do
         if [ -z ${thestate+x} ] && [[ $uid != "None" ]]; then
             if [ -f "state" ]; then
                 if [[ $(< state) =~ ^running.*$ ]] && ! [[ $(ps aux | grep "$uid" | grep -v 'grep' | grep -v 'state.sh') ]]; then
-                    # it says its running but we didnt find the UID, the PID nor the command name >> this has been aborted
-                    thestate="aborted(script exited abnormally)"
-                    #exit
+
+                    # check if this is a memory issue:
+                    if [[ "$pid_child" != "None" ]] && [[ $(sudo dmesg | grep "pid=$pid_child" | grep "oom-kill") ]]; then
+                        thestate="aborted(script exited abnormally [OOM Memory Kill])"
+                    else
+                        # it says its running but we didnt find the UID, the PID nor the command name >> this has been aborted
+                        thestate="aborted(script exited abnormally)"
+                    fi
                 # if state is done but we dont have the out file, this is probably aborted
                 # anyhow we cant do anything because we dont have an output file
                 elif [[ $(< state) =~ ^done.*$ ]] && ! [ -f "$out_file" ] ; then
-                    thestate="aborted(script terminated abnormally [no output])" 
+                    thestate="aborted(script terminated abnormally [no output file])" 
                     #exit
                 else
                     # just display this state
@@ -104,13 +110,26 @@ do
         pid=${arrIN[1]} 
     fi
 
-    echo "$uid,$pid,$thestate"
+    # the problem here is we may not be able to catch the PID on time ....
+    # hence we wont have this info to retrieve errors
+    # >> read in the pid file of the process, we have added the child pid now (appended by microrun.sh)
+
+    #micro_pid=$(ps -ef | grep 'microrun.sh' | grep "$uid" | grep -v 'grep' | awk '{print $2}')
+    #child_pid_out=$(pgrep -P $micro_pid) # this should give the script/command PID
+    if [ $pid_child == "None" ] && [ -f "$run_path/pid" ] ; then
+        info_process=$(< "$run_path/pid")
+        arrIN=(${info_process//,/ })
+        pid_child=${arrIN[2]} 
+    fi
+
+    echo "$uid,$pid,$thestate,$pid_child"
 
     # gets the next set of input parameters (hash,uid,pid,outfile)
     env_name="$1"; shift
     job_hash="$1"; shift
     uid="$1"; shift
     pid=$1; shift
+    pid_child=$1; shift
     out_file="$1"; shift
 
     unset thestate
