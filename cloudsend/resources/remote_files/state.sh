@@ -31,12 +31,12 @@ do
             if [ -f "state" ]; then
                 if [[ $(< state) =~ ^running.*$ ]] && ! [[ $(ps aux | grep "$uid" | grep -v 'grep' | grep -v 'state.sh') ]]; then
                     # it says its running but we didnt find the UID, the PID nor the command name >> this has been aborted
-                    thestate="aborted(script exited abnormally [1])"
+                    thestate="aborted(script exited abnormally)"
                     #exit
                 # if state is done but we dont have the out file, this is probably aborted
                 # anyhow we cant do anything because we dont have an output file
                 elif [[ $(< state) =~ ^done.*$ ]] && ! [ -f "$out_file" ] ; then
-                    thestate="aborted(script exited abnormally [2])" 
+                    thestate="aborted(script terminated abnormally [no output])" 
                     #exit
                 else
                     # just display this state
