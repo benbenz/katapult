@@ -1637,9 +1637,10 @@ class CloudSendFatProvider(CloudSendProvider,ABC):
                 # this helps with the demo which runs a wait() and a get() sequentially ...
                 if self._auto_stop:
                     try:
-                        # wait 2 mins so the demo works smoothly 
+                        # wait 5 mins so the demo works smoothly 
                         # and so the user has time thinking and typing stuff in the CLI as well
-                        await asyncio.sleep(60*2)
+                        # this is to avoid stopping/stopped instances while demo'ing
+                        await asyncio.sleep(60*5)
                     except asyncio.CancelledError as cerr:
                         raise cerr
                     try:

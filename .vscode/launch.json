@@ -42,6 +42,18 @@
             }
         },
         {
+            "name": "Demo CLI",
+            "type": "python",
+            "request": "launch",
+            "program": "${workspaceFolder}/cloudsend/demo.py",
+            "console": "integratedTerminal",
+            "cwd": "${workspaceFolder}",
+            "args": ["config.py","cli"],
+            "env": {
+                "PYTHONPATH":"${workspaceRoot}:${workspaceRoot}/.venv/lib/python3.9/site-packages:$PYTHONPATH"
+            }
+        },
+        {
             "name": "Demo Wait",
             "type": "python",
             "request": "launch",
