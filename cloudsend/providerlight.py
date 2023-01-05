@@ -594,7 +594,7 @@ class CloudSendLightProvider(CloudSendProvider,ABC):
         else:
             args = None
         # triggers maestro::get_jobs_states
-        await self._exec_maestro_command("get_states",args)
+        return await self._exec_maestro_command("get_states",args)
 
     async def print_jobs_summary(self,run_session=None,instance=None):
         if run_session is not None:

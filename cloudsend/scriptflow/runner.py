@@ -1,5 +1,10 @@
 from scriptflow.runners import AbstractRunner
 from cloudsend.provider import get_client
+from cloudsend.core import CloudSendProcessState
+from cloudsend.utils import generate_unique_id
+
+TASK_PROP_UID = 'cloudsend_uid'
+JOB_CFG_T_UID = 'task_uid'
 
 # Runner for tlamadon/scriptflow
 
@@ -7,6 +12,7 @@ class CloudSendRunner(AbstractRunner):
 
     def __init__(self, conf, handle_task_queue=False):
         self._cloudsend         = get_client(conf)
+        self._run_session       = None
         self._processes         = {}
         self._num_instances     = 0 
         self._handle_task_queue = handle_task_queue
@@ -18,7 +24,7 @@ class CloudSendRunner(AbstractRunner):
         if self._handle_task_queue:
             # always available slots
             # this will cause the controller to add all the tasks at once
-            # cloudsend will handle the stacking with the Batch feature ...
+            # cloudsend will handle the stacking with its own batch_run feature ...
             return self._num_instances
         else:
             return self._num_instances - len(self._processes)
@@ -29,9 +35,13 @@ class CloudSendRunner(AbstractRunner):
 
     def add(self, task):
 
+        # we're not doing much here because this method is not async ...
+        # leave it to the update(..) method to do the work...
+
         self._processes[task.hash] = {
-            "job":  None , # we have a one-to-one relationship between job and task (no demultiplier)
             "task": task , 
+            "job":  None , # we have a one-to-one relationship between job and task (no demultiplier)
+            "state" : CloudSendProcessState.UNKNOWN ,
             'start_time': datetime.now().strftime("%d/%m/%Y %H:%M:%S")
         }                
 
@@ -47,7 +57,7 @@ class CloudSendRunner(AbstractRunner):
         # deploy the added jobs on the instances ...
         await self._cloudsend.deploy()
         # run the jobs
-        await self._cloudsend.run() 
+        self._run_session = await self._cloudsend.run() 
 
         # cache the number of instances
         self._num_instances = await self._cloudsend.get_num_instances()
@@ -57,14 +67,65 @@ class CloudSendRunner(AbstractRunner):
             await asyncio.sleep(0.1)
 
     async def _update(self,controller):
-        to_remove = []
+
+        jobs_cfg = []
+
         for (k,p) in self._processes.items():
             # create the job if its not there (it will append/run automatically)
+            if p["job"]:
+                continue 
 
-            # else: check the status ...
+            task = p["task"]
 
-            pass
+            # let's not touch the name/uid of the task
+            # and it may be empty ...
+            task.set_prop(TASK_PROP_UID,generate_unique_id())
 
+            job_cfg = {
+                'input_file'  : None ,
+                'output_file' : self.outputs[0] if isinstance(self.outputs,list) else self.outputs ,
+                'run_command' : task.get_command() ,
+                'cpus_req'    : task.ncore ,
+                JOB_CFG_T_UID : task.get_prop(TASK_PROP_UID)
+            }
+
+            jobs_cfg.append( job_cfg )
+
+        # add the new jobs and get jobs objects back
+        objects = await self._cloudsend.cfg_add_jobs(jobs_cfg)
+
+        # 1 task <-> 1 job
+        assert( objects and len(objects['jobs']) == len(jobs_cfg) )
+
+        # associate the job objects with the tasks
+        for (k,p) in self._processes.items():
+            if p["job"]:
+                continue
+            found = False
+            for job in objects['jobs']:
+                if job.get_config(JOB_CFG_T_UID) == p["task"].get_prop(TASK_PROP_UID):
+                    p["job"] = job
+                    found = True
+                    break
+            if not found:
+                raise Error("Internal Error: could not find job for task")
+
+        # fetch statusses here ...
+        processes_states = await self._cloudsend.get_jobs_state(self._run_session)
+
+        #update status
+        to_remove = []
+        for (k,p) in self._processes.items():
+            job = p["job"]
+            for pstatus in processes_states.values():
+                if pstatus['job_config'][JOB_CFG_T_UID] == p["task"].get_prop(TASK_PROP_UID):
+                    p["state"] = pstatus['state']
+                    break
+            
+            if p["state"] & ( CloudSendProcessState.DONE | CloudSendProcessState.ABORTED):
+                to_remove.append(k)
+
+        # signal completed tasks
         for k in to_remove:
             task = self._processes[k]["task"]
             del self._processes[k]       

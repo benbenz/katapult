@@ -297,7 +297,8 @@ class ServerContext:
                 if args and len(args) == 1:
                     run_session = self.get_run_session("GET STATES:",args[0])
 
-                await self.cs_client.get_jobs_states(run_session)
+                result = await self.cs_client.get_jobs_states(run_session)
+                self.send_result(result)
 
             elif command == 'print_summary' or command == 'print':
 

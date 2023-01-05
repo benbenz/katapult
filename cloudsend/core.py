@@ -439,6 +439,9 @@ class CloudSendJob():
     def get_config(self,key,defaultVal=None):
         return self._config.get(key,defaultVal)
 
+    def get_config_DIRTY(self):
+        return self._config
+
     def get_env(self):
         return self._env
 
@@ -631,7 +634,21 @@ class CloudSendProcess():
 
     def get_state(self):
         return self._state
-     
+
+    def get_state_object(self,withJobRef=False,withJobCfg=False):
+        obj = {
+            'state' : self._state ,
+            'substate' : self._substate ,
+            'aborted_reason' : self._aborted_reason ,
+            'uid' : self._uid 
+        }
+        if withJobRef:
+            obj['job_rank'] = self._job.get_rank()
+            obj['job_hash'] = self._job.get_hash()
+        if withJobCfg:
+            obj['job_config'] = self._job.get_config_DIRTY()
+        return obj
+    
     def set_state(self,value):
         self._state = value
 
@@ -704,6 +721,13 @@ class CloudSendRunSession():
             for p in batch.get_active_processes(instance):
                 processes_res.append(p)
         return processes_res
+
+    def get_processes(self):
+        processes_res = []
+        for batch in self._batches:
+            for p in batch.get_processes():
+                processes_res.append(p)
+        return processes_res        
 
     def get_number(self):
         return self._number

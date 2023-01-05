@@ -1644,8 +1644,11 @@ class CloudSendFatProvider(CloudSendProvider,ABC):
                     except asyncio.CancelledError as cerr:
                         raise cerr
                     try:
-                        self.debug(1,"Stopping instance",instance.get_name(),color=bcolors.WARNING)
-                        self.stop_instance(instance)
+                        if not self._instances_watching[instance.get_name()]:
+                            self.debug(1,"Stopping instance",instance.get_name(),color=bcolors.WARNING)
+                            self.stop_instance(instance)
+                        else:
+                            self.debug(1,"NOT Stopping instance (the instance is being watched again)",instance.get_name(),color=bcolors.WARNING)
                     except:
                         pass
 
@@ -1867,6 +1870,11 @@ class CloudSendFatProvider(CloudSendProvider,ABC):
         
         await asyncio.gather( *jobs )
 
+        result = dict()
+        for process in run_session.get_processes():
+            job = process.get_job()
+            result[process.get_uid()] = process.get_state_object(True,True)
+        return result
 
     @abstractmethod
     def get_recommended_cpus(self,inst_cfg):

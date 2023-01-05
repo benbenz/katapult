@@ -715,6 +715,8 @@ def stream_dump(obj):
         return { 'class': type(obj).__name__ , 'hash':obj.get_hash() }
     elif isinstance(obj,CloudSendJob):
         return { 'class': type(obj).__name__ , 'rank':obj.get_rank() , 'hash':obj.get_hash() }
+    # elif isinstance(obj,CloudSendProcess):
+    #     return { 'class': type(obj).__name__ , 'job': stream_dump(obj.get_job()) , 'uid':obj.get_uid() , 'state': obj.get_state() , 'substate': obj.get_substate() , 'aborted_reason': obj.get_aborted_reason()}
     else:
         return obj      
 
