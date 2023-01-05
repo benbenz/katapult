@@ -62,6 +62,70 @@ async def mainloop(cs_client,reset=False):
 
     print("\n== DONE ==\n")
 
+async def cliloop(config_file):
+
+    print("\n== START ==\n")
+
+    # you have to call init before start
+    os.system("python3 -m cloudsend.cli init "+config_file)
+    os.system("python3 -m cloudsend.cli start")
+
+    # clear the cache
+    os.system("python3 -m cloudsend.cli clear_results_dir")
+
+    print("\n== DEPLOY ==\n")
+
+    # pre-deploy instance , environments and job files
+    # it is recommended to wait here allthough run.sh should wait for bootstraping
+    # currently, the bootstraping is non-blocking
+    # so this will barely wait ... (the jobs will do the waiting ...)
+    os.system("python3 -m cloudsend.cli deploy")
+
+    print("\n== RUN ==\n")
+
+    # run the scripts and get a process back
+    os.system("python3 -m cloudsend.cli run")
+
+    #await cs_client.kill( run_session.get_id() )
+
+    print("\n== ADD more ... ==\n")
+
+    if os.path.isfile('config_add.py'):
+        print("waiting 30 seconds before adding stuff ...")
+        await asyncio.sleep(30)
+        print("adding config_add.py")
+        os.system("python3 -m cloudsend.cli cfg_add_config config_add.py")
+    else:
+        print("this step is optional: you need to have a 'config_add.py' file present")
+
+    print("\n== WAIT ==\n")
+
+    print("Waiting for DONE or ABORTED ...")
+    # now that we have 'watch' before 'wait' , this will exit instantaneously
+    # because watch includes 'wait' mode intrinsiquely
+    os.system("python3 -m cloudsend.cli wait")
+
+    print("\n== SUMMARY ==\n")
+
+    # just to show the API ...
+    os.system("python3 -m cloudsend.cli get_jobs_states")
+
+    # print("\n== WAIT and TAIL ==\n")
+
+    os.system("python3 -m cloudsend.cli print_aborted_logs")
+
+    print("\n== FETCH RESULTS ==\n")
+
+    os.system("python3 -m cloudsend.cli fetch_results")
+
+    print("\n== FINALIZE ==\n")
+
+    os.system("python3 -m cloudsend.cli finalize")
+    # also shutdown the server ...
+    os.system("python3 -m cloudsend.cli shutdown")
+
+    print("\n== DONE ==\n")    
+
 async def waitloop(cs_client):
 
     print("\n== START ==\n")
@@ -108,6 +172,8 @@ def main():
     
     if command == 'wait':
         asyncio.run( waitloop(cs_client) )
+    elif command == 'cli':
+        asyncio.run( cliloop(config_file) )
     elif command == 'reset':
         asyncio.run( mainloop(cs_client,True) )
     else:

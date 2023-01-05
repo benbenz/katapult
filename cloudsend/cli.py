@@ -44,7 +44,7 @@ def is_cloudsend_process(p,name='maestroserver'):
         return False
 
 def cli(command):
-    #start_server() # locally we use python to start the server. maximizes the chance to be Windows complatible
+    start_server() # locally we use python to start the server. maximizes the chance to be Windows complatible
     maestro_client(command)
 
 def start_server():
@@ -139,7 +139,7 @@ def cli_translate(command,args):
     elif command == 'get_num_instances':
         return args
 
-    elif command == 'get_states':
+    elif command == 'get_states' or command == 'get_jobs_states':
         new_args = []
         if args and len(args) >= 2:
             run_session = CloudSendRunSessionProxy( int(args[0]) , args[1] )
@@ -156,7 +156,7 @@ def cli_translate(command,args):
             new_args.append( stream_dump(instance) )
         return new_args 
 
-    elif command == 'print_aborted':
+    elif command == 'print_aborted' or command == 'print_aborted_logs':
         new_args = []
         if args and len(args) >= 2:
             run_session = CloudSendRunSessionProxy( int(args[0]) , args[1] )

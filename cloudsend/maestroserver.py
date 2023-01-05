@@ -291,7 +291,7 @@ class ServerContext:
 
                 await self.cs_client.get_num_instances()                
 
-            elif command == 'get_states':
+            elif command == 'get_states' or command == 'get_jobs_states':
 
                 run_session = None
                 if args and len(args) == 1:
@@ -312,7 +312,7 @@ class ServerContext:
 
                 await self.cs_client.print_jobs_summary(run_session,instance)
 
-            elif command == 'print_aborted':
+            elif command == 'print_aborted' or command == 'print_aborted_logs':
 
                 run_session = None
                 instance    = None
