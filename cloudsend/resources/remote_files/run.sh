@@ -82,7 +82,7 @@ fi
 #exit
 
 cd $run_path
-echo 'running(running normally)' > $run_path/state
+echo 'running(normally)' > $run_path/state
 #exec nohup $thecommand >run.log 2>&1  
 #exec $thecommand >run.log
 #$( exec $thecommand >run.log && echo 'done' > $run_path/state) & printf '%s\n' $(jobs -p) >  "${pid_file}2"
@@ -91,7 +91,20 @@ echo 'running(running normally)' > $run_path/state
 # { $HOME/run/$env_name/microrun.sh "$thecommand" "$run_path" & echo $! > "${pid_file}2"; }
 
 # { $HOME/run/$env_name/microrun.sh "$thecommand" "$uid" "$run_path" "$pid_file" "$output_file" & echo $! > "${pid_file}"; }
-{ $HOME/run/microrun.sh "$thecommand" "$uid" "$run_path" "$pid_file" "$output_file"; }
+
+
+# { $HOME/run/microrun.sh "$thecommand" "$uid" "$run_path" "$pid_file" "$output_file"; }
+# CHANGED FOR INLINE COMMAND:
+#$thecommand 2>&1 >run.log & child_pid=$!
+$thecommand 2>error.log >run.log & child_pid=$!
+echo ",$child_pid" >> $pid_file
+wait $child_pid
+exit_status=$?
+if [[ $exit_status == 0 ]]; then
+  echo "done(completed normally)" > $run_path/state
+else
+  echo "aborted(exit status = $exit_status)" > $run_path/state
+fi
 
 # pgrep -P PID >>> Get the subprocesses
 

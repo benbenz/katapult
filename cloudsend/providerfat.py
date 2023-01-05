@@ -676,7 +676,8 @@ class CloudSendFatProvider(CloudSendProvider,ABC):
             run_path = instance.path_join( path , jhash , uid )
             run_log1 = instance.path_join( run_path , 'run-'+uid+'.log' )
             run_log2 = instance.path_join( run_path , 'run.log' )
-            stdout , stderr = await self._exec_command(ssh_conn,"cat "+run_log1+' '+run_log2)
+            err_log  = instance.path_join( run_path , 'error.log' )
+            stdout , stderr = await self._exec_command(ssh_conn,"cat "+run_log1+' '+run_log2+' '+err_log)
             log = await stdout.read()
             return log
         except:
