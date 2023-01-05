@@ -21,3 +21,8 @@ watch.log
 /tmp
 /dist
 /kyel
+/example/scriptflow/*/*.log
+/example/scriptflow/*/.sf
+/example/scriptflow/*/sf.json
+
+/scriptflow

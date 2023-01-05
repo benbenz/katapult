@@ -92,11 +92,12 @@ class CloudSendFatProvider(CloudSendProvider,ABC):
         old_state = self._state
 
         self.set_state( self._state & (CloudSendProviderState.NEW|CloudSendProviderState.STARTED))
-        if self._state & CloudSendProviderState.STARTED:
+        if len(added_objects['instances'])>0:
             await self.start()
-        if old_state & CloudSendProviderState.DEPLOYED:
+        if len(added_objects['jobs'])>0:
             await self.deploy()
-        if old_state & CloudSendProviderState.RUNNING:
+        # if we are already 
+        if len(added_objects['jobs'])>0:
             if kwargs.get('run_session'):
                 run_session = kwargs['run_session']
             else:

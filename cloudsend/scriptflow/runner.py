@@ -1,3 +1,5 @@
+import asyncio
+from datetime import datetime
 from scriptflow.runners import AbstractRunner
 from cloudsend.provider import get_client
 from cloudsend.core import CloudSendProcessState
@@ -10,7 +12,7 @@ JOB_CFG_T_UID = 'task_uid'
 
 class CloudSendRunner(AbstractRunner):
 
-    def __init__(self, conf, handle_task_queue=False):
+    def __init__(self, conf, handle_task_queue=True):
         self._cloudsend         = get_client(conf)
         self._run_session       = None
         self._processes         = {}
@@ -43,7 +45,7 @@ class CloudSendRunner(AbstractRunner):
             "job":  None , # we have a one-to-one relationship between job and task (no demultiplier)
             "state" : CloudSendProcessState.UNKNOWN ,
             'start_time': datetime.now().strftime("%d/%m/%Y %H:%M:%S")
-        }                
+        }   
 
     """
         Continuously checks on the tasks
@@ -64,7 +66,7 @@ class CloudSendRunner(AbstractRunner):
 
         while True:
             await self._update(controller)                
-            await asyncio.sleep(0.1)
+            await asyncio.sleep(5)
 
     async def _update(self,controller):
 
@@ -83,19 +85,21 @@ class CloudSendRunner(AbstractRunner):
 
             job_cfg = {
                 'input_file'  : None ,
-                'output_file' : self.outputs[0] if isinstance(self.outputs,list) else self.outputs ,
-                'run_command' : task.get_command() ,
+                'output_file' : task.outputs[0] if isinstance(task.outputs,list) else task.outputs ,
+                'run_command' : " ".join(task.get_command()) ,
                 'cpus_req'    : task.ncore ,
+                'number'      : 1 ,
                 JOB_CFG_T_UID : task.get_prop(TASK_PROP_UID)
             }
 
             jobs_cfg.append( job_cfg )
 
         # add the new jobs and get jobs objects back
-        objects = await self._cloudsend.cfg_add_jobs(jobs_cfg)
+        if len(jobs_cfg)>0:
+            objects = await self._cloudsend.cfg_add_jobs(jobs_cfg)
 
-        # 1 task <-> 1 job
-        assert( objects and len(objects['jobs']) == len(jobs_cfg) )
+            # 1 task <-> 1 job
+            assert( objects and len(objects['jobs']) == len(jobs_cfg) )
 
         # associate the job objects with the tasks
         for (k,p) in self._processes.items():
@@ -111,7 +115,7 @@ class CloudSendRunner(AbstractRunner):
                 raise Error("Internal Error: could not find job for task")
 
         # fetch statusses here ...
-        processes_states = await self._cloudsend.get_jobs_state(self._run_session)
+        processes_states = await self._cloudsend.get_jobs_states(self._run_session)
 
         #update status
         to_remove = []

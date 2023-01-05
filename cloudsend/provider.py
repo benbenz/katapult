@@ -555,7 +555,7 @@ class CloudSendProvider(ABC):
         with open(PROVIDER_CONFIG,'w') as config_file:
             config_file.write( json.dumps(self._config,indent=4) )
 
-    def resolve_config(self,config_list_obj):
+    def resolve_config(self,config_list_obj,key_name):
         # config could be a file path
         if isinstance(config_list_obj,str) and os.path.isfile(config_list_obj):
             config = get_config(config_list_obj)
@@ -582,7 +582,7 @@ class CloudSendProvider(ABC):
 
     def _cfg_add_objects(self,key_name,config_list_obj,save=True,**kwargs):
 
-        config = self.resolve_config(config_list_obj)
+        config = self.resolve_config(config_list_obj,key_name)
 
         self.debug(2,"ADDING objects",config)
         

@@ -52,31 +52,7 @@
             "env": {
                 "PYTHONPATH":"${workspaceRoot}:${workspaceRoot}/.venv/lib/python3.9/site-packages:$PYTHONPATH"
             }
-        },
-        {
-            "name": "Demo Wait",
-            "type": "python",
-            "request": "launch",
-            "program": "${workspaceFolder}/cloudsend/demo.py",
-            "console": "integratedTerminal",
-            "cwd": "${workspaceFolder}",
-            "args": ["config.py","wait"],
-            "env": {
-                "PYTHONPATH":"${workspaceRoot}:$PYTHONPATH"
-            }
-        },
-        {
-            "name": "Demo Montecarlo",
-            "type": "python",
-            "request": "launch",
-            "program": "${workspaceFolder}/cloudsend/demo.py",
-            "console": "integratedTerminal",
-            "cwd": "${workspaceFolder}",
-            "args": ["config-montecarlo10.py","reset"],
-            "env": {
-                "PYTHONPATH":"${workspaceRoot}:$PYTHONPATH"
-            }
-        },        
+        },       
         {
             "name": "Maestro Server",
             "type": "python",
@@ -100,31 +76,7 @@
             "env": {
                 "PYTHONPATH":"${workspaceRoot}:$PYTHONPATH"
             }
-        }   ,
-        {
-            "name": "CLI Init",
-            "type": "python",
-            "request": "launch",
-            "program": "${workspaceFolder}/cloudsend/cli.py",
-            "console": "integratedTerminal",
-            "cwd": "${workspaceFolder}",
-            "args": ["init","config.py"],
-            "env": {
-                "PYTHONPATH":"${workspaceRoot}:$PYTHONPATH"
-            }
-        }     ,
-        {
-            "name": "CLI Start",
-            "type": "python",
-            "request": "launch",
-            "program": "${workspaceFolder}/cloudsend/cli.py",
-            "console": "integratedTerminal",
-            "cwd": "${workspaceFolder}",
-            "args": ["start"],
-            "env": {
-                "PYTHONPATH":"${workspaceRoot}:$PYTHONPATH"
-            }
-        }  ,
+        },
         {
             "name": "Test KeyPair",
             "type": "python",
@@ -135,7 +87,20 @@
             "args": ["config.py"],
             "env": {
                 "PYTHONPATH":"${workspaceRoot}:$PYTHONPATH"
-            
+            }
         },
+        {
+            "name": "Scriptflow Simple",
+            "type": "python",
+            "request": "launch",
+            "program": "${workspaceFolder}/.venv/bin/scriptflow",
+            "console": "integratedTerminal",
+            "cwd": "${workspaceFolder}/example/scriptflow/simple/",
+            "args": ["run","sleepit"],
+            "env": {
+                "PATH":"${workspaceFolder}/.venv/bin:$PATH",
+                "PYTHONPATH":"${workspaceRoot}:${workspaceRoot}/.venv/lib/python3.9/site-packages:$PYTHONPATH"
+            }
+        }
     ]
 }
