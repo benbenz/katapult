@@ -39,7 +39,7 @@ class ConfigManager():
 
         #self._instances = [ ]
         if inst_cfgs:
-            for inst_cfg in inst_cfgs:
+            for k,inst_cfg in enumerate(inst_cfgs):
                 if inst_cfg.get(K_LOADED) == True:
                     continue 
 
@@ -61,7 +61,10 @@ class ConfigManager():
                         real_inst_cfg.pop('explode',None) # provide default value to avoid KeyError
 
                         real_inst_cfg['cpus'] = None
-                        real_inst_cfg['rank'] = "{0}.{1}".format(i+1,1)
+                        if inst_cfg.get('number',1)==1:
+                            real_inst_cfg['rank'] = "{0}".format(k+1)
+                        else:
+                            real_inst_cfg['rank'] = "{0}.{1}".format(k+1,i+1)
 
                         self._load_other_instance_info(real_inst_cfg)
 
@@ -88,13 +91,22 @@ class ConfigManager():
                                 num_sub_instances = 1
                             else:
                                 cpu_inc = cpu_split 
-                                num_sub_instances = num_sub_instances + 1
+                                if num_sub_instances * cpu_split < total_inst_cpus:
+                                    num_sub_instances = num_sub_instances + 1
                         else:
                             num_sub_instances = 1
                             cpu_inc = total_inst_cpus
                         cpus_created = 0 
                         for j in range(num_sub_instances):
-                            rank = "{0}.{1}".format(i+1,j+1)
+                            if inst_cfg.get('number',1)>1 and num_sub_instances>1:
+                                rank = "{0}.{1}.{2}".format(k+1,i+1,j+1)
+                            elif inst_cfg.get('number',1)>1:
+                                rank = "{0}.{1}".format(k+1,i+1)
+                            elif num_sub_instances>1:
+                                rank = "{0}.{1}".format(k+1,j+1)
+                            else:
+                                rank = "{0}".format(k+1)
+
                             if j == num_sub_instances-1: # for the last one we're completing the cpus with whatever
                                 inst_cpus = total_inst_cpus - cpus_created
                             else:
@@ -141,7 +153,7 @@ class ConfigManager():
 
         #self._jobs = [ ] 
         if job_cfgs:
-            rank=0
+            rank=len(self._jobs)
             for i,job_cfg in enumerate(job_cfgs):
                 if job_cfg.get(K_LOADED) == True:
                     continue 

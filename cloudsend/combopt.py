@@ -28,7 +28,7 @@ def multiple_knapsack_assignation(jobs,instances,method='mip'):
             for i in range(len(indexmap)):
                 if res[i,b]:
                     assigned[indexmap[i]] = True
-                    print("job",indexmap[i],">>>> instance",b)
+                    #print("job",indexmap[i],">>>> instance",b)
                     jobs[indexmap[i]].set_instance(instances[b])
 
         num_assigned = sum(assigned)

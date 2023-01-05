@@ -674,11 +674,17 @@ class CloudSendProcess():
                 return "CloudSendProcess: UID = {0} , PID = {1} , PID(child) = {2} , STATE = {3}".format(self._uid,str(self._pid).rjust(5),str(self._pid_child).rjust(5),self._state.name)
 
     def __repr__(self):
-        return "CloudSendProcess: job = {0} , UID = {1} , PID = {2} , STATE = {3}".format(self._job,self._uid,str(self._pid).rjust(5),self._state.name)
+        if self._state != CloudSendProcessState.DONE and self._state != CloudSendProcessState.RUNNING:
+            details = self._aborted_reason if self._aborted_reason else self._substate
+        else:
+            details = None
+        if details:
+            return "CloudSendProcess: job = {0} , UID = {1} , PID = {2} , PID(child) = {3} , STATE = {4} ({5})".format(self._job,self._uid,str(self._pid).rjust(5),str(self._pid_child).rjust(5),self._state.name,details)
+        else:
+            return "CloudSendProcess: job = {0} , UID = {1} , PID = {2} , PID(child) = {3} , STATE = {4}".format(self._job,self._uid,str(self._pid).rjust(5),str(self._pid_child).rjust(5),self._state.name)
          
     def __str__(self):
-        return "CloudSendProcess: job = {0} , UID = {1} , PID = {2} , STATE = {3}".format(self._job,self._uid,str(self._pid).rjust(5),self._state.name)
-
+        return self.__repr__()
 
 class CloudSendRunSession():
 

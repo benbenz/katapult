@@ -96,8 +96,6 @@ class CloudSendFatProvider(CloudSendProvider,ABC):
             await self.start()
         if old_state & CloudSendProviderState.DEPLOYED:
             await self.deploy()
-        elif old_state & CloudSendProviderState.ASSIGNED:
-            await self._assign()
         if old_state & CloudSendProviderState.RUNNING:
             if kwargs.get('run_session'):
                 run_session = kwargs['run_session']
@@ -185,6 +183,12 @@ class CloudSendFatProvider(CloudSendProvider,ABC):
         else: #if assignation is None or assignation=='multi_knapsack':
 
             combopt.multiple_knapsack_assignation(self._jobs,self._instances)   
+
+        for job in self._jobs:
+            if not job.get_instance():
+                self.debug(1,"Internal Error: job",job.get_rank(),"has not been assigned to any instance!")
+                continue
+            self.debug(1,"job",job.get_rank(),">>>> instance",job.get_instance().get_rank()) 
 
         self.set_state( self._state | CloudSendProviderState.ASSIGNED )
 
@@ -1067,11 +1071,11 @@ class CloudSendFatProvider(CloudSendProvider,ABC):
                     if not ssh_conn:
                         instanceid , ssh_conn , ftp_client = await self._wait_and_connect(_instance)
                     log = await self.get_log(process,ssh_conn)
-                    self.debug(1,"----------------------------------------------------------------------",color=bcolors.WARNING)
+                    self.debug(1,"\n\n------------------------------------------------------------------------------------------",color=bcolors.WARNING)
                     self.debug(1,"Job #",job.get_rank(),"has ABORTED with errors:",color=bcolors.WARNING)
                     self.debug(1,"COMMAND =",job.get_config('run_script') or job.get_config('run_command'),color=bcolors.WARNING)
-                    self.debug(1,log,color=bcolors.WARNING)
                     self.debug(1,process,color=bcolors.WARNING)
+                    self.debug(1,log,color=bcolors.WARNING)
 
                     substate = process.get_substate()
 
@@ -1116,8 +1120,6 @@ class CloudSendFatProvider(CloudSendProvider,ABC):
             return 'deploy'
         elif not self._state & CloudSendProviderState.RUNNING:
             return 'run'
-        elif not self._state & CloudSendProviderState.ASSIGNED:
-            return 'assign'
         else:
             return ''  
 
@@ -1734,8 +1736,6 @@ class CloudSendFatProvider(CloudSendProvider,ABC):
         if self._recovery:
             if self._state & CloudSendProviderState.STARTED:
                 await self.start()
-            if self._state & CloudSendProviderState.ASSIGNED:
-                await self._assign()
             if self._state & CloudSendProviderState.DEPLOYED:
                 await self.deploy()
             # should we have those here ? Or just let watch do it's thing ? 
@@ -1744,7 +1744,6 @@ class CloudSendFatProvider(CloudSendProvider,ABC):
                 await self.run()
         else:
             # self.start()
-            # self._assign()
             # self.deploy()
             pass
 

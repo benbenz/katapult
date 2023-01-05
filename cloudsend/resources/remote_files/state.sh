@@ -31,8 +31,10 @@ do
         if [ -z ${thestate+x} ] && [[ $uid != "None" ]]; then
             if [ -f "state" ]; then
                 if [[ $(< state) =~ ^running.*$ ]] && ! [[ $(ps aux | grep "$uid" | grep -v 'grep' | grep -v 'state.sh') ]]; then
-
                     # check if this is a memory issue:
+                    # dmesg command; 
+                    # or at the logfiles /var/log/kern.log, /var/log/messages, or /var/log/syslog.
+                    
                     if [[ "$pid_child" != "None" ]] && [[ $(sudo dmesg | grep "pid=$pid_child" | grep "oom-kill") ]]; then
                         thestate="aborted(script exited abnormally [OOM Memory Kill])"
                     else

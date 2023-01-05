@@ -211,11 +211,6 @@ def main():
     command = args.pop(0)
 
     ser_args = cli_translate(command,args)
-    # if len(args)>0:
-    #     the_command =  COMMAND_ARGS_SEP.join( [ command , COMMAND_ARGS_SEP.join(args) ] )
-    # else:
-    #     the_command = command
-
     # lets not escape the command, we're not sending it to a stream
     the_command = make_client_command( command , ser_args , False)
     cli(the_command)
