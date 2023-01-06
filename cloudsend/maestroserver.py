@@ -182,7 +182,7 @@ class ServerContext:
                 if not args:
                     reset = False
                 elif len(args)==1:
-                    reset = args[0] #args[0].strip().lower() == "true"
+                    reset = args[0]
                 else:
                     reset = False
 
@@ -258,7 +258,11 @@ class ServerContext:
 
             elif command == 'run':
 
-                run_session = await self.cs_client.run()
+                if args and len(args)==1:
+                    continue_session = args[0]
+                    run_session = await self.cs_client.run(continue_session)
+                else:
+                    run_session = await self.cs_client.run()
 
                 self.send_result(run_session)
             
@@ -342,6 +346,7 @@ class ServerContext:
 
                 directory   = None
                 run_session = None
+                use_normal_output = False
 
                 if args and len(args)>=1:
                     directory = args[0].strip()
@@ -349,8 +354,10 @@ class ServerContext:
                         directory = None
                 if args and len(args)>=2:
                     run_session = self.get_run_session("FETCH_RESULTS",args[1],True) # allow shallow object return
+                if args and len(args)>=3:
+                    use_normal_output = args[2]
 
-                out_dir = await self.cs_client.fetch_results(directory,run_session)
+                out_dir = await self.cs_client.fetch_results(directory,run_session,use_normal_output)
                 
                 self.send_result(out_dir)
 

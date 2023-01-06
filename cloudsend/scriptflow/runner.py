@@ -7,6 +7,8 @@ from cloudsend.utils import generate_unique_id
 
 TASK_PROP_UID = 'cloudsend_uid'
 JOB_CFG_T_UID = 'task_uid'
+SLEEP_PERIOD_SHORT = 0.1
+SLEEP_PERIOD_LONG  = 15
 
 # Runner for tlamadon/scriptflow
 
@@ -18,6 +20,7 @@ class CloudSendRunner(AbstractRunner):
         self._processes         = {}
         self._num_instances     = 0 
         self._handle_task_queue = handle_task_queue
+        self._sleep_period      = SLEEP_PERIOD_SHORT
 
     def size(self):
         return(len(self._processes))
@@ -39,13 +42,17 @@ class CloudSendRunner(AbstractRunner):
 
         # we're not doing much here because this method is not async ...
         # leave it to the update(..) method to do the work...
+        # we also want to group the handling of adding jobs and running them
+
+        # we don't want to wait as much when we are adding tasks >> lower the period
+        self._sleep_period = SLEEP_PERIOD_SHORT 
 
         self._processes[task.hash] = {
             "task": task , 
             "job":  None , # we have a one-to-one relationship between job and task (no demultiplier)
             "state" : CloudSendProcessState.UNKNOWN ,
             'start_time': datetime.now().strftime("%d/%m/%Y %H:%M:%S")
-        }   
+        }  
 
     """
         Continuously checks on the tasks
@@ -58,15 +65,13 @@ class CloudSendRunner(AbstractRunner):
         await self._cloudsend.clear_results_dir()
         # deploy the added jobs on the instances ...
         await self._cloudsend.deploy()
-        # run the jobs
-        self._run_session = await self._cloudsend.run() 
 
         # cache the number of instances
         self._num_instances = await self._cloudsend.get_num_instances()
 
         while True:
             await self._update(controller)                
-            await asyncio.sleep(5)
+            await asyncio.sleep(self._sleep_period)
 
     async def _update(self,controller):
 
@@ -101,6 +106,12 @@ class CloudSendRunner(AbstractRunner):
             # 1 task <-> 1 job
             assert( objects and len(objects['jobs']) == len(jobs_cfg) )
 
+            # run the jobs
+            if self._run_session is None:
+                self._run_session = await self._cloudsend.run() 
+            else:
+                await self._cloudsend.run(True) # continue_session
+
         # associate the job objects with the tasks
         for (k,p) in self._processes.items():
             if p["job"]:
@@ -117,6 +128,9 @@ class CloudSendRunner(AbstractRunner):
         # fetch statusses here ...
         processes_states = await self._cloudsend.get_jobs_states(self._run_session)
 
+        # augment the period now ...
+        self._sleep_period = SLEEP_PERIOD_LONG
+
         #update status
         to_remove = []
         for (k,p) in self._processes.items():
@@ -128,6 +142,10 @@ class CloudSendRunner(AbstractRunner):
             
             if p["state"] & ( CloudSendProcessState.DONE | CloudSendProcessState.ABORTED):
                 to_remove.append(k)
+
+        # we got some jobs to fetch
+        if len(to_remote)>0:
+            await self._cloudsend.fetch_results('',self._run_session,True,True)
 
         # signal completed tasks
         for k in to_remove:

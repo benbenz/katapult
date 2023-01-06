@@ -19,12 +19,17 @@ run_path="$HOME/run/$env_name/$job_hash/$uid"
 pid_file="$run_path/pid"
 cmd_file="$run_path/cmd"
 
-# the job has been marked as cancelled by kill.sh
-if [[ $(grep -s "$uid" $HOME/run/cancelled) ]]; then
-  echo "Job has been cancelled by kill command"
-  echo 'aborted(cancelled by kill)' > $run_path/state # used to check the state of a process
-  exit 1
-fi
+function check_cancelled () {
+  # the job has been marked as cancelled by kill.sh
+  if [[ $(grep -s "$uid" $HOME/run/cancelled) ]]; then
+    echo "Job has been cancelled by kill command"
+    echo 'aborted(cancelled by kill)' > $run_path/state # used to check the state of a process
+    exit 1
+  fi
+}
+
+check_cancelled
+
 
 # TODO: check if existing PID and PID running ... and throw warning, exit or do something ?
 # we print the mother PID in the PID file (it used to be the one from microrun)
@@ -38,6 +43,7 @@ rm -f $output_file
 waittime=0
 while [[ $(< $env_path/state) != "bootstraped" ]] || ! [ -f $env_path/state ]
 do
+  check_cancelled
   if [[ $(< $env_path/state) == "failed" ]]; then
     echo "Environment bootstraping has FAILED"
     echo 'aborted(environment has failed)' > $run_path/state # used to check the state of a process
@@ -80,6 +86,8 @@ fi
 
 #exec nohup $HOME/run/$env_name/microrun.sh "$thecommand" "$run_path"
 #exit
+
+check_cancelled
 
 cd $run_path
 echo 'running(normally)' > $run_path/state

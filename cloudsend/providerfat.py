@@ -92,19 +92,20 @@ class CloudSendFatProvider(CloudSendProvider,ABC):
         old_state = self._state
 
         self.set_state( self._state & (CloudSendProviderState.NEW|CloudSendProviderState.STARTED))
-        if len(added_objects['instances'])>0:
+        if (self.set_state & CloudSendProviderState.STARTED) and len(added_objects['instances'])>0:
             await self.start()
-        if len(added_objects['jobs'])>0:
+        if (self.set_state & CloudSendProviderState.DEPLOYED) and len(added_objects['instances'])>0 and len(added_objects['jobs'])>0:
             await self.deploy()
         # if we are already 
-        if len(added_objects['jobs'])>0:
+        if (self.set_state & CloudSendProviderState.RUNNING) and len(added_objects['jobs'])>0:
             if kwargs.get('run_session'):
                 run_session = kwargs['run_session']
             else:
                 run_session = self._current_session
             if run_session:
                 # continue on this run session
-                await self._run(run_session,None,True,False)
+                # only_new_processes = True
+                await self._run(run_session,None,True,False,True)
             else:
                 await self.run()
         return added_objects
@@ -657,7 +658,9 @@ class CloudSendFatProvider(CloudSendProvider,ABC):
             # re-deploy it
             await self._deploy_all(instance)
         if run_session: 
-            await self._run(run_session,instance,jobs_can_be_saved) #will run the jobs for this instance
+            # #1-True: do_init = True >> deactivate the jobs for the entire instance (it died)
+            # #2-False: only_new_processes = False >> we want to re-run everything on this instance
+            await self._run(run_session,instance,jobs_can_be_saved,True,False) #will run the jobs for this instance
 
     def _mark_aborted(self,run_session,instance,state_mask,reason=None):
         if run_session:
@@ -763,7 +766,7 @@ class CloudSendFatProvider(CloudSendProvider,ABC):
 
 
 
-    async def _run_jobs_for_instance(self,run_session,batch,instance,except_done) :
+    async def _run_jobs_for_instance(self,run_session,batch,instance,except_done,only_new_processes) :
 
         # we're not coming from revive but we've recovered a state ...
         # if except_done == False and self._recovery == True:
@@ -797,6 +800,10 @@ class CloudSendFatProvider(CloudSendProvider,ABC):
         for job in instance.get_jobs():
 
             if except_done and job.has_completed():
+                continue
+
+            # we just want to add to the run_session
+            if only_new_processes and job.get_state() != CloudSendProcessState.UNKNOWN:
                 continue
 
             # should literally never happen
@@ -887,13 +894,13 @@ class CloudSendFatProvider(CloudSendProvider,ABC):
         self.serialize_state()
 
     # entry point ...
-    async def run(self):
+    async def run(self,continue_session=False):
 
         # we were actually still running processes
         # >> let's use the current session that has been loaded
         if self._recovery and self._state & CloudSendProviderState.RUNNING:
             self.debug(1,"STATE RECOVERY: continuing run job ...",color=bcolors.CVIOLET)
-            await self._run(self._current_session,None,True,False)
+            await self._run(self._current_session,None,True,False,False)
         else:
 
             if not self._state & CloudSendProviderState.DEPLOYED:
@@ -904,21 +911,24 @@ class CloudSendFatProvider(CloudSendProvider,ABC):
             if self._recovery and self._state & CloudSendProviderState.IDLE:
                 self.debug(1,"STATE RECOVERY: jobs have been ran already - about the run again",color=bcolors.CVIOLET)
 
-            # we're gonna create a new run session ... deativate entirely the old one
-            if self._current_session:
-                self._current_session.deactivate() 
+            if not continue_session or not self._current_session:
+                # we're gonna create a new run session ... deativate entirely the old one
+                if self._current_session:
+                    self._current_session.deactivate() 
 
-            # create the new session
-            number = len(self._run_sessions)
-            self._current_session = CloudSendRunSession(number)
-            self._run_sessions.append(self._current_session)
+                # create the new session
+                number = len(self._run_sessions)
+                self._current_session = CloudSendRunSession(number)
+                self._run_sessions.append(self._current_session)
 
-            # run the new session
-            await self._run(self._current_session)
+                # run the new session
+                await self._run(self._current_session)
+            else:
+                await self._run(self._current_session,None,True,False,True)
         
         return self._current_session
 
-    async def _run(self,run_session,instance_filter=None,except_done=False,do_init=True):
+    async def _run(self,run_session,instance_filter=None,except_done=False,do_init=True,only_new_processes=False):
 
         # update the Provider state
         self.set_state( self._state & (CloudSendProviderState.ANY - CloudSendProviderState.RUNNING - CloudSendProviderState.IDLE) )
@@ -941,7 +951,7 @@ class CloudSendFatProvider(CloudSendProvider,ABC):
         # run the jobs on each instances
         jobs = []
         for instance in instances:
-            jobs.append( self._run_jobs_for_instance(run_session,batch,instance,except_done) ) 
+            jobs.append( self._run_jobs_for_instance(run_session,batch,instance,except_done,only_new_processes) ) 
         await asyncio.gather( *jobs )
 
         # update the Provider state
@@ -1138,7 +1148,7 @@ class CloudSendFatProvider(CloudSendProvider,ABC):
         shutil.rmtree(out_dir2, ignore_errors=True)   
         
 
-    async def fetch_results(self,out_dir=None,run_session=None,use_cached=True):
+    async def fetch_results(self,out_dir=None,run_session=None,use_cached=True,use_normal_output=False):
 
         if out_dir is None:
             out_dir = DIRECTORY_TMP
@@ -1191,14 +1201,14 @@ class CloudSendFatProvider(CloudSendProvider,ABC):
         # parallelize
         jobs = []
         for instance , i_processes in instances_processes.items():
-            jobs.append( self._fetch_results( instance , i_processes , session_out_dir) )
+            jobs.append( self._fetch_results( instance , i_processes , session_out_dir , use_normal_output ) )
         
         await asyncio.gather( *jobs )
 
         return session_out_dir
 
 
-    async def _fetch_results(self,instance,processes,session_out_dir):
+    async def _fetch_results(self,instance,processes,session_out_dir,use_normal_output):
 
         instanceid , ssh_conn , ftp_client = await self._wait_and_connect(instance)
 
@@ -1233,10 +1243,14 @@ class CloudSendFatProvider(CloudSendProvider,ABC):
                         directory = instance.path_dirname( remote_file_path )
                         filename  = instance.path_basename( remote_file_path )
                         
-                        file_name , file_extension = os.path.splitext(out_file)
-                        file_name = file_name.replace(os.sep,'_')
+                        if not use_normal_output:
+                            file_name , file_extension = os.path.splitext(out_file)
+                            file_name = file_name.replace(os.sep,'_')
+                            local_path = os.path.join(session_out_dir,'job_'+str(rank).zfill(3)+'_'+file_name+file_extension)
+                        else:
+                            file_name = out_file
+                            local_path = os.path.join(session_out_dir,file_name)
                         #ftp_client.chdir(directory)
-                        local_path = os.path.join(session_out_dir,'job_'+str(rank).zfill(3)+'_'+file_name+file_extension)
                         await ftp_client.chdir( directory )
                         try:
                             await ftp_client.get( filename , local_path )   

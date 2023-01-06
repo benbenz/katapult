@@ -656,7 +656,7 @@ class CloudSendProvider(ABC):
         pass
 
     @abstractmethod
-    async def run(self):
+    async def run(self,continue_session=False):
         pass
 
     @abstractmethod
@@ -688,7 +688,7 @@ class CloudSendProvider(ABC):
         pass
 
     @abstractmethod
-    async def fetch_results(self,directory=None,run_session=None,use_cached=True):
+    async def fetch_results(self,directory=None,run_session=None,use_cached=True,use_normal_output=False):
         pass
 
     @abstractmethod

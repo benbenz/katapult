@@ -116,6 +116,12 @@
   - [x] switch back to asyncio
   - [x] bugs: 1) not writing aborted 2) when not writing aborted, the UNKNOWN is not being fetch either ...
   - [ ] do not terminate maestro when the key is not working >> filter by name + PUBLIC KEY ???? or fragment of private key ?
+  - [x] scriptflow: the logic of re-running jobs should be in the runner 
+  - [-] scriptflow: use ensure_future in add_task to add more business logic there. use queue of tasks_add coroutines >> its best to group handling of tasks in update() function
+  - [x] check cancel list (by kill) before and after the wait env in run.sh
+  - [ ] env_check.py with dry_run functionnality >> gives progress bar of env setup
+  - [ ] fix once for all private key handling. maybe add project name to the key as well?
+  - [ ] add handling of multiple inputs and outputs
   - [ ] write pytests (unit tests)
   - [ ] add CLI:
      - [x] shutdown

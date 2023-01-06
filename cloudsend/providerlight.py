@@ -565,9 +565,9 @@ class CloudSendLightProvider(CloudSendProvider,ABC):
         # triggers maestro::deploy
         await self._exec_maestro_command("deploy") # use output - the deploy part will be skipped depending on option ...
 
-    async def run(self):
+    async def run(self,continue_session=False):
         # triggers maestro::run
-        run_session = await self._exec_maestro_command("run")
+        run_session = await self._exec_maestro_command("run",continue_session)
         self._current_session = run_session
         return self._current_session
 
@@ -636,7 +636,7 @@ class CloudSendLightProvider(CloudSendProvider,ABC):
             await self._exec_maestro_command("clear_results_dir",maestro_dir)
 
 
-    async def fetch_results(self,out_dir=None,run_session=None,use_cached=True):
+    async def fetch_results(self,out_dir=None,run_session=None,use_cached=True,use_normal_output=False):
 
         if out_dir is None:
             out_dir = DIRECTORY_TMP
@@ -676,7 +676,7 @@ class CloudSendLightProvider(CloudSendProvider,ABC):
         session_out_dir_remote = self._get_session_out_dir(maestro_dir,run_session,self._maestro)
 
         # fetch the results on the maestro
-        args = [ maestro_dir , run_session ]
+        args = [ maestro_dir , run_session , use_normal_output ]
         session_out_dir_remote = await self._exec_maestro_command("fetch_results",args)
 
         # get the tar file of the results

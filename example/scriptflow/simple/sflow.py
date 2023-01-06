@@ -14,6 +14,7 @@ from cloudsend.scriptflow.runner import CloudSendRunner
 
 config = {
     'project'      : 'scriptflow' ,
+    '_maestro_name_proj' : True , # so we can test different stuff concurrently (maestro is not multi-projects compatible yet)
     'profile'      : 'cloudsend_benben', 
     'debug'        : 1 ,
     'maestro'      : 'local' ,
