@@ -78,13 +78,14 @@ class CloudSendInstanceState(IntFlag):
 
 class CloudSendProcessState(IntFlag):
 #    FOO = 100
-    UNKNOWN   = 64 # set != 0 otherwise it may test positive when watching
+    CREATED   = 0  # when created
     WAIT      = 1  # waiting for bootstraping
     QUEUE     = 2  # queued (for sequential scripts)
     IDLE      = 4  # script about to start
     RUNNING   = 8  # script running
     DONE      = 16 # script has completed
     ABORTED   = 32 # script has been aborted
+    UNKNOWN   = 64 # set != 0 otherwise it may test positive when watching
     ANY       = 64 + 32 + 16 + 8 + 4 + 2 + 1 
 
 class CloudSendPlatform(IntFlag):
@@ -107,7 +108,7 @@ class CloudSendInstance():
         self._ip_addr_priv = None
         self._dns_addr_priv = None
         # state
-        self._state    = CloudSendProcessState.UNKNOWN
+        self._state    = CloudSendProcessState.CREATED
         # the config the instance has been created on
         self._config   = config 
         # dict data associated with it (AWS response data e.g.)
@@ -425,7 +426,7 @@ class CloudSendJob():
         self._env       = None
         self._instance  = None
         self._deployed = [ ]
-        if (not 'input_file' in self._config) or (not 'output_file' in self._config) or not isinstance(self._config['input_file'],str) or not isinstance(self._config['output_file'],str):
+        if (not 'input_files' in self._config) or (not 'output_files' in self._config) or not isinstance(self._config['input_files'],list) or not isinstance(self._config['output_files'],list):
             print("\n\n\033[91mConfiguration requires an input and output file names\033[0m\n\n")
             raise CloudSendError() 
 
@@ -572,6 +573,10 @@ class CloudSendDeployedJob(CloudSendJob):
     # proxied
     def get_config(self,key,defaultVal=None):
         return self._job._config.get(key,defaultVal)
+
+    # proxied
+    def get_config_DIRTY(self):
+        return self._job.get_config_DIRTY()
 
     def get_env(self):
         return self._env

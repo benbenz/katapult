@@ -235,9 +235,10 @@ def compute_job_hash(job_config):
             realfiles.append( os.path.realpath(f) )
         string_to_hash = string_to_hash + ":" + ",".join(realfiles)
 
-    if job_config.get('input_file'):
-        inputpath = os.path.realpath(job_config.get('input_file'))
-        string_to_hash = string_to_hash + ":" + inputpath
+    if job_config.get('input_files'):
+        for input_file in job_config.get('input_files'):
+            inputpath = os.path.realpath(input_file)
+            string_to_hash = string_to_hash + ":" + inputpath
 
     # also add the input file which should be pointing to a specific file 
     # so if this is different for some reason (but with all the same python file, args, and upload files)

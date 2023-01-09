@@ -354,17 +354,6 @@ class CloudSendFatProvider(CloudSendProvider,ABC):
             dpl_env  = env.deploy(instance) # "deploy" the environment to the instance and get a DeployedEnvironment
             dpl_job  = job.deploy(dpl_env,False) # do not add this dpl_job permanently (only use for utility here)
 
-            # input_files = []
-            # if job.get_config('upload_files'):
-            #     upload_files = job.get_config('upload_files')
-            #     if isinstance(upload_files,str):
-            #         input_files.append(upload_files)
-            #     else:
-            #         for upf in upload_files:
-            #             input_files.append(upf)
-            # if job.get_config('input_file'):
-            #     input_files.append(job.get_config('input_file'))
-
             input_files = self._get_files(dpl_job)            
 
             mkdir_cmd = ""
@@ -429,58 +418,6 @@ class CloudSendFatProvider(CloudSendProvider,ABC):
                         print("Error while uploading file",upfile)
                         print(e)                
 
-                # # change to job hash dir
-                # await ftp_client.chdir(dpl_job.get_path())
-                # if job.get_config('run_script'):
-                #     script_args = job.get_config('run_script').split()
-                #     script_file = script_args[0]
-                #     filename = os.path.basename(script_file)
-                #     try:
-                #         await ftp_client.put(os.path.abspath(script_file),filename)
-                #     except:
-                #         self.debug(1,"You defined a script that is not available",job.get_config('run_script'))
-
-                # # NEW ! WE now go to 
-                # # COMMENT THIS IF YOU WANT TO PUT FILES in relation to the jobs' dir
-                # if self._mutualize_uploads:
-                #     await ftp_client.chdir(files_dir)
-
-                # if job.get_config('upload_files'):
-                #     files = job.get_config('upload_files')
-                #     if isinstance( files,str):
-                #         files = [ files ] 
-                #     for upfile in files:
-                #         local_path , local_rel_path , abs_path , rel_remote_path , external = self._resolve_dpl_job_paths(upfile,dpl_job)
-                                
-                #         # check if the remote path has already been uploaded ...
-                #         if abs_path in file_uploaded:
-                #             self.debug(2,"skipping upload of file",upfile,"for job#",job.get_rank(),"(file has already been uploaded)")
-                #             continue
-                #         file_uploaded[abs_path] = True
-                        
-                #         try:
-                #             try:
-                #                 await ftp_client.put(local_path,rel_remote_path) #os.path.basename(upfile))
-                #             except Exception as e:
-                #                 self.debug(1,"You defined an upload file that is not available",upfile)
-                #                 self.debug(1,e)
-                #         except Exception as e:
-                #             print("Error while uploading file",upfile)
-                #             print(e)
-                # if job.get_config('input_file'):
-
-                #     local_path , local_rel_path , abs_path , rel_remote_path , external = self._resolve_dpl_job_paths(job.get_config('input_file'),dpl_job)
-
-                #     if abs_path in file_uploaded:
-                #         self.debug(2,"skipping upload of file",upfile,"for job#",job.get_rank(),"(file has already been uploaded)")
-                #     else:
-                #         file_uploaded[abs_path] = True
-                #         #filename = os.path.basename(job.get_config('input_file'))
-                #         try:
-                #             await ftp_client.put(local_path,rel_remote_path) #job.get_config('input_file')) #filename)
-                #         except:
-                #             self.debug(1,"You defined an input file that is not available:",job.get_config('input_file'))
-                
                 # used to check if everything is uploaded
                 await ftp_client.chdir(dpl_job.get_path())
                 await self.sftp_put_string(ftp_client, 'ready', "")
@@ -803,7 +740,7 @@ class CloudSendFatProvider(CloudSendProvider,ABC):
                 continue
 
             # we just want to add to the run_session
-            if only_new_processes and job.get_state() != CloudSendProcessState.UNKNOWN:
+            if only_new_processes and job.get_state() != CloudSendProcessState.CREATED:
                 continue
 
             # should literally never happen
@@ -853,7 +790,7 @@ class CloudSendFatProvider(CloudSendProvider,ABC):
             run_sh  = instance.path_join( global_path , 'run.sh' )
             run_log = instance.path_join( run_path , 'run-'+uid+'.log' )
             pid_sh  = instance.path_join( global_path , 'getpid.sh' )
-            cmd_run = cmd_run + run_sh+" \"" + dpl_env.get_name_with_hash() + "\" \""+dpl_job.get_command()+"\" " + job.get_config('input_file') + " " + job.get_config('output_file') + " " + job.get_hash()+" "+uid+">"+run_log+" 2>&1"
+            cmd_run = cmd_run + run_sh+" \"" + dpl_env.get_name_with_hash() + "\" \""+dpl_job.get_command()+"\" \"" + "|".join(job.get_config('input_files')) + "\" \"" + "|".join( job.get_config('output_files') ) + "\" " + job.get_hash()+" "+uid+">"+run_log+" 2>&1"
             cmd_run = cmd_run + "\n"
             cmd_pid = cmd_pid + pid_sh + " \"" + pid_file + "\"\n"
 
@@ -1238,25 +1175,26 @@ class CloudSendFatProvider(CloudSendProvider,ABC):
                             pass
 
                     elif process.get_state() == CloudSendProcessState.DONE:
-                        out_file = dpl_job.get_config('output_file') # this file is written for the local machine
-                        remote_file_path = instance.path_join( process.get_path() , out_file )
-                        directory = instance.path_dirname( remote_file_path )
-                        filename  = instance.path_basename( remote_file_path )
-                        
-                        if not use_normal_output:
-                            file_name , file_extension = os.path.splitext(out_file)
-                            file_name = file_name.replace(os.sep,'_')
-                            local_path = os.path.join(session_out_dir,'job_'+str(rank).zfill(3)+'_'+file_name+file_extension)
-                        else:
-                            file_name = out_file
-                            local_path = os.path.join(session_out_dir,file_name)
-                        #ftp_client.chdir(directory)
-                        await ftp_client.chdir( directory )
-                        try:
-                            await ftp_client.get( filename , local_path )   
-                        except asyncssh.sftp.SFTPNoSuchFile:
-                            self.debug(1,"No file for process",process.get_uid(),"job#",rank,directory,filename,local_path)
-                            pass
+                        out_files = dpl_job.get_config('output_files') # this file is written for the local machine
+                        for out_file in out_files:
+                            remote_file_path = instance.path_join( process.get_path() , out_file )
+                            directory = instance.path_dirname( remote_file_path )
+                            filename  = instance.path_basename( remote_file_path )
+                            
+                            if not use_normal_output:
+                                file_name , file_extension = os.path.splitext(out_file)
+                                file_name = file_name.replace(os.sep,'_')
+                                local_path = os.path.join(session_out_dir,'job_'+str(rank).zfill(3)+'_'+file_name+file_extension)
+                            else:
+                                file_name = out_file
+                                local_path = os.path.join(session_out_dir,file_name)
+                            #ftp_client.chdir(directory)
+                            await ftp_client.chdir( directory )
+                            try:
+                                await ftp_client.get( filename , local_path )   
+                            except asyncssh.sftp.SFTPNoSuchFile:
+                                self.debug(1,"No file for process",process.get_uid(),"job#",rank,directory,filename,local_path)
+                                pass
                     break
                 except (OSError, asyncssh.Error):
                     retrys += 1
@@ -1324,8 +1262,9 @@ class CloudSendFatProvider(CloudSendProvider,ABC):
                 upload_files = [ upload_files ]
             for up_file in upload_files:
                 files.append({ 'file':up_file , 'type':'upload'})
-        if dpl_job.get_config('input_file'):
-            files.append({ 'file' : dpl_job.get_config('input_file') , 'type' : 'input' } )
+        if dpl_job.get_config('input_files'):
+            for input_file in dpl_job.get_config('input_files'):
+                files.append({ 'file' : input_file, 'type' : 'input' } )
         
         # we now do the same for the script file !
         script_args = dpl_job.get_config('run_script').split()
@@ -1473,9 +1412,9 @@ class CloudSendFatProvider(CloudSendProvider,ABC):
             pid         = process.get_pid()
             pid_child  = process.get_pid_child()
             if jobsinfo:
-                jobsinfo = jobsinfo + " " + dpl_env.get_name_with_hash() + " " + str(shash) + " " + str(uid) + " " + str(pid) + " " + str(pid_child) + " \"" + str(job.get_config('output_file')) + "\""
+                jobsinfo = jobsinfo + " " + dpl_env.get_name_with_hash() + " " + str(shash) + " " + str(uid) + " " + str(pid) + " " + str(pid_child) + " \"" + "|".join(job.get_config('output_files')) + "\""
             else:
-                jobsinfo = dpl_env.get_name_with_hash() + " " + str(shash) + " " + str(uid) + " " + str(pid) + " " + str(pid_child) + " \"" + str(job.get_config('output_file')) + "\""
+                jobsinfo = dpl_env.get_name_with_hash() + " " + str(shash) + " " + str(uid) + " " + str(pid) + " " + str(pid_child) + " \"" + "|".join(job.get_config('output_files')) + "\""
             
         return jobsinfo 
     

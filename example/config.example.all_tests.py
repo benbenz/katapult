@@ -153,8 +153,8 @@ config = {
             'run_script'   : 'example/run_remote.py 2 15',  # the script to run (Python (.py) or Julia (.jl) for now) (prioritised vs 'run_command')
             'run_command'  : None ,                        # the command to run
             'upload_files' : [ "uploaded.txt"] ,           # any file to upload (array or string) - will be put in the same directory
-            'input_file'   : 'input.dat' ,                 # the input file name (used by the script)
-            'output_file'  : 'output.dat' ,                # the output file name (used by the script)
+            'input_files'   : 'input.dat' ,                 # the input file name (used by the script)
+            'output_files'  : 'output.dat' ,                # the output file name (used by the script)
         },
         {
             'env_name'     : 'env_err' ,                   # the environment to use (can be 'None' if solely one environment is provided above)
@@ -162,8 +162,8 @@ config = {
             'run_script'   : 'example/run_julia.jl 1 10',  # the script to run (Python (.py) or Julia (.jl) for now) (prioritised vs 'run_command')
             'run_command'  : None ,                        # the command to run
             'upload_files' : None ,                        # any file to upload (array or string) - will be put in the same directory
-            'input_file'   : 'input.dat' ,                 # the input file name (used by the script)
-            'output_file'  : 'output.dat' ,                # the output file name (used by the script)
+            'input_files'   : 'input.dat' ,                 # the input file name (used by the script)
+            'output_files'  : 'output.dat' ,                # the output file name (used by the script)
         },
         {
             'env_name'     : 'env4' ,                      # the environment to use (can be 'None' if solely one environment is provided above)
@@ -171,8 +171,8 @@ config = {
             'run_script'   : 'example/run_remote_err_mem.py',  # the script to run (Python (.py) or Julia (.jl) for now) (prioritised vs 'run_command')
             'run_command'  : None ,                        # the command to run
             'upload_files' : None ,                        # any file to upload (array or string) - will be put in the same directory
-            'input_file'   : 'input.dat' ,                 # the input file name (used by the script)
-            'output_file'  : 'output.dat' ,                # the output file name (used by the script)
+            'input_files'   : 'input.dat' ,                 # the input file name (used by the script)
+            'output_files'  : 'output.dat' ,                # the output file name (used by the script)
         },        
         {
             'env_name'     : 'env2b' ,                       # the environment to use (can be 'None' if solely one environment is provided above)
@@ -180,8 +180,8 @@ config = {
             'run_script'   : 'example/run_julia_err_mem.jl',# the script to run (Python (.py) or Julia (.jl) for now) (prioritised vs 'run_command')
             'run_command'  : None ,                       # the command to run
             'upload_files' : None ,  # any file to upload (array or string) - will be put in the same directory
-            'input_file'   : 'input.dat' ,                # the input file name (used by the script)
-            'output_file'  : 'output.dat' ,               # the output file name (used by the script)
+            'input_files'   : 'input.dat' ,                # the input file name (used by the script)
+            'output_files'  : 'output.dat' ,               # the output file name (used by the script)
         },
         {
             'env_name'     : 'env4' ,                      # the environment to use (can be 'None' if solely one environment is provided above)
@@ -189,17 +189,17 @@ config = {
             'run_script'   : 'example/run_remote.py 2 7',  # the script to run (Python (.py) or Julia (.jl) for now) (prioritised vs 'run_command')
             'run_command'  : None ,                        # the command to run
             'upload_files' : [ "uploaded.txt"] ,           # any file to upload (array or string) - will be put in the same directory
-            'input_file'   : 'input.dat' ,                 # the input file name (used by the script)
-            'output_file'  : 'output.dat' ,                # the output file name (used by the script)
+            'input_files'   : 'input.dat' ,                 # the input file name (used by the script)
+            'output_files'  : 'output.dat' ,                # the output file name (used by the script)
         },
         {
             'env_name'     : 'env4' ,                       # the environment to use (can be 'None' if solely one environment is provided above)
             'cpus_req'     : None ,                        # the CPU(s) requirements for the process (can be None)
-            'run_script'   : 'example/run_remote.py 2 8', # the script to run (Python (.py) or Julia (.jl) for now) (prioritised vs 'run_command')
+            'run_script'   : 'example/run_remote2.py 2 8', # the script to run (Python (.py) or Julia (.jl) for now) (prioritised vs 'run_command')
             'run_command'  : None ,                        # the command to run
             'upload_files' : [ "uploaded.txt"] ,           # any file to upload (array or string) - will be put in the same directory
-            'input_file'   : 'input.dat' ,                 # the input file name (used by the script)
-            'output_file'  : 'output.dat' ,                # the output file name (used by the script)
+            'input_files'   : 'input.dat' ,                 # the input file name (used by the script)
+            'output_files'  : ['output.dat' , 'output2.dat'] ,                # the output file name (used by the script)
         },
         {
             'env_name'     : 'env4' ,                      # the environment to use (can be 'None' if solely one environment is provided above)
@@ -207,8 +207,8 @@ config = {
             'run_script'   : 'example/run_remote_err.py 2 11', # the script to run (Python (.py) or Julia (.jl) for now) (prioritised vs 'run_command')
             'run_command'  : None ,                        # the command to run
             'upload_files' : [ "uploaded.txt"] ,           # any file to upload (array or string) - will be put in the same directory
-            'input_file'   : 'input.dat' ,                 # the input file name (used by the script)
-            'output_file'  : 'output.dat' ,                # the output file name (used by the script)
+            'input_files'   : 'input.dat' ,                 # the input file name (used by the script)
+            'output_files'  : 'output.dat' ,                # the output file name (used by the script)
         },
         {
             'env_name'     : 'env1' ,                       # the environment to use (can be 'None' if solely one environment is provided above)
@@ -216,8 +216,8 @@ config = {
             'run_script'   : 'example/run_julia.jl 1 10',# the script to run (Python (.py) or Julia (.jl) for now) (prioritised vs 'run_command')
             'run_command'  : None ,                       # the command to run
             'upload_files' : [ "/Users/ben/config.log" , "uploaded.txt"] ,  # any file to upload (array or string) - will be put in the same directory
-            'input_file'   : 'input.dat' ,                # the input file name (used by the script)
-            'output_file'  : 'output.dat' ,               # the output file name (used by the script)
+            'input_files'   : 'input.dat' ,                # the input file name (used by the script)
+            'output_files'  : 'output.dat' ,               # the output file name (used by the script)
             'repeat'       : 1
         } ,        
         {
@@ -226,8 +226,8 @@ config = {
             'run_script'   : 'example/run_julia.jl 1 10',# the script to run (Python (.py) or Julia (.jl) for now) (prioritised vs 'run_command')
             'run_command'  : None ,                       # the command to run
             'upload_files' : [ "/Users/ben/config.log" , "uploaded.txt"] ,  # any file to upload (array or string) - will be put in the same directory
-            'input_file'   : 'input.dat' ,                # the input file name (used by the script)
-            'output_file'  : 'output.dat' ,               # the output file name (used by the script)
+            'input_files'   : 'input.dat' ,                # the input file name (used by the script)
+            'output_files'  : 'output.dat' ,               # the output file name (used by the script)
         } ,
         # {
         #     'env_name'     : 'env1' ,                       # the environment to use (can be 'None' if solely one environment is provided above)
@@ -235,8 +235,8 @@ config = {
         #     'run_script'   : 'example/run_julia.jl 2 12',# the script to run (Python (.py) or Julia (.jl) for now) (prioritised vs 'run_command')
         #     'run_command'  : None ,                       # the command to run
         #     'upload_files' : [ "uploaded.txt"] ,          # any file to upload (array or string) - will be put in the same directory
-        #     'input_file'   : 'input.dat' ,                # the input file name (used by the script)
-        #     'output_file'  : 'output.dat' ,               # the output file name (used by the script)
+        #     'input_files'   : 'input.dat' ,                # the input file name (used by the script)
+        #     'output_files'  : 'output.dat' ,               # the output file name (used by the script)
         # },
         # {
         #     'env_name'     : 'env3' ,                      # the environment to use (can be 'None' if solely one environment is provided above)
@@ -244,8 +244,8 @@ config = {
         #     'run_script'   : 'example/run_remote.py 2 5',  # the script to run (Python (.py) or Julia (.jl) for now) (prioritised vs 'run_command')
         #     'run_command'  : None ,                        # the command to run
         #     'upload_files' : [ "uploaded.txt"] ,           # any file to upload (array or string) - will be put in the same directory
-        #     'input_file'   : 'input.dat' ,                 # the input file name (used by the script)
-        #     'output_file'  : 'output.dat' ,                # the output file name (used by the script)
+        #     'input_files'   : 'input.dat' ,                 # the input file name (used by the script)
+        #     'output_files'  : 'output.dat' ,                # the output file name (used by the script)
         # },
         # {
         #     'env_name'     : 'env3' ,                      # the environment to use (can be 'None' if solely one environment is provided above)
@@ -253,8 +253,8 @@ config = {
         #     'run_script'   : 'example/run_remote.py 2 7',  # the script to run (Python (.py) or Julia (.jl) for now) (prioritised vs 'run_command')
         #     'run_command'  : None ,                        # the command to run
         #     'upload_files' : [ "uploaded.txt"] ,           # any file to upload (array or string) - will be put in the same directory
-        #     'input_file'   : 'input.dat' ,                 # the input file name (used by the script)
-        #     'output_file'  : 'output.dat' ,                # the output file name (used by the script)
+        #     'input_files'   : 'input.dat' ,                 # the input file name (used by the script)
+        #     'output_files'  : 'output.dat' ,                # the output file name (used by the script)
         # },
         # {
         #     'env_name'     : 'env3' ,                       # the environment to use (can be 'None' if solely one environment is provided above)
@@ -262,8 +262,8 @@ config = {
         #     'run_script'   : 'example/run_remote.py 2 8', # the script to run (Python (.py) or Julia (.jl) for now) (prioritised vs 'run_command')
         #     'run_command'  : None ,                        # the command to run
         #     'upload_files' : [ "uploaded.txt"] ,           # any file to upload (array or string) - will be put in the same directory
-        #     'input_file'   : 'input.dat' ,                 # the input file name (used by the script)
-        #     'output_file'  : 'output.dat' ,                # the output file name (used by the script)
+        #     'input_files'   : 'input.dat' ,                 # the input file name (used by the script)
+        #     'output_files'  : 'output.dat' ,                # the output file name (used by the script)
         # },
         # {
         #     'env_name'     : 'env3' ,                      # the environment to use (can be 'None' if solely one environment is provided above)
@@ -271,8 +271,8 @@ config = {
         #     'run_script'   : 'example/run_remote.py 2 11', # the script to run (Python (.py) or Julia (.jl) for now) (prioritised vs 'run_command')
         #     'run_command'  : None ,                        # the command to run
         #     'upload_files' : [ "uploaded.txt"] ,           # any file to upload (array or string) - will be put in the same directory
-        #     'input_file'   : 'input.dat' ,                 # the input file name (used by the script)
-        #     'output_file'  : 'output.dat' ,                # the output file name (used by the script)
+        #     'input_files'   : 'input.dat' ,                 # the input file name (used by the script)
+        #     'output_files'  : 'output.dat' ,                # the output file name (used by the script)
         # }
     ]
 }

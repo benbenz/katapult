@@ -248,8 +248,8 @@ class CloudSendLightProvider(CloudSendProvider,ABC):
             args       = ref_file0.split(' ')
             if args and len(args)>0:
                 ref_file0 = args[0]
-            #for attr,use_ref in [ ('run_script',False) , ('upload_files',True) , ('input_file',True) , ('output_file',True) ] :
-            for attr,use_ref in [ ('run_script',False) , ('upload_files',True) , ('input_file',True) ] :
+            #for attr,use_ref in [ ('run_script',False) , ('upload_files',True) , ('input_files',True) , ('output_files',True) ] :
+            for attr,use_ref in [ ('run_script',False) , ('upload_files',True) , ('input_files',True) ] :
                 upfiles = job_cfg.get(attr)
                 ref_file = ref_file0 if use_ref else None
                 if not upfiles:
@@ -652,21 +652,22 @@ class CloudSendLightProvider(CloudSendProvider,ABC):
             self.debug(1,"No session to fetch",color=bcolors.WARNING)
             return None
 
-        session_out_dir  = self._get_session_out_dir(out_dir,run_session)
+        session_out_dir  = self._get_session_out_dir(out_dir,run_session) if use_normal_output else ''
 
         # we've already fetched the results (possibly from the watcher process)
         if use_cached and os.path.exists(session_out_dir):
             return session_out_dir
 
-        try:
-            #os.rmdir(out_dir)
-            shutil.rmtree(session_out_dir, ignore_errors=True)
-        except:
-            pass
-        try:
-            os.makedirs(session_out_dir)
-        except:
-            pass
+        if session_out_dir and session_out_dir != './':
+            try:
+                #os.rmdir(out_dir)
+                shutil.rmtree(session_out_dir, ignore_errors=True)
+            except:
+                pass
+            try:
+                os.makedirs(session_out_dir)
+            except:
+                pass
 
         randnum          = str(random.randrange(1000))
         homedir          = self._maestro.get_home_dir()

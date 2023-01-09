@@ -8,8 +8,8 @@ if (( $# < 6 )); then
 else
   env_name="$1"; shift
   thecommand="$1"; shift
-  input_file="$1"; shift
-  output_file="$1"; shift
+  input_files="$1"; shift
+  output_files="$1"; shift
   job_hash="$1"; shift
   uid="$1"; shift
 fi
@@ -35,10 +35,15 @@ check_cancelled
 # we print the mother PID in the PID file (it used to be the one from microrun)
 printf '%s,%s' $uid $$ > $pid_file
 
-printf '%s\n%s\n' $thecommand $input_file > $cmd_file
+printf '%s\n%s\n' $thecommand $input_files > $cmd_file
 
 echo 'wait(waiting for environment)' > $run_path/state # used to check the state of a process
-rm -f $output_file
+
+OUT_FILES_ARR=(${output_files//|/ })
+for output_file in "${OUT_FILES_ARR[@]}"
+do
+  rm -f $output_file
+done
 
 waittime=0
 while [[ $(< $env_path/state) != "bootstraped" ]] || ! [ -f $env_path/state ]
@@ -98,10 +103,10 @@ echo 'running(normally)' > $run_path/state
 # { $thecommand >run.log & export pid=$! & echo $pid > "${pid_file}2" && wait $pid; } && echo 'done' > $run_path/state
 # { $HOME/run/$env_name/microrun.sh "$thecommand" "$run_path" & echo $! > "${pid_file}2"; }
 
-# { $HOME/run/$env_name/microrun.sh "$thecommand" "$uid" "$run_path" "$pid_file" "$output_file" & echo $! > "${pid_file}"; }
+# { $HOME/run/$env_name/microrun.sh "$thecommand" "$uid" "$run_path" "$pid_file" "$output_files" & echo $! > "${pid_file}"; }
 
 
-# { $HOME/run/microrun.sh "$thecommand" "$uid" "$run_path" "$pid_file" "$output_file"; }
+# { $HOME/run/microrun.sh "$thecommand" "$uid" "$run_path" "$pid_file" "$output_files"; }
 # CHANGED FOR INLINE COMMAND:
 #$thecommand 2>&1 >run.log & child_pid=$!
 $thecommand 2>error.log >run.log & child_pid=$!

@@ -89,12 +89,12 @@ class CloudSendRunner(AbstractRunner):
             task.set_prop(TASK_PROP_UID,generate_unique_id())
 
             job_cfg = {
-                'input_file'  : None ,
-                'output_file' : task.outputs[0] if isinstance(task.outputs,list) else task.outputs ,
-                'run_command' : " ".join(task.get_command()) ,
-                'cpus_req'    : task.ncore ,
-                'number'      : 1 ,
-                JOB_CFG_T_UID : task.get_prop(TASK_PROP_UID)
+                'input_files'  : task.inputs  ,
+                'output_files' : task.outputs ,
+                'run_command'  : " ".join(task.get_command()) ,
+                'cpus_req'     : task.ncore ,
+                'number'       : 1 ,
+                JOB_CFG_T_UID  : task.get_prop(TASK_PROP_UID)
             }
 
             jobs_cfg.append( job_cfg )

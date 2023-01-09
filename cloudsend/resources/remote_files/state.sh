@@ -1,7 +1,7 @@
 #!/usr/bin/bash
 
 if (( $# < 4 )); then
-    echo "$0 ENV_NAME JOB_HASH UID PID OUT_FILE"
+    echo "$0 ENV_NAME JOB_HASH UID PID OUTPUT_FILES"
     exit 0
 else
     env_name="$1"; shift
@@ -9,7 +9,7 @@ else
     uid="$1"; shift
     pid=$1; shift
     pid_child=$1; shift
-    out_file="$1"; shift
+    output_files="$1"; shift
 fi
 
 while [ $job_hash ]
@@ -30,6 +30,15 @@ do
         # ${thestate+x} evaluates empty var 'thestate'
         if [ -z ${thestate+x} ] && [[ $uid != "None" ]]; then
             if [ -f "state" ]; then
+                # split string of output_files
+                all_output_files=1
+                OUT_FILES_ARR=(${output_files//|/ })
+                for output_file in "${OUT_FILES_ARR[@]}"
+                do
+                    if ! [ -f "$output_file" ] ; then
+                        all_output_files=0
+                    fi
+                done
                 if [[ $(< state) =~ ^running.*$ ]] && ! [[ $(ps aux | grep "$uid" | grep -v 'grep' | grep -v 'state.sh') ]]; then
                     # check if this is a memory issue:
                     # dmesg command; 
@@ -43,9 +52,8 @@ do
                     fi
                 # if state is done but we dont have the out file, this is probably aborted
                 # anyhow we cant do anything because we dont have an output file
-                elif [[ $(< state) =~ ^done.*$ ]] && ! [ -f "$out_file" ] ; then
-                    thestate="aborted(script terminated abnormally [no output file])" 
-                    #exit
+                elif [[ $(< state) =~ ^done.*$ ]] && [[ $all_output_files == 0 ]]; then
+                    thestate="aborted(script terminated abnormally [missing output file])" 
                 else
                     # just display this state
                     thestate=$(< state)
@@ -132,7 +140,7 @@ do
     uid="$1"; shift
     pid=$1; shift
     pid_child=$1; shift
-    out_file="$1"; shift
+    output_files="$1"; shift
 
     unset thestate
 

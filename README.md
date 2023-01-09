@@ -249,8 +249,8 @@ config = {
             'run_script'   : 'example/run_remote.py 1 10',# the script to run (Python (.py) or Julia (.jl) for now) (prioritised vs 'run_command')
             'run_command'  : None ,                       # the command to run
             'upload_files' : [ "uploaded.txt"] ,          # any file to upload (array or string) - will be put in the same directory
-            'input_file'   : 'input.dat' ,                # the input file name (used by the script)
-            'output_file'  : 'output.dat' ,               # the output file name (used by the script)
+            'input_files'   : 'input.dat' ,                # the input file name (used by the script)
+            'output_files'  : 'output.dat' ,               # the output file name (used by the script)
             'repeat'       : 2 ,                          # the number of times this job is repeated
         } ,
         {
@@ -259,8 +259,8 @@ config = {
             'run_script'   : 'example/run_remote.py 2 12',# the script to run (Python (.py) or Julia (.jl) for now) (prioritised vs 'run_command')
             'run_command'  : None ,                       # the command to run
             'upload_files' : [ "uploaded.txt"] ,          # any file to upload (array or string) - will be put in the same directory
-            'input_file'   : 'input.dat' ,                # the input file name (used by the script)
-            'output_file'  : 'output.dat' ,               # the output file name (used by the script)
+            'input_files'   : 'input.dat' ,                # the input file name (used by the script)
+            'output_files'  : 'output.dat' ,               # the output file name (used by the script)
         }
     ]
 }
@@ -295,16 +295,16 @@ config = {
             'cpus_req'     : None ,                       # the CPU(s) requirements for the process (can be None)
             'run_script'   : 'example/run_remote.py 1 10',# the script to run (Python (.py) or Julia (.jl) for now) (prioritised vs 'run_command')
             'upload_files' : [ "uploaded.txt"] ,          # any file to upload (array or string) - will be put in the same directory
-            'input_file'   : 'input.dat' ,                # the input file name (used by the script)
-            'output_file'  : 'output.dat' ,               # the output file name (used by the script)
+            'input_files'   : 'input.dat' ,                # the input file name (used by the script)
+            'output_files'  : 'output.dat' ,               # the output file name (used by the script)
         } ,
         {
             'env_name'     : None ,                       # the environment to use (can be 'None' if solely one environment is provided above)
             'cpus_req'     : None ,                       # the CPU(s) requirements for the process (can be None)
             'run_script'   : 'example/run_remote.py 2 12',# the script to run (Python (.py) or Julia (.jl) for now) (prioritised vs 'run_command')
             'upload_files' : [ "uploaded.txt"] ,          # any file to upload (array or string) - will be put in the same directory
-            'input_file'   : 'input.dat' ,                # the input file name (used by the script)
-            'output_file'  : 'output.dat' ,               # the output file name (used by the script)
+            'input_files'   : 'input.dat' ,                # the input file name (used by the script)
+            'output_files'  : 'output.dat' ,               # the output file name (used by the script)
         }
     ]
 }

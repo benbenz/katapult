@@ -20,10 +20,25 @@ class ConfigManager():
         self._jobs = jobs
 
     def load(self):
+        self._preprocess_config()
         added_objects = self._load_objects()
         self._preprocess_jobs()
         self._sanity_checks()
         return added_objects
+
+    def _preprocess_config(self):
+        if not self._config:
+            return
+
+        jobs_cfg = self._config.get('jobs')
+        if not jobs_cfg:
+            return
+        
+        for job_cfg in jobs_cfg:
+            if job_cfg.get('input_files') and isinstance(job_cfg.get('input_files'),str):
+                job_cfg['input_files'] = [ job_cfg['input_files'] ]
+            if job_cfg.get('output_files') and isinstance(job_cfg.get('output_files'),str):
+                job_cfg['output_files'] = [ job_cfg['output_files'] ]
 
     def _load_objects(self):
         projectName = self._config.get('project')
