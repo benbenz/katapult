@@ -341,7 +341,7 @@ class CloudSendEnvironment():
             self._name = cs_environmentNameRoot
 
             append_str = '-' + self._hash
-            if env_config.get('dev') == True:
+            if env_config.get('dev',False) == True:
                 append_str = ''
             if projectName:
                 self._name = cs_environmentNameRoot + '-' + projectName + append_str
@@ -426,7 +426,7 @@ class CloudSendJob():
         self._env       = None
         self._instance  = None
         self._deployed = [ ]
-        if (not 'input_files' in self._config) or (not 'output_files' in self._config) or not isinstance(self._config['input_files'],list) or not isinstance(self._config['output_files'],list):
+        if (not 'input_files' in self._config) or not 'output_files' in self._config or not isinstance(self._config['input_files'],list) or not isinstance(self._config['output_files'],list):
             print("\n\n\033[91mConfiguration requires an input and output file names\033[0m\n\n")
             raise CloudSendError() 
 

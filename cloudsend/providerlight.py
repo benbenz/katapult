@@ -588,11 +588,11 @@ class CloudSendLightProvider(CloudSendProvider,ABC):
         # triggers maestro::wait
         await self._exec_maestro_command("wait",args)
 
-    async def get_jobs_states(self,run_session=None):
+    async def get_jobs_states(self,run_session=None,only_ran_processes=False):
         if run_session is not None:
-            args = [ run_session ]
+            args = [ run_session , only_ran_processes ]
         else:
-            args = None
+            args = [ only_ran_processes ]
         # triggers maestro::get_jobs_states
         return await self._exec_maestro_command("get_states",args)
 
@@ -652,7 +652,7 @@ class CloudSendLightProvider(CloudSendProvider,ABC):
             self.debug(1,"No session to fetch",color=bcolors.WARNING)
             return None
 
-        session_out_dir  = self._get_session_out_dir(out_dir,run_session) if use_normal_output else ''
+        session_out_dir  = self._get_session_out_dir(out_dir,run_session)
 
         # we've already fetched the results (possibly from the watcher process)
         if use_cached and os.path.exists(session_out_dir):

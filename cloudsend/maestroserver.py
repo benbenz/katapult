@@ -104,8 +104,8 @@ class ServerContext:
                 try:
                     sys.stdout = self.old_stdout
                     print(e)
-                    traceback.format_exc()
-                    traceback.print_exc(e)
+                    print(traceback.format_exc())
+                    traceback.print_exc()
                 except:
                     pass
                 break  
@@ -300,8 +300,12 @@ class ServerContext:
                 run_session = None
                 if args and len(args) == 1:
                     run_session = self.get_run_session("GET STATES:",args[0])
+                    last_running_processes = False
+                elif args and len(args) == 2:
+                    run_session = self.get_run_session("GET STATES:",args[0])
+                    last_running_processes = args[1]
 
-                result = await self.cs_client.get_jobs_states(run_session)
+                result = await self.cs_client.get_jobs_states(run_session,last_running_processes)
                 self.send_result(result)
 
             elif command == 'print_summary' or command == 'print':
@@ -379,12 +383,12 @@ class ServerContext:
         
         except Exception as e:
             print(e)
-            traceback.print_exc(e)
+            traceback.print_exc()
             await writer.drain()
             #writer.close()
             self.restore_stdio()
             print(e)
-            traceback.format_exc()
+            traceback.print_exc()
             raise e
 
         await writer.drain()

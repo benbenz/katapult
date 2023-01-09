@@ -92,12 +92,12 @@ class CloudSendFatProvider(CloudSendProvider,ABC):
         old_state = self._state
 
         self.set_state( self._state & (CloudSendProviderState.NEW|CloudSendProviderState.STARTED))
-        if (self.set_state & CloudSendProviderState.STARTED) and len(added_objects['instances'])>0:
+        if (old_state & CloudSendProviderState.STARTED) and len(added_objects['instances'])>0:
             await self.start()
-        if (self.set_state & CloudSendProviderState.DEPLOYED) and len(added_objects['instances'])>0 and len(added_objects['jobs'])>0:
+        if (old_state & CloudSendProviderState.DEPLOYED) and len(added_objects['instances'])>0 and len(added_objects['jobs'])>0:
             await self.deploy()
         # if we are already 
-        if (self.set_state & CloudSendProviderState.RUNNING) and len(added_objects['jobs'])>0:
+        if (old_state & CloudSendProviderState.RUNNING) and len(added_objects['jobs'])>0:
             if kwargs.get('run_session'):
                 run_session = kwargs['run_session']
             else:
@@ -324,10 +324,10 @@ class CloudSendFatProvider(CloudSendProvider,ABC):
                     # setup envs according to current config files state
                     # FIX: mamba is not handling well concurrency
                     # we run the mamba installs sequentially below
-                    #{ 'cmd': instance.path_join( global_path , 'bootstrap.sh' ) + " \"" + dpl_env.get_name_with_hash() + "\" " + ("1" if self._config['dev'] else "0") , 'out': print_deploy , 'output': instance.path_join( dpl_env.get_path() , 'bootstrap._') },  
+                    #{ 'cmd': instance.path_join( global_path , 'bootstrap.sh' ) + " \"" + dpl_env.get_name_with_hash() + "\" " + ("1" if self._config.get('dev',False) else "0") , 'out': print_deploy , 'output': instance.path_join( dpl_env.get_path() , 'bootstrap._') },  
                 ]
 
-                bootstrap_command = bootstrap_command + (" ; " if bootstrap_command else "") + instance.path_join( global_path , 'bootstrap.sh' ) + " \"" + dpl_env.get_name_with_hash() + "\" " + ("1" if self._config['dev'] else "0")
+                bootstrap_command = bootstrap_command + (" ; " if bootstrap_command else "") + instance.path_join( global_path , 'bootstrap.sh' ) + " \"" + dpl_env.get_name_with_hash() + "\" " + ("1" if self._config.get('dev',False) else "0")
 
                 await self._run_ssh_commands(instance,ssh_conn,commands)
                 
@@ -469,7 +469,7 @@ class CloudSendFatProvider(CloudSendProvider,ABC):
                 self.debug(1,fne)
                 self.debug(1,"File NOT FOUND = ",fne.filename,color=bcolors.FAIL)
                 self.debug(1,"Error while deploying",color=bcolors.FAIL)
-                traceback.format_exception(fne)
+                traceback.print_exc()
                 #sys.exit() # this only kills the thread
                 #os.kill(os.getpid(), signal.SIGINT)
                 os._exit(1)
@@ -480,7 +480,7 @@ class CloudSendFatProvider(CloudSendProvider,ABC):
                 self.debug(1,"Error while deploying",color=bcolors.FAIL)
                 #sys.exit() # this only kills the thread
                 #os.kill(os.getpid(), signal.SIGINT)
-                traceback.format_exception(e)
+                traceback.print_exc()
                 os._exit(1)
                 raise e
             
@@ -1267,11 +1267,12 @@ class CloudSendFatProvider(CloudSendProvider,ABC):
                 files.append({ 'file' : input_file, 'type' : 'input' } )
         
         # we now do the same for the script file !
-        script_args = dpl_job.get_config('run_script').split()
-        script_file = script_args[0]
-        files.append( { 'file' : script_file , 'type' : 'script' } )    
+        if dpl_job.get_config('run_script'):
+            script_args = dpl_job.get_config('run_script').split()
+            script_file = script_args[0]
+            files.append( { 'file' : script_file , 'type' : 'script' } )    
 
-        return files      
+        return files
 
     def _get_ln_command(self,dpl_job,uid):
         lnstr = ""
@@ -1807,7 +1808,7 @@ class CloudSendFatProvider(CloudSendProvider,ABC):
         ssh_conn.close()
 
 
-    async def get_jobs_states(self,run_session=None):
+    async def get_jobs_states(self,run_session=None,last_running_processes=False):
 
         self.debug(2,'Getting Jobs States ...')
 
@@ -1818,6 +1819,9 @@ class CloudSendFatProvider(CloudSendProvider,ABC):
         if not run_session:
             run_session = self._current_session
 
+        if not run_session:
+            return dict()
+
         jobs = []
         for instance in self._instances:
             jobs.append( self.__get_jobs_states_internal(run_session,instance) )
@@ -1825,7 +1829,8 @@ class CloudSendFatProvider(CloudSendProvider,ABC):
         await asyncio.gather( *jobs )
 
         result = dict()
-        for process in run_session.get_processes():
+        processes = run_session.get_processes() if not last_running_processes else run_session.get_ran_processes()
+        for process in processes:
             job = process.get_job()
             result[process.get_uid()] = process.get_state_object(True,True)
         return result
