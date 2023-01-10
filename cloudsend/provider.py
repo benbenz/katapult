@@ -136,7 +136,10 @@ class CloudSendProvider(ABC):
             raise e
 
     def _resolve_dpl_job_paths(self,upfile,dpl_job):
-        ref_file     = dpl_job.get_config('run_script')
+        if dpl_job.get_config('run_script'):
+            ref_file = dpl_job.get_config('run_script')
+        else:
+            ref_file = os.getcwd()
         ref_args     = ref_file.split()
         ref_abs_path = os.path.abspath(ref_args[0])
         upf_abs_path = os.path.abspath(upfile)

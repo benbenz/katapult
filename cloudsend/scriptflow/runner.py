@@ -1,6 +1,7 @@
 import asyncio
 import shutil
 import os
+import shlex
 import traceback
 from datetime import datetime
 from scriptflow.runners import AbstractRunner
@@ -57,6 +58,17 @@ class CloudSendRunner(AbstractRunner):
                 # this can happen due to asynchronisms
                 #raise Error("Internal Error: could not find job for task")        
                 pass
+
+    def _flatten_inouts(self,obj,result):
+        if isinstance(obj,list):
+            for o in obj:
+                self._flatten_inouts(o,result)
+        elif isinstance(obj,dict):
+            for v in obj.values():
+                self._flatten_inouts(v,result)
+        elif isinstance(obj,str):
+            result.append(obj)
+        return result 
 
     def size(self):
         return(len(self._processes))
@@ -133,11 +145,21 @@ class CloudSendRunner(AbstractRunner):
 
                 task = p["task"]
 
+                nuargs = []
+                for arg in task.get_command():
+                    if " " in arg:
+                        #nuargs.append( "\\\"" + arg + "\\\"")
+                        nuargs.append( "\"" + arg + "\"")
+                    else:
+                        nuargs.append(arg)
+
                 job_cfg = {
-                    'input_files'  : task.deps ,
-                    'output_files' : task.outputs[None],
+                    'input_files'  : self._flatten_inouts(task.deps,[]) ,
+                    'output_files' : self._flatten_inouts(task.outputs,[]),
                     #'run_command'  : shlex.join(task.get_command()) ,
-                    'run_command'  : " ".join(task.get_command()) ,
+                    #'run_command'  : " ".join(task.get_command()) ,
+                    #'run_command'  : " ".join([shlex.quote(arg) for arg in task.get_command()]) ,
+                    'run_command'  : " ".join(nuargs) ,
                     'cpus_req'     : task.ncore ,
                     'number'       : 1 ,
                     JOB_CFG_T_UID  : task.get_prop(TASK_PROP_UID)
@@ -153,8 +175,6 @@ class CloudSendRunner(AbstractRunner):
 
         # add the new jobs and get jobs objects back
         if len(jobs_cfg)>0:
-
-            print("ADDING JOBS",jobs_cfg)
 
             objects = await self._cloudsend.cfg_add_jobs(jobs_cfg,run_session=self._run_session)
 
@@ -180,6 +200,8 @@ class CloudSendRunner(AbstractRunner):
         if len(processes_states)>0:
             self._sleep_period = SLEEP_PERIOD_LONG
 
+        has_aborted_process = False
+
         #update status
         to_remove = []
         for (k,p) in self._processes.items():
@@ -203,11 +225,14 @@ class CloudSendRunner(AbstractRunner):
 
             if p["state"] & ( CloudSendProcessState.DONE | CloudSendProcessState.ABORTED):
                 to_remove.append(k)
+                has_aborted_process = has_aborted_process or p["state"] == CloudSendProcessState.ABORTED
 
         # we got some jobs to fetch
         if len(to_remove)>0:
             results_dir = await self._cloudsend.fetch_results('tmp',self._run_session,True,True)
             self._move_results(results_dir)
+            if has_aborted_process:
+                await self._cloudsend.print_aborted_logs(self._run_session)
 
         # signal completed tasks
         for k in to_remove:

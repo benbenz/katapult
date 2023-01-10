@@ -35,7 +35,7 @@ check_cancelled
 # we print the mother PID in the PID file (it used to be the one from microrun)
 printf '%s,%s' $uid $$ > $pid_file
 
-printf '%s\n%s\n' $thecommand $input_files > $cmd_file
+printf '%s\n%s\n' "$thecommand" $input_files > $cmd_file
 
 echo 'wait(waiting for environment)' > $run_path/state # used to check the state of a process
 
@@ -109,7 +109,8 @@ echo 'running(normally)' > $run_path/state
 # { $HOME/run/microrun.sh "$thecommand" "$uid" "$run_path" "$pid_file" "$output_files"; }
 # CHANGED FOR INLINE COMMAND:
 #$thecommand 2>&1 >run.log & child_pid=$!
-$thecommand 2>error.log >run.log & child_pid=$!
+#$thecommand 2>error.log >run.log & child_pid=$!
+bash -c "$thecommand" 2>error.log >run.log & child_pid=$!
 echo ",$child_pid" >> $pid_file
 wait $child_pid
 exit_status=$?

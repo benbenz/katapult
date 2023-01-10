@@ -485,6 +485,12 @@ class CloudSendJob():
                     return True
         return False
 
+    def has_processes(self):
+        for dpl_job in self._deployed:
+            for process in dpl_job.get_processes():
+                return True
+        return False
+
     def get_last_process(self):
         if not self._deployed or len(self._deployed)==0:
             return None
@@ -515,7 +521,7 @@ class CloudSendJob():
         instance.append_job(self)
 
     def str_simple(self):
-        return "{0}: HASH = {1} , ENV = {2}: {3}".format(type(self).__name__,self.get_hash(),self.get_env().get_name() if self.get_env() else None,self.get_config('run_script'))
+        return "{0}: HASH = {1} , ENV = {2}: {3}".format(type(self).__name__,self.get_hash(),self.get_env().get_name() if self.get_env() else None,self.get_config('run_script') or self.get_config('run_command') )
 
     def __repr__(self):
         return "{0}: HASH = {1} , INSTANCE = {2} , ENV = {3}".format(type(self).__name__,self.get_hash(),self.get_instance(),self.get_env().get_name() if self.get_env() else None)

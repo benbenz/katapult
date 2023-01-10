@@ -739,8 +739,8 @@ class CloudSendFatProvider(CloudSendProvider,ABC):
             if except_done and job.has_completed():
                 continue
 
-            # we just want to add to the run_session
-            if only_new_processes and job.get_state() != CloudSendProcessState.CREATED:
+            # we just want to add to the run_session for newly created jobs
+            if only_new_processes and job.has_processes():
                 continue
 
             # should literally never happen
@@ -790,7 +790,7 @@ class CloudSendFatProvider(CloudSendProvider,ABC):
             run_sh  = instance.path_join( global_path , 'run.sh' )
             run_log = instance.path_join( run_path , 'run-'+uid+'.log' )
             pid_sh  = instance.path_join( global_path , 'getpid.sh' )
-            cmd_run = cmd_run + run_sh+" \"" + dpl_env.get_name_with_hash() + "\" \""+dpl_job.get_command()+"\" \"" + "|".join(job.get_config('input_files')) + "\" \"" + "|".join( job.get_config('output_files') ) + "\" " + job.get_hash()+" "+uid+">"+run_log+" 2>&1"
+            cmd_run = cmd_run + run_sh+" \"" + dpl_env.get_name_with_hash() + "\" \""+dpl_job.get_command().replace("\"","\\\"")+"\" \"" + "|".join(job.get_config('input_files')) + "\" \"" + "|".join( job.get_config('output_files') ) + "\" " + job.get_hash()+" "+uid+">"+run_log+" 2>&1"
             cmd_run = cmd_run + "\n"
             cmd_pid = cmd_pid + pid_sh + " \"" + pid_file + "\"\n"
 

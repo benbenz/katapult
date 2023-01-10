@@ -30,7 +30,8 @@ config = {
 
     'environments' : [
         {
-            'name' : 'env_python' # that's it - instances come with python ...
+            'name'      : 'env_python' ,
+            'env_conda' : [ 'sflow' ]
         }
     ]
 }
@@ -62,20 +63,20 @@ async def flow_sleepit():
 
     i=1
     t1 = sf.Task(
-        cmd = f"""python -c "import time; time.sleep(2); open('test_{i}.txt','w').write('5');" """,
+        cmd = f"""python3 -c "import time; time.sleep(2); open('test_{i}.txt','w').write('5');" """,
         outputs = f"test_{i}.txt",
         name = f"solve-{i}")
 
     i=2
     t2 = sf.Task(
-        cmd = f"""python -c "import time; time.sleep(2); open('test_{i}.txt','w').write('5');" """,
+        cmd = f"""python3 -c "import time; time.sleep(2); open('test_{i}.txt','w').write('5');" """,
         outputs = f"test_{i}.txt",
         name = f"solve-{i}")
 
     await sf.bag(t1,t2)
 
     tfinal = sf.Task(
-        cmd = f"""python -c "import sflow; sflow.compare_file()" """,
+        cmd = f"""python3 -c "import sflow; sflow.compare_file()" """,
         outputs = "final.txt",
         name = "final",
         inputs = [t1.outputs, t2.outputs])
