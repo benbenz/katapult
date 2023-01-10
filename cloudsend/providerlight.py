@@ -224,57 +224,63 @@ class CloudSendLightProvider(CloudSendProvider,ABC):
 
         config['region'] = self.get_region()
 
-        for i , inst_cfg in enumerate(config.get('instances')):
-            # we need to freeze the region within each instance config ...
-            if not config['instances'][i].get('region'):
-                config['instances'][i]['region'] = self.get_region()
+        if config.get('instances'):
+            for i , inst_cfg in enumerate(config.get('instances')):
+                # we need to freeze the region within each instance config ...
+                if not config['instances'][i].get('region'):
+                    config['instances'][i]['region'] = self.get_region()
 
-        for i , env_cfg in enumerate(config.get('environments')):
-            # Note: we are using a simple CloudSendEnvironment here 
-            # we're not deploying at this stage
-            # but this will help use re-use all the business logic in cloudsendutils envs
-            # in order to standardize the environment and create an inline version 
-            # through the CloudSendEnvironment::json() method
-            env = CloudSendEnvironment(self._config.get('project'),env_cfg)
-            config['environments'][i] = env.get_env_obj()
-            config['environments'][i][K_COMPUTED] = True
+        if config.get('environments'):
+            for i , env_cfg in enumerate(config.get('environments')):
+                # Note: we are using a simple CloudSendEnvironment here 
+                # we're not deploying at this stage
+                # but this will help use re-use all the business logic in cloudsendutils envs
+                # in order to standardize the environment and create an inline version 
+                # through the CloudSendEnvironment::json() method
+                env = CloudSendEnvironment(self._config.get('project'),env_cfg)
+                config['environments'][i] = env.get_env_obj()
+                config['environments'][i][K_COMPUTED] = True
 
         files_to_upload = dict()
 
-        for i , job_cfg in enumerate(config.get('jobs')):
-            job = CloudSendJob(job_cfg,i)
-            run_script = job.get_config('run_script')  
-            ref_file0  = run_script
-            args       = ref_file0.split(' ')
-            if args and len(args)>0:
-                ref_file0 = args[0]
-            #for attr,use_ref in [ ('run_script',False) , ('upload_files',True) , ('input_files',True) , ('output_files',True) ] :
-            for attr,use_ref in [ ('run_script',False) , ('upload_files',True) , ('input_files',True) ] :
-                upfiles = job_cfg.get(attr)
-                ref_file = ref_file0 if use_ref else None
-                if not upfiles:
-                    continue
-                if isinstance(upfiles,str):
-                    upfiles_split = upfiles.split(' ')
-                    if len(upfiles_split)>0:
-                        upfiles = upfiles_split[0]
-                if isinstance(upfiles,str):
-                    local_abs_path , local_rel_path , remote_abs_path , remote_rel_path , external = self._resolve_maestro_job_paths(upfiles,ref_file,self._get_home_dir())
-                    if local_abs_path not in files_to_upload:
-                        files_to_upload[local_abs_path] = { 'local' : local_abs_path , 'remote' : remote_abs_path }
-                    if attr == 'run_script':
-                        args = run_script.split(' ')
-                        args[0] = remote_abs_path
-                        config['jobs'][i][attr] = (' ').join(args)
-                    else:
-                        config['jobs'][i][attr] = remote_abs_path
+        if config.get('jobs'):
+            for i , job_cfg in enumerate(config.get('jobs')):
+                job = CloudSendJob(job_cfg,i)
+                if job.get_config('run_script'):
+                    run_script = job.get_config('run_script')  
+                    ref_file0  = run_script
+                    args       = ref_file0.split(' ')
+                    if args and len(args)>0:
+                        ref_file0 = args[0]
                 else:
-                    config['jobs'][i][attr] = []
-                    for upfile in upfiles:
-                        local_abs_path , local_rel_path , remote_abs_path , remote_rel_path , external = self._resolve_maestro_job_paths(upfile,ref_file,self._get_home_dir())
+                    ref_file0 = None
+                #for attr,use_ref in [ ('run_script',False) , ('upload_files',True) , ('input_files',True) , ('output_files',True) ] :
+                for attr,use_ref in [ ('run_script',False) , ('upload_files',True) , ('input_files',True) ] :
+                    upfiles = job_cfg.get(attr)
+                    ref_file = ref_file0 if use_ref else None
+                    if not upfiles:
+                        continue
+                    if isinstance(upfiles,str):
+                        upfiles_split = upfiles.split(' ')
+                        if len(upfiles_split)>0:
+                            upfiles = upfiles_split[0]
+                    if isinstance(upfiles,str):
+                        local_abs_path , local_rel_path , remote_abs_path , remote_rel_path , external = self._resolve_maestro_job_paths(upfiles,ref_file,self._get_home_dir())
                         if local_abs_path not in files_to_upload:
                             files_to_upload[local_abs_path] = { 'local' : local_abs_path , 'remote' : remote_abs_path }
-                        config['jobs'][i][attr].append(remote_abs_path)
+                        if attr == 'run_script':
+                            args = run_script.split(' ')
+                            args[0] = remote_abs_path
+                            config['jobs'][i][attr] = (' ').join(args)
+                        else:
+                            config['jobs'][i][attr] = remote_abs_path
+                    else:
+                        config['jobs'][i][attr] = []
+                        for upfile in upfiles:
+                            local_abs_path , local_rel_path , remote_abs_path , remote_rel_path , external = self._resolve_maestro_job_paths(upfile,ref_file,self._get_home_dir())
+                            if local_abs_path not in files_to_upload:
+                                files_to_upload[local_abs_path] = { 'local' : local_abs_path , 'remote' : remote_abs_path }
+                            config['jobs'][i][attr].append(remote_abs_path)
         
         mkdir_cmd = ""
         files_to_upload_per_dir = dict()
@@ -589,10 +595,7 @@ class CloudSendLightProvider(CloudSendProvider,ABC):
         await self._exec_maestro_command("wait",args)
 
     async def get_jobs_states(self,run_session=None,only_ran_processes=False):
-        if run_session is not None:
-            args = [ run_session , only_ran_processes ]
-        else:
-            args = [ only_ran_processes ]
+        args = [ run_session , only_ran_processes ]
         # triggers maestro::get_jobs_states
         return await self._exec_maestro_command("get_states",args)
 

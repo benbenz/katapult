@@ -119,6 +119,8 @@ class ServerContext:
             pass
 
     def get_run_session(self,label,session_arg,allow_proxied=False):
+        if session_arg is None:
+            return None
         run_session = stream_load(self.cs_client,session_arg)
         if run_session is None:
             err_level = bcolors.FAIL if not allow_proxied else bcolors.WARNING
@@ -289,11 +291,13 @@ class ServerContext:
                 if args and len(args) >= 1:
                     run_session = self.get_run_session("GET_NUM_ACTIVE_PROCESSES:",args[0])
 
-                await self.cs_client.get_num_active_processes(run_session)                
+                result = await self.cs_client.get_num_active_processes(run_session)                
+                self.send_result(result)
 
             elif command == 'get_num_instances':
 
-                await self.cs_client.get_num_instances()                
+                result = await self.cs_client.get_num_instances()                
+                self.send_result(result)
 
             elif command == 'get_states' or command == 'get_jobs_states':
 
@@ -302,7 +306,7 @@ class ServerContext:
                     run_session = self.get_run_session("GET STATES:",args[0])
                     last_running_processes = False
                 elif args and len(args) == 2:
-                    run_session = self.get_run_session("GET STATES:",args[0])
+                    run_session = self.get_run_session("GET STATES:",args[0]) 
                     last_running_processes = args[1]
 
                 result = await self.cs_client.get_jobs_states(run_session,last_running_processes)

@@ -1,5 +1,5 @@
 """
-Simple example with dependencis. Install scriptflow with pip install scriptflow then run 
+Simple example with dependencies running with light CloudSend client.
 
 > scriptflow run sleepit
 
@@ -14,10 +14,10 @@ from cloudsend.scriptflow.runner import CloudSendRunner
 
 config = {
     'project'      : 'scriptflow' ,
-    '_maestro_name_proj' : True , # so we can test different stuff concurrently (maestro is not multi-projects compatible yet)
+    '_maestro_name_proj' : True , # so we can test different projects concurrently (maestro is not handling multi-projects yet)
     'profile'      : 'cloudsend_benben', 
     'debug'        : 1 ,
-    'maestro'      : 'local' ,
+    'maestro'      : 'remote' ,
     'auto_stop'    : True ,
     'recover'      : False ,
 

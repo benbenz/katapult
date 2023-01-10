@@ -112,7 +112,8 @@ class CloudSendRunner(AbstractRunner):
     async def loop(self, controller):
 
         # start the provider and get remote instances information
-        await self._cloudsend.start()
+        await self._cloudsend.start(True) # with reset
+        #await self._cloudsend.start()
         # delete the fetch results directory
         await self._cloudsend.clear_results_dir()
 
@@ -197,7 +198,7 @@ class CloudSendRunner(AbstractRunner):
         processes_states = await self._cloudsend.get_jobs_states(self._run_session,True)
 
         # augment the period now ...
-        if len(processes_states)>0:
+        if processes_states and len(processes_states)>0:
             self._sleep_period = SLEEP_PERIOD_LONG
 
         has_aborted_process = False

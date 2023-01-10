@@ -1830,7 +1830,7 @@ class CloudSendFatProvider(CloudSendProvider,ABC):
 
         if not self._state & CloudSendProviderState.STARTED:
             self.debug(1,"Not ready to get job states. Call 'start' first")
-            return
+            return None
 
         if not run_session:
             run_session = self._current_session
