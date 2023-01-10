@@ -628,6 +628,15 @@ class CloudSendFatProvider(CloudSendProvider,ABC):
         except:
             return None
 
+    async def get_bootstrap_log(self,instance,ssh_conn):
+        try:
+            bootstrap_log = instance.path_join( instance.get_global_dir() , 'bootstrap.log' )
+            stdout , stderr = await self._exec_command(ssh_conn,"cat "+bootstrap_log)
+            log = await stdout.read()
+            return log
+        except:
+            return None            
+
         # we may not have to do anything:
         # we recovered a state at startup
         # let's make sure the state has "advanced":
@@ -1007,6 +1016,7 @@ class CloudSendFatProvider(CloudSendProvider,ABC):
         for _instance in instances:
             ssh_conn   = None
             ftp_client = None
+            has_bootstrap_error = False
             for job in _instance.get_jobs():
                 process = job.get_last_process()
                 if process is None: # should not really happened but it did while writing code
@@ -1044,6 +1054,12 @@ class CloudSendFatProvider(CloudSendProvider,ABC):
                             self.debug(1,"ENV '{0}' bootstraping errors:".format(env_info['name']),color=bcolors.FAIL)
                             for error in env_info.get('errors'):
                                 self.debug(1,"- {0}".format(error),color=bcolors.FAIL)
+                        if 'fail' in env_info.get('state_code'):
+                            has_bootstrap_error = True
+            
+            if has_bootstrap_error:
+                boot_log = await self.get_bootstrap_log(_instance,ssh_conn) # ssh_conn is initialized then
+                self.debug(1,boot_log,color=bcolors.WARNING)
 
             if ssh_conn:
                 # ftp_client.close()

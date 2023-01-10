@@ -31,7 +31,7 @@ config = {
     'environments' : [
         {
             'name'      : 'env_python' ,
-            'env_conda' : [ 'sflow' ]
+            'env_pypi' : [ 'sflow' ]
         }
     ]
 }

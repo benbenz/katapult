@@ -138,15 +138,15 @@ class CloudSendProvider(ABC):
     def _resolve_dpl_job_paths(self,upfile,dpl_job):
         if dpl_job.get_config('run_script'):
             ref_file = dpl_job.get_config('run_script')
+            ref_args     = ref_file.split()
+            ref_abs_path = os.path.abspath(ref_args[0])
+            upf_abs_path = os.path.abspath(upfile)
+            # we're gonna set ref_file to None if its not the ref file
+            use_ref  = ref_abs_path != upf_abs_path
+            ref_file = ref_file if use_ref else None
         else:
             ref_file = os.getcwd()
-        ref_args     = ref_file.split()
-        ref_abs_path = os.path.abspath(ref_args[0])
-        upf_abs_path = os.path.abspath(upfile)
-
-        # we're gonna set ref_file to None if its not the ref file
-        use_ref = ref_abs_path != upf_abs_path
-        ref_file = ref_file if use_ref else None
+            ref_file = None
 
         if self._mutualize_uploads:
             instance = dpl_job.get_instance()
