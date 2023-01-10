@@ -532,9 +532,10 @@ class CloudSendJob():
 
 class CloudSendJobProxy(CloudSendJob):
 
-    def __init__(self,rank,hash):
-        self._rank = rank 
-        self._hash = hash
+    def __init__(self,rank,hash,config=None):
+        self._rank   = rank 
+        self._hash   = hash
+        self._config = config
 
 
 # "Temporary" objects used when starting scripts     

@@ -717,7 +717,7 @@ def stream_dump(obj):
     elif isinstance(obj,CloudSendEnvironment):
         return { 'class': type(obj).__name__ , 'hash':obj.get_hash() }
     elif isinstance(obj,CloudSendJob):
-        return { 'class': type(obj).__name__ , 'rank':obj.get_rank() , 'hash':obj.get_hash() }
+        return { 'class': type(obj).__name__ , 'rank':obj.get_rank() , 'hash':obj.get_hash() , 'config':obj.get_config_DIRTY() }
     # elif isinstance(obj,CloudSendProcess):
     #     return { 'class': type(obj).__name__ , 'job': stream_dump(obj.get_job()) , 'uid':obj.get_uid() , 'state': obj.get_state() , 'substate': obj.get_substate() , 'aborted_reason': obj.get_aborted_reason()}
     else:
@@ -730,20 +730,27 @@ def stream_load(cs_client,jsondata):
             result.append(stream_load(cs_client,v))
         return result
     elif isinstance(jsondata,dict):
-        if jsondata['class'] in [ 'CloudSendRunSession' , 'CloudSendRunSessionProxy' ]:
-            session_number = int(jsondata['number'])
+        if jsondata.get('class') in [ 'CloudSendRunSession' , 'CloudSendRunSessionProxy' ]:
+            if isinstance(jsondata['number'],str):
+                session_number = int(jsondata['number'].strip())
+            else:
+                session_number = jsondata['number']
             session_id     = jsondata['id'].strip()
             return cs_client.get_run_session(session_number,session_id)
-        elif jsondata['class'] in [ 'CloudSendInstance' , 'CloudSendInstanceProxy' ]:
+        elif jsondata.get('class') in [ 'CloudSendInstance' , 'CloudSendInstanceProxy' ]:
             instance_name = jsondata['name'].strip()
             return cs_client.get_instance(instance_name)    
-        elif jsondata['class'] in [ 'CloudSendEnvironment' , 'CloudSendEnvironmentProxy' ]:
+        elif jsondata.get('class') in [ 'CloudSendEnvironment' , 'CloudSendEnvironmentProxy' ]:
             env_hash = jsondata['hash'].strip()
             return cs_client.get_environment(env_hash)    
-        elif jsondata['class'] in [ 'CloudSendJob' , 'CloudSendJobProxy' ]:
-            job_rank = int(jsondata['rank'].strip())
+        elif jsondata.get('class') in [ 'CloudSendJob' , 'CloudSendJobProxy' ]:
+            if isinstance(jsondata['rank'],str):
+                job_rank = int(jsondata['rank'].strip())
+            else:
+                job_rank = jsondata['rank']
             job_hash = jsondata['hash'].strip()
-            return cs_client.get_job(job_rank,job_hash)    
+            job_cfg  = jsondata.get('config')
+            return cs_client.get_job(job_rank,job_hash,job_cfg)    
         else:        
             result = {}
             for k,v in jsondata.items():
@@ -870,8 +877,13 @@ def make_client_command(maestro_command,args,escape=True):
     if args and not isinstance(args,list):
         args = [ args ]
     the_command = json.dumps({'cmd':maestro_command,'args':args})
+
+    # escape for stream
+    # Note: especially if we have 'run_command' in the jobs description
+    # we need to double escape ... example: { "run_command" : "python3 -c \".....\"" }
     if escape:
-        the_command = "\""+the_command.replace("\"","\\\"")+"\""
+        #the_command = "\""+the_command.replace("\"","\\\"")+"\""
+        the_command = "\""+the_command.replace("\\\"","||||").replace("\"","\\\"")+"\""
 
     return the_command
 

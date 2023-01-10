@@ -103,6 +103,7 @@ class ServerContext:
             except Exception as e:
                 try:
                     sys.stdout = self.old_stdout
+                    sys.stderr = self.old_stderr
                     print(e)
                     print(traceback.format_exc())
                     traceback.print_exc()

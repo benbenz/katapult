@@ -16,18 +16,16 @@ config = {
     'project'      : 'scriptflow' ,
     '_maestro_name_proj' : True , # so we can test different projects concurrently (maestro is not handling multi-projects yet)
     'profile'      : 'cloudsend_benben', 
-    'debug'        : 1 ,
+    'debug'        : 2 ,
     'maestro'      : 'remote' ,
     'auto_stop'    : True ,
     'recover'      : False ,
-
     'instances'    : [
         {
             'type'         : 't3.micro' ,
             'number'       : 1
         }
     ] ,
-
     'environments' : [
         {
             'name'      : 'env_python' ,

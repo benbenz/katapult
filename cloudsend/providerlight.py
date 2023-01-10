@@ -748,8 +748,8 @@ class CloudSendLightProvider(CloudSendProvider,ABC):
     def get_environment(self,env_hash):
         return CloudSendEnvironmentProxy( env_hash )
 
-    def get_job(self,job_rank,job_hash):
-        return CloudSendJobProxy( job_rank , job_hash )
+    def get_job(self,job_rank,job_hash,config=None):
+        return CloudSendJobProxy( job_rank , job_hash , config )
 
     async def get_num_active_processes(self,run_session=None):
         if run_session is None:

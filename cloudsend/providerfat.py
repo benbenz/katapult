@@ -1259,7 +1259,6 @@ class CloudSendFatProvider(CloudSendProvider,ABC):
                 return job
         return None
 
-
     async def get_num_active_processes(self,run_session=None):
         if run_session is None:
             run_session = self._current_session
@@ -1268,7 +1267,10 @@ class CloudSendFatProvider(CloudSendProvider,ABC):
         return len(run_session.get_active_processes())
 
     async def get_num_instances(self):
-        return len(self._instances)   
+        if self._instances is not None:
+            return len(self._instances)
+        else:
+            return 0
 
     def _get_files(self,dpl_job):   
         files = []
