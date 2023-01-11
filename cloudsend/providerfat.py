@@ -281,7 +281,7 @@ class CloudSendFatProvider(CloudSendProvider,ABC):
                     re_upload_env_mamba = await self._test_reupload(instance,mamba_test, ssh_conn,False)
                     re_upload_env = re_upload_env or re_upload_env_mamba
                 if dpl_env.get_config('env_pypi') is not None and dpl_env.get_config('env_conda') is None:
-                    venv_test = instance.path_join( instance.get_home_dir() , '.' + dpl_env.get_name_with_hash() )
+                    venv_test = instance.path_join( instance.get_global_dir() , '.' + dpl_env.get_name_with_hash() )
                     re_upload_env_pip = await self._test_reupload(instance,venv_test, ssh_conn, False)
                     re_upload_env = re_upload_env or re_upload_env_pip
                 # TODO: have an aptget install TEST
@@ -483,6 +483,11 @@ class CloudSendFatProvider(CloudSendProvider,ABC):
                 traceback.print_exc()
                 os._exit(1)
                 raise e
+
+            except ConnectionResetError as cre:
+                self.debug(1,e,color=bcolors.WARNING)
+                asyncio.sleep(15)
+                self.debug(1,"Retrying ...")
             
             attempts = attempts + 1
 

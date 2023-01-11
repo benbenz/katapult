@@ -49,7 +49,7 @@ if os.path.isfile('environment.yml'):
                             dep = re.sub('[=<>].*', '', dep)
                             if dep not in history:
                                 bootstraped = False
-                                errors.append("dependency missing in mamba configuration: " + dep + " " + env_name)
+                                errors.append("dependency missing in mamba configuration ("+env_name+"): " + dep)
 
 if os.path.isfile('requirements.txt'):
     piplist = ""
@@ -60,7 +60,7 @@ if os.path.isfile('requirements.txt'):
         #print("piplist mamba",piplist)
         pipsrc = "mamba"
     else:
-        venvpip = os.path.join(HOME,'.'+env_name,'bin','pip')
+        venvpip = os.path.join(HOME,'run','.'+env_name,'bin','pip')
         piplist = run(venvpip + " list")
         #print("piplist venv",piplist)
         pipsrc = "venv"
@@ -73,7 +73,7 @@ if os.path.isfile('requirements.txt'):
             req = re.sub('\s*[=<>].*', '', req)
             if req not in piplist:
                 bootstraped = False
-                errors.append("dependency missing in pip configuration ("+pipsrc+"): " + req + " " + env_name)
+                errors.append("dependency missing in pip configuration ("+pipsrc+" "+env_name+"): " + req)
 
 if os.path.isfile('aptget.sh'):
     with open('aptget.sh','r') as sh_file:

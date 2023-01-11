@@ -34,7 +34,9 @@ class CloudSendRunner(AbstractRunner):
                 moved_file = os.path.join(os.getcwd(),filename)
                 if os.path.isfile(moved_file):
                     os.remove(moved_file)
-                shutil.move(os.path.join(results_dir,filename),os.getcwd())
+                src_file = os.path.join(results_dir,filename)
+                shutil.move(src_file,os.getcwd())
+                #print("moved {0} to {1}".format(src_file,moved_file))
 
             for dirname in dirs:
                 moved_dir = os.path.join(os.getcwd(),dirname)
@@ -166,6 +168,13 @@ class CloudSendRunner(AbstractRunner):
                     'number'       : 1 ,
                     JOB_CFG_T_UID  : task.get_prop(TASK_PROP_UID)
                 }
+
+                # lets upload also the sflow file
+                # in case some defined routines are used (as in the examples)
+                if os.path.isfile( os.path.join(os.getcwd(),'sflow.py') ):
+                    if not job_cfg.get('upload_files'):
+                        job_cfg['upload_files'] = []
+                    job_cfg['upload_files'].append('sflow.py')
 
                 jobs_cfg.append( job_cfg )
 

@@ -17,7 +17,7 @@ config = {
     '_maestro_name_proj' : True , # so we can test different projects concurrently (maestro is not handling multi-projects yet)
     'profile'      : 'cloudsend_benben', 
     'debug'        : 1 ,
-    'maestro'      : 'remote' ,
+    'maestro'      : 'local' ,
     'auto_stop'    : True ,
     'recover'      : False ,
     'instances'    : [
@@ -29,7 +29,9 @@ config = {
     'environments' : [
         {
             'name'      : 'env_python' ,
-            'env_pypi' : [ 'sflow' ]
+            # everything below is just so we can run 'sflow.compare_file()' ...
+            'env_conda' : [ 'python>=3.9' ] , # this is because cloudsend requires python 3.9 
+            'env_pypi'  : [ 'scriptflow' , 'cloudsend>=0.6.2' ] # sflow.py requires this
         }
     ]
 }
@@ -38,7 +40,12 @@ def init(config):
     conf = OmegaConf.create(config)
     logging.basicConfig(filename='scriptflow.log', level=logging.DEBUG)
     # set main maestro
-    cloudsend = CloudSendRunner(config,reset=True)
+    try:
+        cloudsend = CloudSendRunner(config,reset=True)
+    except Exception as e:
+        print("Error while initializing cloudsend",e)
+        return
+    
     sf.set_main_controller(sf.core.Controller(conf,cloudsend))
     
     if conf.debug:
@@ -61,20 +68,20 @@ async def flow_sleepit():
 
     i=1
     t1 = sf.Task(
-        cmd = f"""python3 -c "import time; time.sleep(2); open('test_{i}.txt','w').write('5');" """,
+        cmd = f"""python -c "import time; time.sleep(2); open('test_{i}.txt','w').write('5');" """,
         outputs = f"test_{i}.txt",
         name = f"solve-{i}")
 
     i=2
     t2 = sf.Task(
-        cmd = f"""python3 -c "import time; time.sleep(2); open('test_{i}.txt','w').write('5');" """,
+        cmd = f"""python -c "import time; time.sleep(2); open('test_{i}.txt','w').write('5');" """,
         outputs = f"test_{i}.txt",
         name = f"solve-{i}")
 
     await sf.bag(t1,t2)
 
     tfinal = sf.Task(
-        cmd = f"""python3 -c "import sflow; sflow.compare_file()" """,
+        cmd = f"""python -c "import sflow; sflow.compare_file()" """,
         outputs = "final.txt",
         name = "final",
         inputs = [t1.outputs, t2.outputs])
