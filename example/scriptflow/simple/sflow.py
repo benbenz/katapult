@@ -16,7 +16,7 @@ config = {
     'project'      : 'scriptflow' ,
     '_maestro_name_proj' : True , # so we can test different projects concurrently (maestro is not handling multi-projects yet)
     'profile'      : 'cloudsend_benben', 
-    'debug'        : 2 ,
+    'debug'        : 1 ,
     'maestro'      : 'remote' ,
     'auto_stop'    : True ,
     'recover'      : False ,
@@ -38,7 +38,7 @@ def init(config):
     conf = OmegaConf.create(config)
     logging.basicConfig(filename='scriptflow.log', level=logging.DEBUG)
     # set main maestro
-    cloudsend = CloudSendRunner(config)
+    cloudsend = CloudSendRunner(config,reset=True)
     sf.set_main_controller(sf.core.Controller(conf,cloudsend))
     
     if conf.debug:

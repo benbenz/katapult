@@ -86,7 +86,7 @@ if [ -f "$FILE_CONDA" ]; then
 fi 
 
 if ([ -f "$FILE_PYPI" ] && ! [ -f "$FILE_CONDA" ]); then
-    source ".$env_name/bin/activate"
+    source "$HOME/run/.$env_name/bin/activate"
 fi
 
 #exec nohup $HOME/run/$env_name/microrun.sh "$thecommand" "$run_path"

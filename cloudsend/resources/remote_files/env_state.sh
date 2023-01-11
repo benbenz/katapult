@@ -39,7 +39,7 @@ if [ -d $env_path ] && [[ $env_name != "None" ]]; then
             #tail state
             #exit
         fi
-    elif [[ $(ps aux | grep "$uid" | grep -v 'grep' | grep -v 'state.sh') ]] ; then
+    elif [[ $(ps aux | grep "$env_name" | grep -v 'grep' | grep -v 'env_state.sh') ]] ; then
         thestate="environment not created [1]"
         state_code="failed"
         #exit

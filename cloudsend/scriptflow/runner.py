@@ -19,13 +19,14 @@ SLEEP_PERIOD_LONG  = 15
 
 class CloudSendRunner(AbstractRunner):
 
-    def __init__(self, conf, handle_task_queue=True):
+    def __init__(self, conf, **kwargs):
         self._cloudsend         = get_client(conf)
         self._run_session       = None
         self._processes         = {}
         self._num_instances     = 0 
-        self._handle_task_queue = handle_task_queue
+        self._handle_task_queue = kwargs.get('handle_task_queue',True)
         self._sleep_period      = SLEEP_PERIOD_SHORT
+        self._do_reset          = kwargs.get('reset',False)
 
     def _move_results(self,results_dir):
         for root, dirs, files in os.walk(results_dir):
@@ -112,8 +113,7 @@ class CloudSendRunner(AbstractRunner):
     async def loop(self, controller):
 
         # start the provider and get remote instances information
-        await self._cloudsend.start(True) # with reset
-        #await self._cloudsend.start()
+        await self._cloudsend.start(self._do_reset)
         # delete the fetch results directory
         await self._cloudsend.clear_results_dir()
 

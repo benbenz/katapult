@@ -117,15 +117,15 @@ if ([ -f "$FILE_PYPI" ] && ! [ -f "$FILE_CONDA" ]); then
   # 1. nothing to do: virtualenv is already installed
 
   # 2. check if we need to create the virtual environment, and activate
-  if ! [ -d ".$env_name" ]; then
+  if ! [ -d "$HOME/run/.$env_name" ]; then
     echo "virtual environment not found"
-    virtualenv ".$env_name"
-    source ".$env_name/bin/activate"
-    .$env_name/bin/pip install -r "$FILE_PYPI"
+    cd $HOME/run/ && virtualenv ".$env_name"
+    source "$HOME/run/.$env_name/bin/activate"
+    $HOME/run/.$env_name/bin/pip install -r "$FILE_PYPI"
   else
     echo "virtual environment exists"
     # we activate in run.sh now
-    source ".$env_name/bin/activate"
+    source "$HOME/run/.$env_name/bin/activate"
   fi
   
 fi # FILE_PYPI
