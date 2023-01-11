@@ -43,6 +43,10 @@ class CloudSendRunner(AbstractRunner):
                 if os.path.isdir(moved_dir):
                     shutil.rmtree(moved_dir)
                 shutil.move(os.path.join(results_dir,dirname),os.getcwd())
+        
+        # remove it so the next fetch_result doesnt return prematurely (we're using cached=True)
+        shutil.rmtree(results_dir)
+            
 
     def _associate_jobs_to_tasks(self,objects):
         # associate the job objects with the tasks
@@ -203,13 +207,15 @@ class CloudSendRunner(AbstractRunner):
             # associate task <-> job
             self._associate_jobs_to_tasks(objects)
 
-        # fetch statusses here ...
-        # True stands for 'last_running_processes' meaning we will only get one process per job (the last one)
-        processes_states = await self._cloudsend.get_jobs_states(self._run_session,True)
+        if len(self._processes)>0:
+            # fetch statusses here ...
+            # True stands for 'last_running_processes' meaning we will only get one process per job (the last one)
+            processes_states = await self._cloudsend.get_jobs_states(self._run_session,True)
 
-        # augment the period now ...
-        if processes_states and len(processes_states)>0:
-            self._sleep_period = SLEEP_PERIOD_LONG
+            # augment the period now ...
+            if processes_states and len(processes_states)>0:
+                self._sleep_period = SLEEP_PERIOD_LONG
+
 
         has_aborted_process = False
 
