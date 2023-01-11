@@ -883,7 +883,8 @@ def make_client_command(maestro_command,args,escape=True):
     # we need to double escape ... example: { "run_command" : "python3 -c \".....\"" }
     if escape:
         #the_command = "\""+the_command.replace("\"","\\\"")+"\""
-        the_command = "\""+the_command.replace("\\\"","||||").replace("\"","\\\"")+"\""
+        the_command = "\""+the_command.replace("\\\"","|*|*|*|").replace("\"","\\\"").replace("|*|*|*|","\\\\\\\"")+"\""
+        #the_command = "\""+re.sub(r'([^\])"', r'\g<1>\"', the_command)+"\"" # this escape not-already-escaped quotes...
 
     return the_command
 

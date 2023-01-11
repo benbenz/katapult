@@ -151,6 +151,7 @@ class CloudSendRunner(AbstractRunner):
                     if " " in arg:
                         #nuargs.append( "\\\"" + arg + "\\\"")
                         nuargs.append( "\"" + arg + "\"")
+                        #nuargs.append(arg)
                     else:
                         nuargs.append(arg)
 
