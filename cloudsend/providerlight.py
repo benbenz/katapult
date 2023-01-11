@@ -187,9 +187,16 @@ class CloudSendLightProvider(CloudSendProvider,ABC):
         self.debug(1,"initialize server with config")
         await self._exec_maestro_command("init","config.json")
 
-    async def _deploy_config(self,ssh_conn,ftp_client,config_filename='config.json'):
+        # TODO: improve return result from init and match whats been loaded and what has not
+        # (same as cfg_add_***)
+        for objs_key in ['instances','environments','jobs']:
+            if self._config.get(objs_key):
+                for obj_cfg in self._config[objs_key]:
+                    obj_cfg[K_LOADED]=True
 
-        config , mkdir_cmd , files_to_upload_per_dir = self._translate_config_for_maestro()
+    async def _deploy_config(self,ssh_conn,ftp_client,config_filename='config.json',only_new=False):
+
+        config , mkdir_cmd , files_to_upload_per_dir = self._translate_config_for_maestro(only_new)
 
         # we can add some keyed arguments to the config ...
         # useful to serialize some arguments between light client and fat client
@@ -217,8 +224,19 @@ class CloudSendLightProvider(CloudSendProvider,ABC):
                     self.debug(1,"You have specified a file that does not exist:",nsf,remote_dir,file_info,color=bcolors.FAIL)
         return config 
 
-    def _translate_config_for_maestro(self):
-        config = copy.deepcopy(self._config)
+    def _translate_config_for_maestro(self,only_new):
+        if only_new:
+            config = dict()
+            for master_key in self._config:
+                if master_key in ['instances','environments','jobs']:
+                    config[master_key] = []                    
+                    for obj_cfg in self._config[master_key]:
+                        if obj_cfg.get(K_LOADED) == False:
+                            config[master_key].append(copy.deepcopy(obj_cfg))
+                else:
+                    config[master_key] = copy.deepcopy(self._config[master_key])
+        else:
+            config = copy.deepcopy(self._config)
 
         config['maestro'] = 'local' # the config is for maestro, which needs to run local
 
@@ -527,11 +545,47 @@ class CloudSendLightProvider(CloudSendProvider,ABC):
         config_name = 'config_add-' + cloudsendutils.generate_unique_id() + '.json'
         # deploy the new config to the maestro (every time)
         # (this ensures the deployment of dependent files)
-        translated_config = await self._deploy_config(ssh_conn,ftp_client,config_name)
+        translated_config = await self._deploy_config(ssh_conn,ftp_client,config_name,True) #True = only new stuff
         # triggers maestro::add_* : use string dump or config file name (either way)
         #await self._exec_maestro_command(name,config_name)
         args = [ translated_config , kwargs ]
-        return await self._exec_maestro_command(name,args)
+        objs = await self._exec_maestro_command(name,args)
+
+        # match loaded stuff in the light client config
+
+        # for objs_key in ['instances','environments','jobs']:
+        #     if self._config.get(objs_key):
+        #         for obj_cfg in self._config[objs_key]
+        #             uid = obj_cfg.get(K_CFG_UID)
+        #             if uid is None:
+        #                 self.debug(1,"Internal Error - a config uid is not set. it should not happen",color=bcolors.WARNING)
+        #                 self.debug(1,"marking this configuration as loaded by DEFAULT!",obj_cfg)
+        #                 obj_cfg[K_LOADED]=True
+        #             else:
+        #                 # find the first occurence of this UID in the created objects
+        #                 if not objs_key in objs:
+        #                     self.debug(1,"Internal Error - no objects created for this type",color=bcolors.WARNING)
+        #                     self.debug(1,"marking this configuration as loaded by DEFAULT!",obj_cfg)
+        #                     obj_cfg[K_LOADED]=True
+        #                 else:
+        #                     for real_obj in objs[objs_key]:
+        #                         o_uid = real_obj.get_config(K_CFG_UID)
+        #                         if uid == o_uid:
+        #                             obj_cfg[K_LOADED] = real_obj.get_config(K_LOADED) # this is what we wanted
+        #                             break 
+        for objs_key in ['instances','environments','jobs']:
+            if objs.get(objs_key) and self._config.get(objs_key):
+                for obj in objs[objs_key]:
+                    o_uid = obj.get_config(K_CFG_UID)
+                    if not o_uid:
+                        continue
+                    for cfg in self._config[objs_key]:
+                        c_uid = cfg[K_CFG_UID]
+                        if o_uid == c_uid:
+                            cfg[K_LOADED] = obj.get_config(K_LOADED) 
+                            break         
+
+        return objs
 
     async def cfg_add_instances(self,conf,**kwargs):
         return await self._cfg_add_objects(conf,super().cfg_add_instances,"cfg_add_instances",**kwargs)
@@ -680,7 +734,7 @@ class CloudSendLightProvider(CloudSendProvider,ABC):
         session_out_dir_remote = self._get_session_out_dir(maestro_dir,run_session,self._maestro)
 
         # fetch the results on the maestro
-        args = [ maestro_dir , run_session , use_normal_output ]
+        args = [ maestro_dir , run_session , use_cached , use_normal_output ]
         session_out_dir_remote = await self._exec_maestro_command("fetch_results",args)
 
         # get the tar file of the results
@@ -742,14 +796,14 @@ class CloudSendLightProvider(CloudSendProvider,ABC):
     def get_run_session(self,session_number,session_id):
         return CloudSendRunSessionProxy( session_number , session_id )
 
-    def get_instance(self,instance_name):
+    def get_instance(self,instance_name,**kwargs):
         return CloudSendInstanceProxy( instance_name )
 
-    def get_environment(self,env_hash):
+    def get_environment(self,env_hash,**kwargs):
         return CloudSendEnvironmentProxy( env_hash )
 
-    def get_job(self,job_rank,job_hash,config=None):
-        return CloudSendJobProxy( job_rank , job_hash , config )
+    def get_job(self,job_rank,job_hash,**kwargs):
+        return CloudSendJobProxy( job_rank , job_hash , kwargs.get('config') )
 
     async def get_num_active_processes(self,run_session=None):
         if run_session is None:

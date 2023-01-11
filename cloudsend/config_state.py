@@ -8,6 +8,7 @@ import math
 from cloudsend.core import *
 from datetime import date, datetime
 import traceback
+import cloudsend.utils as cloudsendutils
 
 class ConfigManager():
 
@@ -39,6 +40,13 @@ class ConfigManager():
                 job_cfg['input_files'] = [ job_cfg['input_files'] ]
             if job_cfg.get('output_files') and isinstance(job_cfg.get('output_files'),str):
                 job_cfg['output_files'] = [ job_cfg['output_files'] ]
+
+        for objs_key in ['instances','environments','jobs']:
+            if objs_key not in self._config:
+                continue
+            for obj_cfg in self._config[objs_key]:
+                if K_CFG_UID not in obj_cfg:
+                    obj_cfg[K_CFG_UID] = cloudsendutils.generate_unique_id()
 
     def _load_objects(self):
         projectName = self._config.get('project')
@@ -80,6 +88,8 @@ class ConfigManager():
                             real_inst_cfg['rank'] = "{0}".format(k+1)
                         else:
                             real_inst_cfg['rank'] = "{0}.{1}".format(k+1,i+1)
+
+                        real_inst_cfg[K_LOADED] = True # mark it loaded for the individual instance as well
 
                         self._load_other_instance_info(real_inst_cfg)
 
@@ -138,6 +148,8 @@ class ConfigManager():
                             real_inst_cfg.pop('explode',None) # provide default value to avoid KeyError
                             real_inst_cfg['cpus'] = inst_cpus
                             real_inst_cfg['rank'] = rank
+
+                            real_inst_cfg[K_LOADED] = True # mark it loaded for the individual instance as well
 
                             self._load_other_instance_info(real_inst_cfg)
 

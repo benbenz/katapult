@@ -10,6 +10,7 @@ else
   thecommand="$1"; shift
   input_files="$1"; shift
   output_files="$1"; shift
+  batch_uid="$1"; shift
   job_hash="$1"; shift
   uid="$1"; shift
 fi
@@ -70,6 +71,13 @@ do
   fi
 done
 echo "Environment is bootstraped"
+
+while [[ $(ps aux | grep "batch_run" | grep -v "batch_run-$batch_uid" | grep -v 'grep') ]]
+do
+  echo "Waiting on previous batch to finish"
+  echo 'wait(waiting on previous batch to finish)' > $run_path/state
+  sleep 15
+done
 
 echo 'idle(about to start)' > $run_path/state # used to check the state of a process
 

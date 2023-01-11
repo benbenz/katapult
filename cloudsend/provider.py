@@ -598,6 +598,8 @@ class CloudSendProvider(ABC):
 
         for cfg in config[key_name]:
             cfg[K_LOADED] = False # make sure we mark it as not-loaded
+            if K_CFG_UID not in cfg: 
+                cfg[K_CFG_UID] = cloudsendutils.generate_unique_id() # this will help trace what's been loaded in the generated objects ..
             self._config[key_name].append( cfg )
 
         # no need, this only plays with global vars...
@@ -639,15 +641,15 @@ class CloudSendProvider(ABC):
         pass
 
     @abstractmethod
-    async def get_instance(self,instance_name):
+    async def get_instance(self,instance_name,**kwargs):
         pass
 
     @abstractmethod
-    async def get_environment(self,env_hash):
+    async def get_environment(self,env_hash,**kwargs):
         pass
 
     @abstractmethod
-    async def get_job(self,job_rank,job_hash):
+    async def get_job(self,job_rank,job_hash,**kwargs):
         pass
 
     @abstractmethod
@@ -713,9 +715,9 @@ def stream_dump(obj):
     elif isinstance(obj,CloudSendRunSession):
         return { 'class': type(obj).__name__ , 'number':obj.get_number() , 'id': obj.get_id() }
     elif isinstance(obj,CloudSendInstance):
-        return { 'class': type(obj).__name__ , 'name':obj.get_name() }
+        return { 'class': type(obj).__name__ , 'name':obj.get_name() , 'config':obj.get_config_DIRTY() }
     elif isinstance(obj,CloudSendEnvironment):
-        return { 'class': type(obj).__name__ , 'hash':obj.get_hash() }
+        return { 'class': type(obj).__name__ , 'hash':obj.get_hash() , 'config':obj.get_config_DIRTY() }
     elif isinstance(obj,CloudSendJob):
         return { 'class': type(obj).__name__ , 'rank':obj.get_rank() , 'hash':obj.get_hash() , 'config':obj.get_config_DIRTY() }
     # elif isinstance(obj,CloudSendProcess):
@@ -739,10 +741,12 @@ def stream_load(cs_client,jsondata):
             return cs_client.get_run_session(session_number,session_id)
         elif jsondata.get('class') in [ 'CloudSendInstance' , 'CloudSendInstanceProxy' ]:
             instance_name = jsondata['name'].strip()
-            return cs_client.get_instance(instance_name)    
+            instance_cfg  = jsondata.get('config')
+            return cs_client.get_instance(instance_name,config=instance_cfg)    
         elif jsondata.get('class') in [ 'CloudSendEnvironment' , 'CloudSendEnvironmentProxy' ]:
             env_hash = jsondata['hash'].strip()
-            return cs_client.get_environment(env_hash)    
+            env_cfg  = jsondata.get('config')
+            return cs_client.get_environment(env_hash,config=instance_cfg)    
         elif jsondata.get('class') in [ 'CloudSendJob' , 'CloudSendJobProxy' ]:
             if isinstance(jsondata['rank'],str):
                 job_rank = int(jsondata['rank'].strip())
@@ -750,7 +754,7 @@ def stream_load(cs_client,jsondata):
                 job_rank = jsondata['rank']
             job_hash = jsondata['hash'].strip()
             job_cfg  = jsondata.get('config')
-            return cs_client.get_job(job_rank,job_hash,job_cfg)    
+            return cs_client.get_job(job_rank,job_hash,config=job_cfg)    
         else:        
             result = {}
             for k,v in jsondata.items():

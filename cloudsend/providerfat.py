@@ -486,8 +486,7 @@ class CloudSendFatProvider(CloudSendProvider,ABC):
 
             except ConnectionResetError as cre:
                 self.debug(1,e,color=bcolors.WARNING)
-                asyncio.sleep(15)
-                self.debug(1,"Retrying ...")
+                await asyncio.sleep(15)
             
             attempts = attempts + 1
 
@@ -804,7 +803,7 @@ class CloudSendFatProvider(CloudSendProvider,ABC):
             run_sh  = instance.path_join( global_path , 'run.sh' )
             run_log = instance.path_join( run_path , 'run-'+uid+'.log' )
             pid_sh  = instance.path_join( global_path , 'getpid.sh' )
-            cmd_run = cmd_run + run_sh+" \"" + dpl_env.get_name_with_hash() + "\" \""+dpl_job.get_command().replace("\"","\\\"")+"\" \"" + "|".join(job.get_config('input_files')) + "\" \"" + "|".join( job.get_config('output_files') ) + "\" " + job.get_hash()+" "+uid+">"+run_log+" 2>&1"
+            cmd_run = cmd_run + run_sh+" \"" + dpl_env.get_name_with_hash() + "\" \""+dpl_job.get_command().replace("\"","\\\"")+"\" \"" + "|".join(job.get_config('input_files')) + "\" \"" + "|".join( job.get_config('output_files') ) + "\" " + batch.get_uid() + " " + job.get_hash()+" "+uid+">"+run_log+" 2>&1"
             cmd_run = cmd_run + "\n"
             cmd_pid = cmd_pid + pid_sh + " \"" + pid_file + "\"\n"
 
@@ -1246,19 +1245,19 @@ class CloudSendFatProvider(CloudSendProvider,ABC):
                 return session
         return None
 
-    def get_instance( self , instance_name ):
+    def get_instance( self , instance_name , **kwargs):
         for instance in self._instances:
             if instance.get_name() == instance_name:
                 return instance
         return None
 
-    def get_environment( self , env_hash ):
+    def get_environment( self , env_hash , **kwargs):
         for env in self._environments:
             if env.get_hash() == env_hash:
                 return env
         return None
 
-    def get_job( self , rank , job_hash ):
+    def get_job( self , rank , job_hash , **kwargs):
         for job in self._jobs:
             if job.get_rank() == rank and job.get_hash() == job_hash:
                 return job

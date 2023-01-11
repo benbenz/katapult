@@ -216,6 +216,9 @@ class CloudSendRunner(AbstractRunner):
             if processes_states and len(processes_states)>0:
                 self._sleep_period = SLEEP_PERIOD_LONG
 
+        else:
+            self._sleep_period = SLEEP_PERIOD_SHORT
+
 
         has_aborted_process = False
 

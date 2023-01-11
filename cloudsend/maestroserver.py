@@ -355,6 +355,7 @@ class ServerContext:
 
                 directory   = None
                 run_session = None
+                use_cached  = True
                 use_normal_output = False
 
                 if args and len(args)>=1:
@@ -364,9 +365,11 @@ class ServerContext:
                 if args and len(args)>=2:
                     run_session = self.get_run_session("FETCH_RESULTS",args[1],True) # allow shallow object return
                 if args and len(args)>=3:
-                    use_normal_output = args[2]
+                    use_cached = args[2]
+                if args and len(args)>=4:
+                    use_normal_output = args[3]
 
-                out_dir = await self.cs_client.fetch_results(directory,run_session,use_normal_output)
+                out_dir = await self.cs_client.fetch_results(directory,run_session,use_cached,use_normal_output)
                 
                 self.send_result(out_dir)
 

@@ -20,6 +20,7 @@ cs_maestroPolicyName   = 'cloudsend-maestro-policy'
 
 K_LOADED   = '_loaded_'
 K_COMPUTED = '_computed_'
+K_CFG_UID  = '_cfg_uid_'
 
 # NEW > STARTED > ASSIGNED > DEPLOYED > ( RUNNING | WATCHING <-> IDLE )
 
@@ -326,8 +327,9 @@ class CloudSendInstance():
 
 class CloudSendInstanceProxy(CloudSendInstance):
 
-    def __init__(self,name):
+    def __init__(self,name,config=None):
         self._name = name
+        self._config = config
 
 
 class CloudSendEnvironment():
@@ -359,6 +361,9 @@ class CloudSendEnvironment():
     def get_config(self,key):
         return self._config.get(key)
 
+    def get_config_DIRTY(self):
+        return self._config
+
     def get_env_obj(self):
         _env_obj = cloudsendutils.compute_environment_object(self._config)
         return _env_obj 
@@ -380,8 +385,9 @@ class CloudSendEnvironment():
 
 class CloudSendEnvironmentProxy(CloudSendEnvironment):
 
-    def __init__(self,hash):
+    def __init__(self,hash,config=None):
         self._hash = hash
+        self._config = config
 
 
 # "Temporary" objects used when starting scripts      
