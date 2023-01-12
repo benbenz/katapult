@@ -169,6 +169,12 @@ python3 -m cloudsend.demo config reset
 poetry run demo config
 # to run with poetry with reset (maestro and the instances)
 poetry run demo config reset
+
+# to run script flow test
+poetry install -E scriptflow
+cd example/scriptflow/simple
+# [!] EDIT THE PROFILE_NAME in sflow.py [!]
+scriptflow run sleepit
 ```
 
 # Configuration example
