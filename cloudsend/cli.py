@@ -123,16 +123,16 @@ def cli_translate(command,args):
         if args and len(args) >= 1:
             job_state = int(args[0])
             new_args.append(job_state)
-        if args and len(args) >= 3:
-            run_session = CloudSendRunSessionProxy( int(args[1]) , args[2] )
+        if args and len(args) >= 2:
+            run_session = CloudSendRunSessionProxy( args[1] )
             new_args.append( stream_dump(run_session) )
         return new_args 
 
     elif command == 'get_num_active_processes':
 
         new_args = []
-        if args and len(args) >= 2:
-            run_session = CloudSendRunSessionProxy( int(args[0]) , args[1] )
+        if args and len(args) >= 1:
+            run_session = CloudSendRunSessionProxy( args[0] )
             new_args.append( stream_dump(run_session) )
         return new_args 
 
@@ -141,28 +141,28 @@ def cli_translate(command,args):
 
     elif command == 'get_states' or command == 'get_jobs_states':
         new_args = []
-        if args and len(args) >= 2:
-            run_session = CloudSendRunSessionProxy( int(args[0]) , args[1] )
+        if args and len(args) >= 1:
+            run_session = CloudSendRunSessionProxy( args[0] )
             new_args.append( stream_dump(run_session) )
         return new_args 
 
     elif command == 'print_summary' or command == 'print':
         new_args = []
-        if args and len(args) >= 2:
-            run_session = CloudSendRunSessionProxy( int(args[0]) , args[1] )
+        if args and len(args) >= 1:
+            run_session = CloudSendRunSessionProxy( args[0] )
             new_args.append( stream_dump(run_session) )
-        if args and len(args) >= 3:
-            instance = CloudSendInstanceProxy( args[2] )
+        if args and len(args) >= 2:
+            instance = CloudSendInstanceProxy( args[1] )
             new_args.append( stream_dump(instance) )
         return new_args 
 
     elif command == 'print_aborted' or command == 'print_aborted_logs':
         new_args = []
-        if args and len(args) >= 2:
-            run_session = CloudSendRunSessionProxy( int(args[0]) , args[1] )
+        if args and len(args) >= 1:
+            run_session = CloudSendRunSessionProxy( args[0] )
             new_args.append( stream_dump(run_session) )
-        if args and len(args) >= 3:
-            instance = CloudSendInstanceProxy( args[2] )
+        if args and len(args) >= 2:
+            instance = CloudSendInstanceProxy( args[1] )
             new_args.append( stream_dump(instance) )
         return new_args 
         
@@ -172,6 +172,7 @@ def cli_translate(command,args):
     elif command == 'clear_results_dir':
         return args
 
+    # out_dir=None,run_session=None,use_cached=True,use_normal_output=False
     elif command == 'fetch_results':
 
         new_args = []
@@ -180,9 +181,15 @@ def cli_translate(command,args):
             if directory.lower() == 'none':
                 directory = None
             new_args.append(directory)
-        if args and len(args)>=3:
-            run_session = CloudSendRunSessionProxy( int(args[1]) , args[2] )
+        if args and len(args)>=2:
+            run_session = CloudSendRunSessionProxy( args[1] )
             new_args.append( stream_dump(run_session) )
+        if args and len(args)>=3:
+            use_cached = args[2].lower().strip() == "true"
+            new_args.append( use_cached )
+        if args and len(args)>=4:
+            use_normal_output = args[3].lower().strip() == "true"
+            new_args.append( use_normal_output )
         return new_args
 
     elif command == 'finalize':

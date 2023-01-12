@@ -314,16 +314,6 @@ config = {
 # Python API
 
 ```python
-class CloudSendProcessState(IntFlag):
-    UNKNOWN   = 0
-    WAIT      = 1  # waiting for bootstraping
-    QUEUE     = 2  # queued (for sequential scripts)
-    IDLE      = 4  # script about to start
-    RUNNING   = 8  # script running
-    DONE      = 16 # script has completed
-    ABORTED   = 32 # script has been aborted
-    ANY       = 32 + 16 + 8 + 4 + 2 + 1 
-
 class CloudSendLightProvider(ABC):
 class CloudSendFatProvider(ABC):
 
@@ -387,11 +377,7 @@ class CloudSendFatProvider(ABC):
 
 # GLOBAL methods 
 
-def get_client(provider='aws',maestro='local'):
-
-def init_instance_name(instance_config):
-
-def debug(level,*args,**kwargs):
+def get_client(provider='aws',maestro='local')
 ```
 
 # CloudSend usage
