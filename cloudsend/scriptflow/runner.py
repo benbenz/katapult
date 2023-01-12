@@ -3,6 +3,7 @@ import shutil
 import os
 import shlex
 import traceback
+import fnmatch
 from datetime import datetime
 from scriptflow.runners import AbstractRunner
 from cloudsend.provider import get_client
@@ -24,9 +25,10 @@ class CloudSendRunner(AbstractRunner):
         self._run_session       = None
         self._processes         = {}
         self._num_instances     = 0 
-        self._handle_task_queue = kwargs.get('handle_task_queue',True)
         self._sleep_period      = SLEEP_PERIOD_SHORT
+        self._handle_task_queue = kwargs.get('handle_task_queue',True)
         self._do_reset          = kwargs.get('reset',False)
+        self._upload_python     = kwargs.get('upload_python_files',False)
 
     def _move_results(self,results_dir):
         for root, dirs, files in os.walk(results_dir):
@@ -173,12 +175,22 @@ class CloudSendRunner(AbstractRunner):
                     JOB_CFG_T_UID  : task.get_prop(TASK_PROP_UID)
                 }
 
+                # option to upload all python files of the directory
+                # in case some defined routines are used (as in the examples)
+                if self._upload_python:
+                    filesOfDirectory = os.listdir('.')
+                    pattern = "*.py"
+                    for file in filesOfDirectory:
+                        if fnmatch.fnmatch(file, pattern):
+                            if not job_cfg.get('upload_files'):
+                                job_cfg['upload_files'] = []
+                            job_cfg['upload_files'].append(file)
                 # lets upload also the sflow file
                 # in case some defined routines are used (as in the examples)
-                if os.path.isfile( os.path.join(os.getcwd(),'sflow.py') ):
-                    if not job_cfg.get('upload_files'):
-                        job_cfg['upload_files'] = []
-                    job_cfg['upload_files'].append('sflow.py')
+                # if os.path.isfile( os.path.join(os.getcwd(),'sflow.py') ):
+                #     if not job_cfg.get('upload_files'):
+                #         job_cfg['upload_files'] = []
+                #     job_cfg['upload_files'].append('sflow.py')
 
                 jobs_cfg.append( job_cfg )
 
@@ -234,7 +246,9 @@ class CloudSendRunner(AbstractRunner):
             for pstatus in processes_states.values():
                 if pstatus['job_config'][JOB_CFG_T_UID] == p["task"].get_prop(TASK_PROP_UID):
 
-                    assert pstatus['job_rank'] == job.get_rank() and pstatus['job_hash'] == job.get_hash() , "Internal Error: task<->job<->last_process: it looks like something is wrong ! Fix it"
+                    # we match with runner-managed task id, but the job_id should also be right
+                    # (we self manage this match in case cloudsend internal api changes)
+                    assert pstatus['job_id'] == job.get_id() , "Internal Error: task<->job<->last_process: it looks like something is wrong ! Fix it"
                     
                     p["state"] = pstatus['state']
                     found_process = True

@@ -86,6 +86,13 @@ class CloudSendFatProvider(CloudSendProvider,ABC):
 
         self._save_config() 
 
+    def get_objects(self):
+        return {
+            'instances' : self._instances ,
+            'environments' : self._environments ,
+            'jobs' : self._jobs
+        }
+
     async def _cfg_add_objects(self,conf,method,**kwargs):
         await method(conf,**kwargs)
         added_objects = self._config_manager.load()
@@ -1239,9 +1246,9 @@ class CloudSendFatProvider(CloudSendProvider,ABC):
     # this is used especially when we use the light client to control a fat client
     # a proxied session is used (shallow object with only an ID and a number)
     # and we need to retrieve a true connected object in memory 
-    def get_run_session( self , session_number , session_id ):
+    def get_run_session( self , session_id ):
         for session in self._run_sessions:
-            if session.get_id() == session_id and session.get_number() == session_number:
+            if session.get_id() == session_id:
                 return session
         return None
 
@@ -1257,9 +1264,9 @@ class CloudSendFatProvider(CloudSendProvider,ABC):
                 return env
         return None
 
-    def get_job( self , rank , job_hash , **kwargs):
+    def get_job( self , job_id , **kwargs):
         for job in self._jobs:
-            if job.get_rank() == rank and job.get_hash() == job_hash:
+            if job.get_id() == job_id:
                 return job
         return None
 

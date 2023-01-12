@@ -185,14 +185,16 @@ class CloudSendLightProvider(CloudSendProvider,ABC):
         # we have separated run and init and start 
         # we need to init with the deployed config
         self.debug(1,"initialize server with config")
-        await self._exec_maestro_command("init","config.json")
+        init_objects = await self._exec_maestro_command("init","config.json")
+        
+        self._update_K_loaded(init_objects)
 
         # TODO: improve return result from init and match whats been loaded and what has not
         # (same as cfg_add_***)
-        for objs_key in ['instances','environments','jobs']:
-            if self._config.get(objs_key):
-                for obj_cfg in self._config[objs_key]:
-                    obj_cfg[K_LOADED]=True
+        # for objs_key in ['instances','environments','jobs']:
+        #     if self._config.get(objs_key):
+        #         for obj_cfg in self._config[objs_key]:
+        #             obj_cfg[K_LOADED]=True
 
     async def _deploy_config(self,ssh_conn,ftp_client,config_filename='config.json',only_new=False):
 
@@ -228,7 +230,7 @@ class CloudSendLightProvider(CloudSendProvider,ABC):
         if only_new:
             config = dict()
             for master_key in self._config:
-                if master_key in ['instances','environments','jobs']:
+                if master_key in K_OBJECTS:
                     config[master_key] = []                    
                     for obj_cfg in self._config[master_key]:
                         if obj_cfg.get(K_LOADED) == False:
@@ -536,6 +538,19 @@ class CloudSendLightProvider(CloudSendProvider,ABC):
         # triggers maestro::start
         await self._exec_maestro_command("start",reset)
 
+    def _update_K_loaded(self,objs_result):
+        for objs_key in K_OBJECTS:
+            if objs_result.get(objs_key) and self._config.get(objs_key):
+                for obj in objs_result[objs_key]:
+                    o_uid = obj.get_config(K_CFG_UID)
+                    if not o_uid:
+                        continue
+                    for cfg in self._config[objs_key]:
+                        c_uid = cfg[K_CFG_UID]
+                        if o_uid == c_uid:
+                            cfg[K_LOADED] = obj.get_config(K_LOADED) 
+                            break           
+
     async def _cfg_add_objects(self,conf,coroutine,name,**kwargs):
         # complement self._config
         await coroutine(conf,**kwargs)
@@ -552,38 +567,7 @@ class CloudSendLightProvider(CloudSendProvider,ABC):
         objs = await self._exec_maestro_command(name,args)
 
         # match loaded stuff in the light client config
-
-        # for objs_key in ['instances','environments','jobs']:
-        #     if self._config.get(objs_key):
-        #         for obj_cfg in self._config[objs_key]
-        #             uid = obj_cfg.get(K_CFG_UID)
-        #             if uid is None:
-        #                 self.debug(1,"Internal Error - a config uid is not set. it should not happen",color=bcolors.WARNING)
-        #                 self.debug(1,"marking this configuration as loaded by DEFAULT!",obj_cfg)
-        #                 obj_cfg[K_LOADED]=True
-        #             else:
-        #                 # find the first occurence of this UID in the created objects
-        #                 if not objs_key in objs:
-        #                     self.debug(1,"Internal Error - no objects created for this type",color=bcolors.WARNING)
-        #                     self.debug(1,"marking this configuration as loaded by DEFAULT!",obj_cfg)
-        #                     obj_cfg[K_LOADED]=True
-        #                 else:
-        #                     for real_obj in objs[objs_key]:
-        #                         o_uid = real_obj.get_config(K_CFG_UID)
-        #                         if uid == o_uid:
-        #                             obj_cfg[K_LOADED] = real_obj.get_config(K_LOADED) # this is what we wanted
-        #                             break 
-        for objs_key in ['instances','environments','jobs']:
-            if objs.get(objs_key) and self._config.get(objs_key):
-                for obj in objs[objs_key]:
-                    o_uid = obj.get_config(K_CFG_UID)
-                    if not o_uid:
-                        continue
-                    for cfg in self._config[objs_key]:
-                        c_uid = cfg[K_CFG_UID]
-                        if o_uid == c_uid:
-                            cfg[K_LOADED] = obj.get_config(K_LOADED) 
-                            break         
+        self._update_K_loaded(objs)
 
         return objs
 
@@ -793,17 +777,17 @@ class CloudSendLightProvider(CloudSendProvider,ABC):
     def serialize_state(self):
         pass
 
-    def get_run_session(self,session_number,session_id):
-        return CloudSendRunSessionProxy( session_number , session_id )
+    def get_run_session(self,session_id):
+        return CloudSendRunSessionProxy( session_id )
 
     def get_instance(self,instance_name,**kwargs):
-        return CloudSendInstanceProxy( instance_name )
+        return CloudSendInstanceProxy( instance_name , kwargs.get('config') )
 
     def get_environment(self,env_hash,**kwargs):
-        return CloudSendEnvironmentProxy( env_hash )
+        return CloudSendEnvironmentProxy( env_hash , kwargs.get('config') )
 
-    def get_job(self,job_rank,job_hash,**kwargs):
-        return CloudSendJobProxy( job_rank , job_hash , kwargs.get('config') )
+    def get_job(self,job_id,**kwargs):
+        return CloudSendJobProxy( job_id , kwargs.get('config') )
 
     async def get_num_active_processes(self,run_session=None):
         if run_session is None:

@@ -253,9 +253,12 @@ def compute_job_hash(job_config):
     hash = hashlib.md5(string_to_hash.encode()).hexdigest()
     return hash[0:12]
 
-def generate_unique_id():
+def generate_unique_id(short=False):
     #return str(uuid.uuid4())
-    return uuid.uuid4().hex # a little simpler ...
+    if not short:
+        return uuid.uuid4().hex # a little simpler ...
+    else:
+        return uuid.uuid4().hex[:8]
 
 def compute_job_command(instance,script_dir,job_config):
     script_command = ''

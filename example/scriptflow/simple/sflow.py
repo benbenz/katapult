@@ -41,7 +41,7 @@ def init(config):
     logging.basicConfig(filename='scriptflow.log', level=logging.DEBUG)
     # set main maestro
     try:
-        cloudsend = CloudSendRunner(config,reset=True)
+        cloudsend = CloudSendRunner(config,reset=True,upload_python_files=True)
     except Exception as e:
         print("Error while initializing cloudsend",e)
         return

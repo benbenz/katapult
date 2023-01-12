@@ -4,6 +4,7 @@ import cloudsend.utils as cloudsendutils
 import json
 import copy
 import os
+import re
 import ntpath , posixpath
 
 cs_keypairName         = 'cloudsend-keypair'
@@ -21,6 +22,8 @@ cs_maestroPolicyName   = 'cloudsend-maestro-policy'
 K_LOADED   = '_loaded_'
 K_COMPUTED = '_computed_'
 K_CFG_UID  = '_cfg_uid_'
+
+K_OBJECTS = ['instances','environments','jobs']
 
 # NEW > STARTED > ASSIGNED > DEPLOYED > ( RUNNING | WATCHING <-> IDLE )
 
@@ -429,6 +432,7 @@ class CloudSendJob():
         self._config    = job_cfg
         self._rank      = rank
         self._hash      = cloudsendutils.compute_job_hash(self._config)
+        self._id        = cloudsendutils.generate_unique_id() + '_' + str(rank)
         self._env       = None
         self._instance  = None
         self._deployed = [ ]
@@ -442,6 +446,9 @@ class CloudSendJob():
 
     def get_hash(self):
         return self._hash
+
+    def get_id(self):
+        return self._id
 
     def get_config(self,key,defaultVal=None):
         return self._config.get(key,defaultVal)
@@ -527,20 +534,20 @@ class CloudSendJob():
         instance.append_job(self)
 
     def str_simple(self):
-        return "{0}: HASH = {1} , ENV = {2}: {3}".format(type(self).__name__,self.get_hash(),self.get_env().get_name() if self.get_env() else None,self.get_config('run_script') or self.get_config('run_command') )
+        return "{0}: ID = {1} , HASH = {2} , ENV = {3}: {4}".format(type(self).__name__,self.get_id(),self.get_hash(),self.get_env().get_name() if self.get_env() else None,self.get_config('run_script') or self.get_config('run_command') )
 
     def __repr__(self):
-        return "{0}: HASH = {1} , INSTANCE = {2} , ENV = {3}".format(type(self).__name__,self.get_hash(),self.get_instance(),self.get_env().get_name() if self.get_env() else None)
+        return "{0}: ID = {1} , HASH = {2} , INSTANCE = {3} , ENV = {4}".format(type(self).__name__,self.get_id(),self.get_hash(),self.get_instance(),self.get_env().get_name() if self.get_env() else None)
          
     def __str__(self):
-        return "{0}: HASH = {1} , INSTANCE = {2} , ENV = {3}".format(type(self).__name__,self.get_hash(),self.get_instance(),self.get_env().get_name() if self.get_env() else None)
+        return "{0}: ID = {1} , HASH = {2} , INSTANCE = {3} , ENV = {4}".format(type(self).__name__,self.get_id(),self.get_hash(),self.get_instance(),self.get_env().get_name() if self.get_env() else None)
 
 
 class CloudSendJobProxy(CloudSendJob):
 
-    def __init__(self,rank,hash,config=None):
-        self._rank   = rank 
-        self._hash   = hash
+    def __init__(self,id,config=None):
+        self._id     = id 
+        self._rank   = int( re.sub(r'[0-9a-zA-Z]+_','',self._id) )
         self._config = config
 
 
@@ -582,6 +589,10 @@ class CloudSendDeployedJob(CloudSendJob):
     # proxied
     def get_hash(self):
         return self._job._hash
+
+    # proxied
+    def get_id(self):
+        return self._job._id
 
     # proxied
     def get_config(self,key,defaultVal=None):
@@ -661,8 +672,7 @@ class CloudSendProcess():
             'uid' : self._uid 
         }
         if withJobRef:
-            obj['job_rank'] = self._job.get_rank()
-            obj['job_hash'] = self._job.get_hash()
+            obj['job_id'] = self._job.get_id()
         if withJobCfg:
             obj['job_config'] = self._job.get_config_DIRTY()
         return obj
@@ -725,7 +735,7 @@ class CloudSendRunSession():
 
     def __init__(self,number):
         self._number  = number 
-        self._id      = cloudsendutils.generate_unique_id()
+        self._id      = cloudsendutils.generate_unique_id() + '_' + str(number)
         self._batches = []
 
     def create_batch(self):
@@ -795,9 +805,9 @@ class CloudSendRunSession():
 
 class CloudSendRunSessionProxy(CloudSendRunSession):
 
-    def __init__(self,number,session_id):
-        self._number = number
+    def __init__(self,session_id):
         self._id     = session_id
+        self._number = int( re.sub(r'[0-9a-zA-Z]+_','',self._id) )
 
 class CloudSendBatch():
 

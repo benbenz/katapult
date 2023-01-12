@@ -174,7 +174,10 @@ class ServerContext:
                     config_ = None
                 self.cs_client  = cs.get_client(config_)
 
-                await self.wakeup()                
+                await self.wakeup() 
+
+                init_objects = self.cs_client.get_objects()
+                self.send_result(init_objects)               
 
             elif command == 'wakeup':
 

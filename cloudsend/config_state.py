@@ -41,12 +41,12 @@ class ConfigManager():
             if job_cfg.get('output_files') and isinstance(job_cfg.get('output_files'),str):
                 job_cfg['output_files'] = [ job_cfg['output_files'] ]
 
-        for objs_key in ['instances','environments','jobs']:
-            if objs_key not in self._config:
-                continue
-            for obj_cfg in self._config[objs_key]:
-                if K_CFG_UID not in obj_cfg:
-                    obj_cfg[K_CFG_UID] = cloudsendutils.generate_unique_id()
+        # for objs_key in K_OBJECTS:
+        #     if objs_key not in self._config:
+        #         continue
+        #     for obj_cfg in self._config[objs_key]:
+        #         if K_CFG_UID not in obj_cfg:
+        #             obj_cfg[K_CFG_UID] = cloudsendutils.generate_unique_id()
 
     def _load_objects(self):
         projectName = self._config.get('project')
@@ -65,6 +65,8 @@ class ConfigManager():
             for k,inst_cfg in enumerate(inst_cfgs):
                 if inst_cfg.get(K_LOADED) == True:
                     continue 
+
+                self._provider.debug(3,'loading instance config',inst_cfg)                    
 
                 # virtually demultiply according to 'number' and 'explode'
                 for i in range(inst_cfg.get('number',1)):
@@ -90,6 +92,7 @@ class ConfigManager():
                             real_inst_cfg['rank'] = "{0}.{1}".format(k+1,i+1)
 
                         real_inst_cfg[K_LOADED] = True # mark it loaded for the individual instance as well
+                        real_inst_cfg[K_CFG_UID] = inst_cfg[K_CFG_UID]
 
                         self._load_other_instance_info(real_inst_cfg)
 
@@ -150,6 +153,7 @@ class ConfigManager():
                             real_inst_cfg['rank'] = rank
 
                             real_inst_cfg[K_LOADED] = True # mark it loaded for the individual instance as well
+                            real_inst_cfg[K_CFG_UID] = inst_cfg[K_CFG_UID]
 
                             self._load_other_instance_info(real_inst_cfg)
 
@@ -167,8 +171,11 @@ class ConfigManager():
         #self._environments = [ ] 
         if env_cfgs:
             for env_cfg in env_cfgs:
+
                 if env_cfg.get(K_LOADED) == True:
                     continue
+
+                self._provider.debug(3,'loading env config',env_cfg)
 
                 # copy the dev global paramter to the environment configuration (will be used for names)
                 env_cfg['dev']  = self._config.get('dev',False)
@@ -178,12 +185,16 @@ class ConfigManager():
 
                 env_cfg[K_LOADED] = True
 
+        self._provider.debug(3,self._environments)                
+
         #self._jobs = [ ] 
         if job_cfgs:
             rank=len(self._jobs)
             for i,job_cfg in enumerate(job_cfgs):
                 if job_cfg.get(K_LOADED) == True:
                     continue 
+
+                self._provider.debug(3,'loading job config',job_cfg)                    
 
                 for j in range(job_cfg.get('repeat',1)):
                     job = CloudSendJob(job_cfg,rank)
@@ -192,6 +203,8 @@ class ConfigManager():
                     rank = rank + 1
                 
                 job_cfg[K_LOADED] = True
+
+        self._provider.debug(3,self._jobs)                                
 
         return added_objects
 

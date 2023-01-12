@@ -47,7 +47,9 @@ class CloudSendProvider(ABC):
         self._profile_name = self._config.get('profile')
         if self._config.get('profile'):
             self.set_profile(self._config.get('profile'))   
-        
+
+        self._init_hidden_properties(conf)
+
         self._save_config()
 
     def debug_set_prefix(self,value):
@@ -583,12 +585,25 @@ class CloudSendProvider(ABC):
     
         return config
 
+    def _init_hidden_properties(self,config,key_name=None):
+        keys_list = [ key_name ] if key_name is not None else K_OBJECTS
+        for objs_key in keys_list:
+            if config.get(objs_key):
+                for cfg in config[objs_key]:
+                    if K_LOADED not in cfg:
+                        cfg[K_LOADED] = False # make sure we mark it as not-loaded
+                    if K_CFG_UID not in cfg: 
+                        cfg[K_CFG_UID] = cloudsendutils.generate_unique_id(True) # this will help trace what's been loaded in the generated objects ..
+
+        
     def _cfg_add_objects(self,key_name,config_list_obj,save=True,**kwargs):
 
         config = self.resolve_config(config_list_obj,key_name)
 
         self.debug(2,"ADDING objects",config)
         
+        self._init_hidden_properties(config,key_name)
+
         if key_name not in config:
             self.debug(1,"No "+key_name+" specified in config file",config)
             return
@@ -597,9 +612,6 @@ class CloudSendProvider(ABC):
             self._config[key_name] = []
 
         for cfg in config[key_name]:
-            cfg[K_LOADED] = False # make sure we mark it as not-loaded
-            if K_CFG_UID not in cfg: 
-                cfg[K_CFG_UID] = cloudsendutils.generate_unique_id() # this will help trace what's been loaded in the generated objects ..
             self._config[key_name].append( cfg )
 
         # no need, this only plays with global vars...
@@ -637,7 +649,7 @@ class CloudSendProvider(ABC):
         self._init(config)  
 
     @abstractmethod
-    async def get_run_session(self,session_number,session_id):
+    async def get_run_session(self,session_id):
         pass
 
     @abstractmethod
@@ -649,7 +661,7 @@ class CloudSendProvider(ABC):
         pass
 
     @abstractmethod
-    async def get_job(self,job_rank,job_hash,**kwargs):
+    async def get_job(self,job_id,**kwargs):
         pass
 
     @abstractmethod
@@ -713,13 +725,13 @@ def stream_dump(obj):
             strdump[k] = stream_dump(v)
         return strdump
     elif isinstance(obj,CloudSendRunSession):
-        return { 'class': type(obj).__name__ , 'number':obj.get_number() , 'id': obj.get_id() }
+        return { 'class': type(obj).__name__ , 'id': obj.get_id() }
     elif isinstance(obj,CloudSendInstance):
         return { 'class': type(obj).__name__ , 'name':obj.get_name() , 'config':obj.get_config_DIRTY() }
     elif isinstance(obj,CloudSendEnvironment):
         return { 'class': type(obj).__name__ , 'hash':obj.get_hash() , 'config':obj.get_config_DIRTY() }
     elif isinstance(obj,CloudSendJob):
-        return { 'class': type(obj).__name__ , 'rank':obj.get_rank() , 'hash':obj.get_hash() , 'config':obj.get_config_DIRTY() }
+        return { 'class': type(obj).__name__ , 'id':obj.get_id() , 'config':obj.get_config_DIRTY() }
     # elif isinstance(obj,CloudSendProcess):
     #     return { 'class': type(obj).__name__ , 'job': stream_dump(obj.get_job()) , 'uid':obj.get_uid() , 'state': obj.get_state() , 'substate': obj.get_substate() , 'aborted_reason': obj.get_aborted_reason()}
     else:
@@ -733,12 +745,8 @@ def stream_load(cs_client,jsondata):
         return result
     elif isinstance(jsondata,dict):
         if jsondata.get('class') in [ 'CloudSendRunSession' , 'CloudSendRunSessionProxy' ]:
-            if isinstance(jsondata['number'],str):
-                session_number = int(jsondata['number'].strip())
-            else:
-                session_number = jsondata['number']
             session_id     = jsondata['id'].strip()
-            return cs_client.get_run_session(session_number,session_id)
+            return cs_client.get_run_session(session_id)
         elif jsondata.get('class') in [ 'CloudSendInstance' , 'CloudSendInstanceProxy' ]:
             instance_name = jsondata['name'].strip()
             instance_cfg  = jsondata.get('config')
@@ -746,15 +754,11 @@ def stream_load(cs_client,jsondata):
         elif jsondata.get('class') in [ 'CloudSendEnvironment' , 'CloudSendEnvironmentProxy' ]:
             env_hash = jsondata['hash'].strip()
             env_cfg  = jsondata.get('config')
-            return cs_client.get_environment(env_hash,config=instance_cfg)    
+            return cs_client.get_environment(env_hash,config=env_cfg)    
         elif jsondata.get('class') in [ 'CloudSendJob' , 'CloudSendJobProxy' ]:
-            if isinstance(jsondata['rank'],str):
-                job_rank = int(jsondata['rank'].strip())
-            else:
-                job_rank = jsondata['rank']
-            job_hash = jsondata['hash'].strip()
+            job_id   = jsondata['id'].strip()
             job_cfg  = jsondata.get('config')
-            return cs_client.get_job(job_rank,job_hash,config=job_cfg)    
+            return cs_client.get_job(job_id,config=job_cfg)    
         else:        
             result = {}
             for k,v in jsondata.items():
