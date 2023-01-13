@@ -95,7 +95,7 @@
             "request": "launch",
             "program": "${workspaceFolder}/.venv/bin/scriptflow",
             "console": "integratedTerminal",
-            "cwd": "${workspaceFolder}/example/scriptflow/simple/",
+            "cwd": "${workspaceFolder}/examples/scriptflow/simple/",
             "args": ["run","sleepit"],
             "env": {
                 "PATH":"${workspaceFolder}/.venv/bin:$PATH",

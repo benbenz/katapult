@@ -9,7 +9,7 @@ remote_files/config.json
 /config*.py
 /config*.zip
 /config*.json
-/example/config.py
+/examples/config.py
 /config-cloudsend*.json
 poetry.lock
 __pycache__
@@ -21,9 +21,9 @@ watch.log
 /tmp
 /dist
 /kyel
-/example/scriptflow/*/*.log
-/example/scriptflow/*/.sf
-/example/scriptflow/*/sf.json
-/example/scriptflow/*/*.txt
+/examples/scriptflow/*/*.log
+/examples/scriptflow/*/.sf
+/examples/scriptflow/*/sf.json
+/examples/scriptflow/*/*.txt
 
 /scriptflow

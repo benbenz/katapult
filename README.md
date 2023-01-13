@@ -156,7 +156,7 @@ C:\> poetry install
 
 ```bash
 # copy the example file
-cp example/config.example.py config.py
+cp examples/config.example.py config.py
 #
 # EDIT THE FILE
 #
@@ -172,7 +172,7 @@ poetry run demo config reset
 
 # to run script flow test
 poetry install -E scriptflow
-cd example/scriptflow/simple
+cd examples/scriptflow/simple
 # [!] EDIT THE PROFILE_NAME in sflow.py [!]
 scriptflow run sleepit
 ```
@@ -235,11 +235,11 @@ config = {
             # env_conda (only)      : mamba is used to setup the env
             # env_pypi  (only)      : venv + pip is used to setup the env 
 
-            'command'      : 'example/install_julia.sh' ,      # None, or a string: path to a bash file to execute when deploying
+            'command'      : 'examples/install_julia.sh' ,      # None, or a string: path to a bash file to execute when deploying
             'env_aptget'   : [ "openssh-client"] ,        # None, an array of librarires/binaries for apt-get
-            'env_conda'    : "example/environment.yml",   # None, an array of libraries, a path to environment.yml  file, or a path to the root of a conda environment
+            'env_conda'    : "examples/environment.yml",   # None, an array of libraries, a path to environment.yml  file, or a path to the root of a conda environment
             'env_conda_channels' : None ,                 # None, an array of channels. If None (or absent), defaults and conda-forge will be used
-            'env_pypi'     : "example/requirements.txt" , # None, an array of libraries, a path to requirements.txt file, or a path to the root of a venv environment 
+            'env_pypi'     : "examples/requirements.txt" , # None, an array of libraries, a path to requirements.txt file, or a path to the root of a venv environment 
             'env_julia'    : [ "Wavelets" ] ,             # None, a string or an array of Julia packages to install (requires julia)
         }
     ] ,
@@ -252,7 +252,7 @@ config = {
         {
             'env_name'     : None ,                       # the environment to use (can be 'None' if solely one environment is provided above)
             'cpus_req'     : None ,                       # the CPU(s) requirements for the process (can be None)
-            'run_script'   : 'example/run_remote.py 1 10',# the script to run (Python (.py) or Julia (.jl) for now) (prioritised vs 'run_command')
+            'run_script'   : 'examples/run_remote.py 1 10',# the script to run (Python (.py) or Julia (.jl) for now) (prioritised vs 'run_command')
             'run_command'  : None ,                       # the command to run
             'upload_files' : [ "uploaded.txt"] ,          # any file to upload (array or string) - will be put in the same directory
             'input_files'   : 'input.dat' ,                # the input file name (used by the script)
@@ -262,7 +262,7 @@ config = {
         {
             'env_name'     : None ,                       # the environment to use (can be 'None' if solely one environment is provided above)
             'cpus_req'     : None ,                       # the CPU(s) requirements for the process (can be None)
-            'run_script'   : 'example/run_remote.py 2 12',# the script to run (Python (.py) or Julia (.jl) for now) (prioritised vs 'run_command')
+            'run_script'   : 'examples/run_remote.py 2 12',# the script to run (Python (.py) or Julia (.jl) for now) (prioritised vs 'run_command')
             'run_command'  : None ,                       # the command to run
             'upload_files' : [ "uploaded.txt"] ,          # any file to upload (array or string) - will be put in the same directory
             'input_files'   : 'input.dat' ,                # the input file name (used by the script)
@@ -290,7 +290,7 @@ config = {
     'environments' : [
         {
             'name'         : None ,                       # name of the environment - should be unique if not 'None'. 'None' only when len(environments)==1
-            'env_conda'    : "example/environment.yml",   # None, an array of libraries, a path to environment.yml  file, or a path to the root of a conda environment
+            'env_conda'    : "examples/environment.yml",   # None, an array of libraries, a path to environment.yml  file, or a path to the root of a conda environment
             'env_julia'    : ["Wavelets"] ,                       # None, a string or an array of Julia packages to install (requires julia)
         }
     ] ,
@@ -299,7 +299,7 @@ config = {
         {
             'env_name'     : None ,                       # the environment to use (can be 'None' if solely one environment is provided above)
             'cpus_req'     : None ,                       # the CPU(s) requirements for the process (can be None)
-            'run_script'   : 'example/run_remote.py 1 10',# the script to run (Python (.py) or Julia (.jl) for now) (prioritised vs 'run_command')
+            'run_script'   : 'examples/run_remote.py 1 10',# the script to run (Python (.py) or Julia (.jl) for now) (prioritised vs 'run_command')
             'upload_files' : [ "uploaded.txt"] ,          # any file to upload (array or string) - will be put in the same directory
             'input_files'   : 'input.dat' ,                # the input file name (used by the script)
             'output_files'  : 'output.dat' ,               # the output file name (used by the script)
@@ -307,7 +307,7 @@ config = {
         {
             'env_name'     : None ,                       # the environment to use (can be 'None' if solely one environment is provided above)
             'cpus_req'     : None ,                       # the CPU(s) requirements for the process (can be None)
-            'run_script'   : 'example/run_remote.py 2 12',# the script to run (Python (.py) or Julia (.jl) for now) (prioritised vs 'run_command')
+            'run_script'   : 'examples/run_remote.py 2 12',# the script to run (Python (.py) or Julia (.jl) for now) (prioritised vs 'run_command')
             'upload_files' : [ "uploaded.txt"] ,          # any file to upload (array or string) - will be put in the same directory
             'input_files'   : 'input.dat' ,                # the input file name (used by the script)
             'output_files'  : 'output.dat' ,               # the output file name (used by the script)
