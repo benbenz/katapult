@@ -830,6 +830,16 @@ def aws_get_suggested_image(session,region):
     )
     images = results['Images']
 
+    if not images or len(images)==0:
+        # this is to handle moto Mock version of describe_images
+        results = ec2_client.describe_images() 
+        images = []
+        for r in results['Images']:
+            name = r['Name'].lower()
+            desc = r['Description'].lower()
+            if 'linux' in name or 'linux' in desc or 'ubuntu' in name or 'ubuntu' in desc:
+                images.append(r)
+
     images = sorted(images, key=lambda d: d['Name']) 
 
     for image in images:

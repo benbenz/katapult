@@ -3,9 +3,10 @@
 # http://docs.getmoto.org/en/2.2.13/ (oldest doc)
 
 import botocore
+from botocore import client
 
 # Original botocore _make_api_call function
-orig = botocore.client.BaseClient._make_api_call
+orig = client.BaseClient._make_api_call
 
 # Mocked botocore _make_api_call function
 def mock_make_api_call(self, operation_name, kwarg):

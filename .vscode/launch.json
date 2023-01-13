@@ -101,6 +101,19 @@
                 "PATH":"${workspaceFolder}/.venv/bin:$PATH",
                 "PYTHONPATH":"${workspaceRoot}:${workspaceRoot}/.venv/lib/python3.9/site-packages:$PYTHONPATH"
             }
+        },
+        {
+            "name": "PyTest",
+            "type": "python",
+            "request": "launch",
+            "program": "${workspaceFolder}/.venv/bin/pytest",
+            "console": "integratedTerminal",
+            "cwd": "${workspaceFolder}",
+            "args": [],
+            "env": {
+                "PATH":"${workspaceFolder}/.venv/bin:$PATH",
+                "PYTHONPATH":"${workspaceRoot}:${workspaceRoot}/.venv/lib/python3.9/site-packages:$PYTHONPATH"
+            }
         }
     ]
 }

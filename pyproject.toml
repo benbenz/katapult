@@ -11,14 +11,14 @@ include = ["requirements.txt"]
 [tool.poetry.dependencies]
 # protobuf = "^3.20"
 python = "^3.9"
-boto3 = "^1"
+boto3 = "1.26.1"
 jcs = "^0.2"
 pyyaml = "^6.0"
 asyncssh = "~2.12.0"
 ortools = "^9.0"
 psutil = "^5.9.4"
 scriptflow = {version = "^0.2.5", optional = true}
-cryptography = "3.1.1"
+# cryptography = "3.1.1"
 
 [tool.poetry.extras]
 scriptflow = ["scriptflow"]
