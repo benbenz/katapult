@@ -30,6 +30,24 @@ class NoAuthSSHServer(asyncssh.SSHServer):
         else:
             print('SSH connection closed.')        
 
+class MySFTPServer(asyncssh.SFTPServer):
+    def __init__(self, chan):
+        #root = '/tmp/sftp/' + chan.get_extra_info('username')
+        #os.makedirs(root, exist_ok=True)
+        #super().__init__(chan, chroot=root)            
+        super().__init__(chan)
+
+    def  open(self, path, pflags, attrs):
+        print("open",path)
+        super().open(path, pflags, attrs)
+
+    def close(self, file_obj):
+        print("close",file_obj)
+        super().close(file_obj)
+
+    def  read(self,file_obj, offset, size):
+        print("read",file_obj)
+        super().read(file_obj,offset, size)
 
 @asynccontextmanager
 async def simple_ssh_server(handler, port=0):
@@ -49,7 +67,7 @@ async def simple_ssh_server(handler, port=0):
         server_factory=NoAuthSSHServer,
         server_host_keys=[private_key],
         process_factory=handler,
-        sftp_factory=True,
+        sftp_factory=MySFTPServer,
         options=asyncssh.SSHServerConnectionOptions(host_based_auth=False)
     )
     server = acceptor._server
