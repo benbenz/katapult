@@ -178,7 +178,7 @@ class CloudSendInstance():
         return self.path_join( self.get_home_dir() , 'run' )
 
     def path(self):
-        if self._platform == CloudSendPlatform.LINUX or self._platform == CloudSendPlatform.WINDWS_WSL:
+        if self._platform == CloudSendPlatform.LINUX or self._platform == CloudSendPlatform.WINDOWS_WSL:
             return posixpath
         elif self._platform == CloudSendPlatform.WINDWS:
             return ntpath

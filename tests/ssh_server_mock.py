@@ -39,7 +39,7 @@ async def simple_ssh_server(handler, port=0):
         if socket.family == AF_INET
     )
     async with server:
-        yield port
+        yield port , private_key
 
 
 @pytest.fixture(scope="function")
@@ -73,7 +73,9 @@ async def ssh_mock_server():
         process.stdout.write(value)
         process.exit(0)
 
-    async with simple_ssh_server(handler) as port:
+    async with simple_ssh_server(handler) as port_private_key:
+        port = port_private_key[0]
+        private_key = port_private_key[1]
         ssh_options = [
             "-o UserKnownHostsFile=/dev/null",
             "-o StrictHostKeyChecking=no",
@@ -98,4 +100,6 @@ async def ssh_mock_server():
             )
 
         mock.run_mock_shell = run_mock_shell
+        mock.port = port 
+        mock.private_key = private_key
         yield mock

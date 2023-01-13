@@ -54,6 +54,10 @@ class CloudSendProvider(ABC):
 
         self._save_config()
 
+        self._ssh_hostname = None 
+        self._ssh_port     = None
+        self._ssh_privkey  = None
+
     def debug_set_prefix(self,value):
         self.DBG_PREFIX = value
         global DBG_PREFIX
@@ -259,29 +263,42 @@ class CloudSendProvider(ABC):
             await self.hard_reset_instance(instance)
             await self._wait_for_instance(instance) 
 
+    def set_ssh_server( self , hostname , port , privkey ):
+        self._ssh_hostname = hostname 
+        self._ssh_port     = port
+        self._ssh_privkey  = privkey
+
     async def _connect_to_instance(self,instance,**kwargs):
         # ssh into instance and run the script 
         region = instance.get_region()
         #if region is None:
         #    region = self.get_user_region(self._config.get('profile'))
-        keypair_filename = self.get_key_filename(self._config.get('profile'),region)
-        if not os.path.exists(keypair_filename):
-            self.debug(1,"KeyPair not found locally, we will have to regenerate it ...",color=bcolors.WARNING)
-            #self.create_keypair(region)
-            await self._refresh_instance_key(instance)
-        try:
-            k = asyncssh.read_private_key(keypair_filename)
-        except:
-            # key file exists but is invalid >> try again
-            await self._refresh_instance_key(instance)
-            k = asyncssh.read_private_key(keypair_filename)
+
+        # for mocking/testing
+        if self._ssh_privkey:
+            k = self._ssh_privkey
+        else:
+            keypair_filename = self.get_key_filename(self._config.get('profile'),region)
+            if not os.path.exists(keypair_filename):
+                self.debug(1,"KeyPair not found locally, we will have to regenerate it ...",color=bcolors.WARNING)
+                #self.create_keypair(region)
+                await self._refresh_instance_key(instance)
+            try:
+                k = asyncssh.read_private_key(keypair_filename)
+            except:
+                # key file exists but is invalid >> try again
+                await self._refresh_instance_key(instance)
+                k = asyncssh.read_private_key(keypair_filename)
 
         self.debug(1,"connecting to",instance.get_name(),"@",instance.get_ip_addr())
         retrys = 0 
         retrys_key = 0
         while True:
             try:
-                conn = await asyncssh.connect(host=instance.get_dns_addr(),username=instance.get_config('img_username'),client_keys=[k],known_hosts=None,**kwargs) #,password=’mypassword’)
+                if self._ssh_hostname: # mock/testing mode
+                    conn = await asyncssh.connect(host=self._ssh_hostname,port=self._ssh_port,client_keys=[k],known_hosts=None,**kwargs)
+                else:
+                    conn = await asyncssh.connect(host=instance.get_dns_addr(),username=instance.get_config('img_username'),client_keys=[k],known_hosts=None,**kwargs) #,password=’mypassword’)
                 break
             except asyncssh.PermissionDenied as pde:
                 # we need to forward this higher up so we can handle the private key issue
