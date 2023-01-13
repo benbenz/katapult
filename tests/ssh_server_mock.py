@@ -68,7 +68,8 @@ async def ssh_mock_server():
     mock = Mock(name="ssh_mock_server")
 
     def handler(process):
-        value = mock(process.get_command())
+        #value = mock(process.get_command())
+        value = mock(process.command)
         process.stdout.write(value)
         process.exit(0)
 
