@@ -10,6 +10,7 @@ from enum import IntFlag
 #import multiprocessing
 import asyncio
 import asyncssh
+import importlib
 
 COMMAND_ARGS_SEP = '__:__'
 ARGS_SEP         = '__,__'
@@ -785,9 +786,13 @@ def get_config(path):
             config = None
     elif config_extension=='.py':
         try:
-            sys.path.append(os.path.abspath(configdir))
-            configModule = __import__(config_name,globals(),locals())
-            config = configModule.config
+            # sys.path.append(os.path.abspath(configdir))
+            # configModule = __import__(config_name,globals(),locals())
+            # config = configModule.config
+            spec = importlib.util.spec_from_file_location("", os.path.join(os.getcwd(),config_file))
+            foo = importlib.util.module_from_spec(spec)
+            spec.loader.exec_module(foo)
+            config = foo.config
         except ModuleNotFoundError as mfe:
             config = None
         except:
