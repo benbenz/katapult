@@ -109,7 +109,7 @@
             "program": "${workspaceFolder}/.venv/bin/pytest",
             "console": "integratedTerminal",
             "cwd": "${workspaceFolder}",
-            "args": [],
+            "args": ["-s"],
             "env": {
                 "PATH":"${workspaceFolder}/.venv/bin:$PATH",
                 "PYTHONPATH":"${workspaceRoot}:${workspaceRoot}/.venv/lib/python3.9/site-packages:$PYTHONPATH"

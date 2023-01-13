@@ -7,7 +7,7 @@ import boto3
 import os
 import pytest_asyncio
 import asyncio
-from .configs import config_aws_one_instance
+from .configs import config_aws_one_instance_local
 from cloudsend.core import CloudSendInstanceState
 from .ssh_server_mock import ssh_mock_server
 
@@ -16,7 +16,7 @@ def test_client_create_one_instance(ec2):
     with patch('botocore.client.BaseClient._make_api_call', new=mock_make_api_call):
         from cloudsend.provider import get_client
 
-        cs = get_client(config_aws_one_instance)
+        cs = get_client(config_aws_one_instance_local)
 
         assert cs is not None
 
@@ -29,7 +29,7 @@ def test_client_create_full(ec2):
     with patch('botocore.client.BaseClient._make_api_call', new=mock_make_api_call):
         from cloudsend.provider import get_client
 
-        cs = get_client(os.path.join('tests','config.example.all_tests.py'))
+        cs = get_client(os.path.join('tests','config.example.all_tests.local.py'))
 
         assert cs is not None
 
@@ -49,7 +49,7 @@ async def test_client_start(ec2,sts):
     with patch('botocore.client.BaseClient._make_api_call', new=mock_make_api_call):
         from cloudsend.provider import get_client
 
-        cs = get_client(os.path.join('tests','config.example.all_tests.py'))
+        cs = get_client(os.path.join('tests','config.example.all_tests.local.py'))
 
         await cs.start()
 
@@ -69,7 +69,7 @@ async def test_client_deploy(ec2,sts,ssh_mock_server):
     with patch('botocore.client.BaseClient._make_api_call', new=mock_make_api_call):
         from cloudsend.provider import get_client
 
-        cs = get_client(os.path.join('tests','config.example.all_tests.py'))
+        cs = get_client(os.path.join('tests','config.example.all_tests.local.py'))
 
         await cs.start()
 
