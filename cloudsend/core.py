@@ -177,7 +177,7 @@ class CloudSendInstance():
         elif self._platform == CloudSendPlatform.UNKNOWN: # those are local instances (used by Mock/Testing)
             return os.path.expanduser( '~' )
         elif self._platform == CloudSendPlatform.MOCK: # those are local instances (used by Mock/Testing)
-            return os.path.expanduser( '~' )
+            return os.path.join( os.getcwd() , 'tests_tmp' , 'instances' , self.get_name() )
 
     def get_global_dir(self):
         return self.path_join( self.get_home_dir() , 'run' )

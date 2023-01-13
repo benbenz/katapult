@@ -105,9 +105,15 @@ async def ssh_mock_server():
     """
     mock = Mock(name="ssh_mock_server")
 
+    def get_return_value(process):
+        # get the return_value set by ssh_mock_server.return_value (from the test)
+        return mock(process.command)
+
     def handler(process):
         #value = mock(process.get_command())
-        value = mock(process.command)
+
+        #value = mock(process.command)
+        value = get_return_value(process)
         process.stdout.write(value)
         process.exit(0)
 
