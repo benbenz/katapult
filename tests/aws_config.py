@@ -1,7 +1,7 @@
 import pytest
 import os
 import boto3
-from moto import mock_ec2
+from moto import mock_ec2 , mock_sts
 from unittest import mock
 from pathlib import Path
 
@@ -23,4 +23,11 @@ def ec2(aws_credentials):
         #yield boto3.client("ec2", region_name="eu-west-3")   
         session=boto3.Session(profile_name='mock',region_name="eu-west-3")
         yield session.client('ec2')
+
+@pytest.fixture(scope="function")
+def sts(aws_credentials):
+    with mock_sts():
+        #yield boto3.client("ec2", region_name="eu-west-3")   
+        session=boto3.Session(profile_name='mock',region_name="eu-west-3")
+        yield session.client('sts')
 
