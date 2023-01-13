@@ -2,6 +2,7 @@
 from abc import ABC , abstractmethod
 from cloudsend.provider import CloudSendProvider , stream_load , stream_dump , line_buffered , make_client_command , STREAM_RESULT, DIRECTORY_TMP , get_EOL_conversion
 from cloudsend.core import *
+from cloudsend.attrs import *
 import copy , io
 from zipfile import ZipFile
 import sys , os , fnmatch
@@ -88,6 +89,8 @@ class CloudSendLightProvider(CloudSendProvider,ABC):
             activate_file = self._maestro.path_join( cloudsend_dir , '.venv' , 'maestro' , 'bin' , 'activate' )
         elif self._maestro.get_platform() == CloudSendPlatform.WINDOWS:
             activate_file = self._maestro.path_join( cloudsend_dir , '.venv' , 'maestro' , 'Scripts' , 'activate.bat' )
+        elif self._maestro.get_platform() == CloudSendPlatform.UNKNOWN:
+            activate_file = os.path.join( cloudsend_dir , '.venv' , 'maestro' , 'Scripts' , 'activate.bat' )
         
         re_init  = await self._test_reupload(self._maestro,ready_file, ssh_conn)
 

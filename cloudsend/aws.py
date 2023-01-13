@@ -661,11 +661,14 @@ def aws_update_instance_info(session,instance):
         if status_res['InstanceStatus']['Status'] == 'ok' and status_res['SystemStatus']['Status'] == 'ok':
              instance.set_reachability(True)
 
-    platform_details = instance_new_data.get('PlatformDetails').lower()
-    if 'linux' in platform_details:
-        instance.set_platform(CloudSendPlatform.LINUX)
-    elif 'windows' in platform_details:
-        instance.set_platform(CloudSendPlatform.WINDOWS_WSL)
+    if instance_new_data.get('PlatformDetails'):
+        platform_details = instance_new_data.get('PlatformDetails').lower()
+        if 'linux' in platform_details:
+            instance.set_platform(CloudSendPlatform.LINUX)
+        elif 'windows' in platform_details:
+            instance.set_platform(CloudSendPlatform.WINDOWS_WSL)
+    else: # to handle old moto version >> will perform the same as the running plaform ...
+        instance.set_platform(CloudSendPlatform.UNKNOWN)
 
     return instance
 

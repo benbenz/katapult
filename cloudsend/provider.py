@@ -6,6 +6,7 @@ from io import BytesIO
 import csv , io
 import pkg_resources
 from cloudsend.core import *
+from cloudsend.attrs import *
 from enum import IntFlag
 #import multiprocessing
 import asyncio

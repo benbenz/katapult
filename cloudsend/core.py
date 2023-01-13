@@ -6,6 +6,7 @@ import copy
 import os
 import re
 import ntpath , posixpath
+from cloudsend.attrs import *
 
 cs_keypairName         = 'cloudsend-keypair'
 cs_secGroupName        = 'cloudsend-sec-group-allow-ssh'
@@ -18,12 +19,6 @@ cs_environmentNameRoot = 'cloudsend-env'
 cs_maestroProfileName  = 'cloudsend-maestro-profile'
 cs_maestroRoleName     = 'cloudsend-maestro-role'
 cs_maestroPolicyName   = 'cloudsend-maestro-policy'
-
-K_LOADED   = '_loaded_'
-K_COMPUTED = '_computed_'
-K_CFG_UID  = '_cfg_uid_'
-
-K_OBJECTS = ['instances','environments','jobs']
 
 # NEW > STARTED > ASSIGNED > DEPLOYED > ( RUNNING | WATCHING <-> IDLE )
 
@@ -93,6 +88,7 @@ class CloudSendProcessState(IntFlag):
     ANY       = 64 + 32 + 16 + 8 + 4 + 2 + 1 
 
 class CloudSendPlatform(IntFlag):
+    UNKNOWN     = 0
     LINUX       = 1
     WINDOWS     = 2
     WINDOWS_WSL = 3
@@ -123,7 +119,7 @@ class CloudSendInstance():
         self._envs     = dict()
         # invalid
         self._invalid  = False
-        self._platform = CloudSendPlatform.LINUX
+        self._platform = CloudSendPlatform.UNKNOWN
         self._reachability = False
 
     def get_region(self):
@@ -186,6 +182,8 @@ class CloudSendInstance():
             return posixpath
         elif self._platform == CloudSendPlatform.WINDWS:
             return ntpath
+        elif self._platform == CloudSendPlatform.UNKNOWN:
+            return os.path
 
     def path_join(self,*args):
         return self.path().join(*args)

@@ -8,6 +8,7 @@ import os
 import pytest_asyncio
 import asyncio
 from .configs import config_one_instance
+from cloudsend.core import CloudSendInstanceState
 
 @mock_ec2
 def test_client_create_one_instance(ec2):
@@ -50,6 +51,14 @@ async def test_client_start(ec2,sts):
         cs = get_client(os.path.join('tests','config.example.all_tests.py'))
 
         await cs.start()
+
+        objects = cs.get_objects()
+
+        for instance in objects['instances']:
+            await cs._wait_for_instance(instance)
+
+        for instance in objects['instances']:
+            assert instance.get_state() == CloudSendInstanceState.RUNNING
 
 
 # working

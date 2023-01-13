@@ -6,6 +6,7 @@ import json
 import pickle
 import math
 from cloudsend.core import *
+from cloudsend.attrs import *
 from datetime import date, datetime
 import traceback
 import cloudsend.utils as cloudsendutils
