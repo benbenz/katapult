@@ -20,19 +20,39 @@ class NoAuthSSHServer(asyncssh.SSHServer):
     def begin_auth(self, username):
         return False
 
+    def connection_made(self, conn):
+        print('SSH connection received from %s.' %
+                  conn.get_extra_info('peername')[0])
+
+    def connection_lost(self, exc):
+        if exc:
+            print('SSH connection error: ' + str(exc), file=sys.stderr)
+        else:
+            print('SSH connection closed.')        
+
 
 @asynccontextmanager
 async def simple_ssh_server(handler, port=0):
     """Run a simple ssh server from a provided handler."""
 
     private_key = asyncssh.generate_private_key("ssh-rsa")
-    server = await asyncssh.create_server(
-        NoAuthSSHServer,
+    # server = await asyncssh.create_server(
+    #     NoAuthSSHServer,
+    #     "localhost",
+    #     0,
+    #     server_host_keys=[private_key],
+    #     process_factory=handler,
+    # )
+    acceptor = await asyncssh.listen(
         "localhost",
         0,
+        server_factory=NoAuthSSHServer,
         server_host_keys=[private_key],
         process_factory=handler,
+        sftp_factory=True,
+        options=asyncssh.SSHServerConnectionOptions(host_based_auth=False)
     )
+    server = acceptor._server
     port = next(
         socket.getsockname()[1]
         for socket in server.sockets

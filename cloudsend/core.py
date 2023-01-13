@@ -173,6 +173,8 @@ class CloudSendInstance():
             return '/home/' + self.get_config('img_username') if absolute else '%HOME'
         elif self._platform == CloudSendPlatform.WINDOWS:
             return 'C:\>' + self.get_config('img_username') if absolute else '%HOME%'
+        elif self._platform == CloudSendPlatform.UNKNOWN: # those are local instances (used by Mock/Testing)
+            return os.path.expanduser( '~' )
 
     def get_global_dir(self):
         return self.path_join( self.get_home_dir() , 'run' )
@@ -180,7 +182,7 @@ class CloudSendInstance():
     def path(self):
         if self._platform == CloudSendPlatform.LINUX or self._platform == CloudSendPlatform.WINDOWS_WSL:
             return posixpath
-        elif self._platform == CloudSendPlatform.WINDWS:
+        elif self._platform == CloudSendPlatform.WINDOWS:
             return ntpath
         elif self._platform == CloudSendPlatform.UNKNOWN:
             return os.path
@@ -225,9 +227,9 @@ class CloudSendInstance():
 
 
     # def path_sep(self):
-    #     if self._platform == CloudSendPlatform.LINUX or self._platform == CloudSendPlatform.WINDWS_WSL:
+    #     if self._platform == CloudSendPlatform.LINUX or self._platform == CloudSendPlatform.WINDOWS_WSL:
     #         return '/'
-    #     elif self._platform == CloudSendPlatform.WINDWS:
+    #     elif self._platform == CloudSendPlatform.WINDOWS:
     #         return '\\'
 
     def set_ip_addr(self,value):

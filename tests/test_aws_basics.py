@@ -78,7 +78,7 @@ async def test_client_deploy(ec2,sts,ssh_mock_server):
         priv = ssh_mock_server.private_key
         cs.set_ssh_server('localhost',port,priv)
 
-        #await cs.deploy()
+        await cs.deploy()
 
 # working
 # @mock_ec2
