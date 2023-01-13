@@ -667,7 +667,9 @@ def aws_update_instance_info(session,instance):
             instance.set_platform(CloudSendPlatform.LINUX)
         elif 'windows' in platform_details:
             instance.set_platform(CloudSendPlatform.WINDOWS_WSL)
-    else: # to handle old moto version >> will perform the same as the running plaform ...
+        elif 'mock' in platform_details: # to handle old moto version >> will perform the same as the running plaform ...
+            instance.set_platform(CloudSendPlatform.MOCK)
+    else: 
         instance.set_platform(CloudSendPlatform.UNKNOWN)
 
     return instance

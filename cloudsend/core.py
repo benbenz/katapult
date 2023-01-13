@@ -92,6 +92,7 @@ class CloudSendPlatform(IntFlag):
     LINUX       = 1
     WINDOWS     = 2
     WINDOWS_WSL = 3
+    MOCK        = 4 # instance = local machine (for mocking/testing)
 
 class CloudSendInstance():
 
@@ -175,6 +176,8 @@ class CloudSendInstance():
             return 'C:\>' + self.get_config('img_username') if absolute else '%HOME%'
         elif self._platform == CloudSendPlatform.UNKNOWN: # those are local instances (used by Mock/Testing)
             return os.path.expanduser( '~' )
+        elif self._platform == CloudSendPlatform.MOCK: # those are local instances (used by Mock/Testing)
+            return os.path.expanduser( '~' )
 
     def get_global_dir(self):
         return self.path_join( self.get_home_dir() , 'run' )
@@ -185,6 +188,8 @@ class CloudSendInstance():
         elif self._platform == CloudSendPlatform.WINDOWS:
             return ntpath
         elif self._platform == CloudSendPlatform.UNKNOWN:
+            return os.path
+        elif self._platform == CloudSendPlatform.MOCK:
             return os.path
 
     def path_join(self,*args):

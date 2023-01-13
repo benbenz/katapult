@@ -33,6 +33,7 @@ def mock_make_api_call(self, operation_name, kwarg):
             for instance in instances:
                 for attr in ['PublicDnsName','PublicIpAddress','PrivateDnsName','PrivateIPAddress']:
                     instance[attr] = 'localhost'
+            instance['PlatformDetails'] = 'mock'
         return result
 
     # If we don't want to patch the API call

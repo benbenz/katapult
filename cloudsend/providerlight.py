@@ -14,6 +14,7 @@ import random
 import shutil
 import asyncssh
 import asyncio
+import platform
 
 random.seed()
 
@@ -90,8 +91,16 @@ class CloudSendLightProvider(CloudSendProvider,ABC):
         elif self._maestro.get_platform() == CloudSendPlatform.WINDOWS:
             activate_file = self._maestro.path_join( cloudsend_dir , '.venv' , 'maestro' , 'Scripts' , 'activate.bat' )
         elif self._maestro.get_platform() == CloudSendPlatform.UNKNOWN:
-            activate_file = os.path.join( cloudsend_dir , '.venv' , 'maestro' , 'Scripts' , 'activate.bat' )
-        
+            if 'windows' in platform.system().lower():
+                activate_file = os.path.join( cloudsend_dir , '.venv' , 'maestro' , 'Scripts' , 'activate.bat' )
+            else:
+                activate_file = self._maestro.path_join( cloudsend_dir , '.venv' , 'maestro' , 'bin' , 'activate' )
+        elif self._maestro.get_platform() == CloudSendPlatform.MOCK:
+            if 'windows' in platform.system().lower():
+                activate_file = os.path.join( cloudsend_dir , '.venv' , 'maestro' , 'Scripts' , 'activate.bat' )
+            else:
+                activate_file = self._maestro.path_join( cloudsend_dir , '.venv' , 'maestro' , 'bin' , 'activate' )
+
         re_init  = await self._test_reupload(self._maestro,ready_file, ssh_conn)
 
         if re_init:
