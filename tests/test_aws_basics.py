@@ -7,7 +7,7 @@ import boto3
 import os
 import pytest_asyncio
 import asyncio
-from .configs import config_one_instance
+from .configs import config_aws_one_instance
 from cloudsend.core import CloudSendInstanceState
 
 @mock_ec2
@@ -15,7 +15,7 @@ def test_client_create_one_instance(ec2):
     with patch('botocore.client.BaseClient._make_api_call', new=mock_make_api_call):
         from cloudsend.provider import get_client
 
-        cs = get_client(config_one_instance)
+        cs = get_client(config_aws_one_instance)
 
         assert cs is not None
 
@@ -60,6 +60,20 @@ async def test_client_start(ec2,sts):
         for instance in objects['instances']:
             assert instance.get_state() == CloudSendInstanceState.RUNNING
 
+
+@mock_ec2
+@mock_sts
+@pytest.mark.asyncio
+async def test_client_deploy(ec2,sts):
+    with patch('botocore.client.BaseClient._make_api_call', new=mock_make_api_call):
+        from cloudsend.provider import get_client
+
+        cs = get_client(os.path.join('tests','config.example.all_tests.py'))
+
+        await cs.start()
+
+        # this is blocking while we dont mock the ssh server...
+        #await cs.deploy()
 
 # working
 # @mock_ec2

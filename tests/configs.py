@@ -1,5 +1,5 @@
 
-config_one_instance = {
+config_aws_one_instance = {
     'project'      : 'test' ,                             
     'maestro'      : 'local',
     'profile'      : 'mock' ,
