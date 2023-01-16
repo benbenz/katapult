@@ -1,11 +1,11 @@
 [tool.poetry]
-name = "cloudsend"
+name = "katapult"
 version = "0.6.5"
-description = "CloudSend is a Python package that allows you to run any script on a cloud service (for now AWS only)."
+description = "Katapult is a Python package that allows you to run any script on a cloud service (for now AWS only)."
 authors = ["Your Name <you@example.com>"]
 license = "MIT"
 readme = "README.md"
-repository = "https://github.com/benbenz/cloudsend"
+repository = "https://github.com/benbenz/katapult"
 include = ["requirements.txt"]
 
 [tool.poetry.dependencies]
@@ -37,9 +37,9 @@ requires = ["poetry-core"]
 build-backend = "poetry.core.masonry.api"
 
 [tool.poetry.scripts]
-demo = 'cloudsend.demo:main'
-cli = 'cloudsend.cli:main'
-client = 'cloudsend.maestroclient:main'
+demo = 'katapult.demo:main'
+cli = 'katapult.cli:main'
+client = 'katapult.maestroclient:main'
 
 [tool.pytest.ini_options]
 asyncio_mode="auto"

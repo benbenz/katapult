@@ -5,11 +5,11 @@ import os , signal
 import json
 import pickle
 import math
-from cloudsend.core import *
-from cloudsend.attrs import *
+from katapult.core import *
+from katapult.attrs import *
 from datetime import date, datetime
 import traceback
-import cloudsend.utils as cloudsendutils
+import katapult.utils as katapultutils
 
 class ConfigManager():
 
@@ -47,7 +47,7 @@ class ConfigManager():
         #         continue
         #     for obj_cfg in self._config[objs_key]:
         #         if K_CFG_UID not in obj_cfg:
-        #             obj_cfg[K_CFG_UID] = cloudsendutils.generate_unique_id()
+        #             obj_cfg[K_CFG_UID] = katapultutils.generate_unique_id()
 
     def _load_objects(self):
         projectName = self._config.get('project')
@@ -100,7 +100,7 @@ class ConfigManager():
                         # starts calling the Service here !
                         # instance , created = self.start_instance( real_inst_cfg )
                         # let's put some dummy instances for now ...
-                        instance = CloudSendInstance( real_inst_cfg , None, None )
+                        instance = KatapultInstance( real_inst_cfg , None, None )
                         self._instances.append( instance )
                         added_objects['instances'].append(instance)
                     else:
@@ -159,7 +159,7 @@ class ConfigManager():
                             self._load_other_instance_info(real_inst_cfg)
 
                             # let's put some dummy instances for now ...
-                            instance = CloudSendInstance( real_inst_cfg , None, None )
+                            instance = KatapultInstance( real_inst_cfg , None, None )
                             self._instances.append( instance )
                             added_objects['instances'].append(instance)
 
@@ -180,7 +180,7 @@ class ConfigManager():
 
                 # copy the dev global paramter to the environment configuration (will be used for names)
                 env_cfg['dev']  = self._config.get('dev',False)
-                env = CloudSendEnvironment(projectName,env_cfg)
+                env = KatapultEnvironment(projectName,env_cfg)
                 self._environments.append(env)
                 added_objects['environments'].append(env)
 
@@ -198,7 +198,7 @@ class ConfigManager():
                 self._provider.debug(3,'loading job config',job_cfg)                    
 
                 for j in range(job_cfg.get('repeat',1)):
-                    job = CloudSendJob(job_cfg,rank)
+                    job = KatapultJob(job_cfg,rank)
                     self._jobs.append(job)
                     added_objects['jobs'].append(job)
                     rank = rank + 1
@@ -256,31 +256,31 @@ class ConfigManager():
         return None
 
 # def json_get_key(obj):
-#     if isinstance(obj,CloudSendInstance):
-#         return "__cloudsend_instance:" + obj.get_name()
-#     elif isinstance(obj,CloudSendDeployedEnvironment):
-#         return "__cloudsend_environment_dpl:" + obj.get_name()
-#     elif isinstance(obj,CloudSendEnvironment):
-#         return "__cloudsend_environment:" + obj.get_name()
-#     elif isinstance(obj,CloudSendDeployedJob):
-#         return "__cloudsend_job_dpl:" + obj.get_hash() + "|" + str(obj.get_job().get_rank()) + "," + str(obj.get_rank())
-#     elif isinstance(obj,CloudSendJob):
-#         return "__cloudsend_job:" + obj.get_hash() + "|" + str(obj.get_rank()) 
-#     elif isinstance(obj,CloudSendProcess):
-#         return "__cloudsend_process:" + obj.get_uid()
+#     if isinstance(obj,KatapultInstance):
+#         return "__katapult_instance:" + obj.get_name()
+#     elif isinstance(obj,KatapultDeployedEnvironment):
+#         return "__katapult_environment_dpl:" + obj.get_name()
+#     elif isinstance(obj,KatapultEnvironment):
+#         return "__katapult_environment:" + obj.get_name()
+#     elif isinstance(obj,KatapultDeployedJob):
+#         return "__katapult_job_dpl:" + obj.get_hash() + "|" + str(obj.get_job().get_rank()) + "," + str(obj.get_rank())
+#     elif isinstance(obj,KatapultJob):
+#         return "__katapult_job:" + obj.get_hash() + "|" + str(obj.get_rank()) 
+#     elif isinstance(obj,KatapultProcess):
+#         return "__katapult_process:" + obj.get_uid()
 #     else:
 #         return str(cs_obj)
 
-# class CloudSendJSONEncoder(json.JSONEncoder):
+# class KatapultJSONEncoder(json.JSONEncoder):
 
 #     def __init__(self, *args, **kwargs):
 #         kwargs['check_circular'] = False  # no need to check anymore
-#         super(CloudSendJSONEncoder,self).__init__(*args, **kwargs)
+#         super(KatapultJSONEncoder,self).__init__(*args, **kwargs)
 #         self.proc_objs = []
 
 #     def default(self, obj):
 
-#         if  isinstance(obj, (CloudSendInstance, CloudSendEnvironment, CloudSendDeployedEnvironment, CloudSendJob, CloudSendDeployedJob, CloudSendProcess)):
+#         if  isinstance(obj, (KatapultInstance, KatapultEnvironment, KatapultDeployedEnvironment, KatapultJob, KatapultDeployedJob, KatapultProcess)):
 #             if obj in self.proc_objs:
 #                 return json_get_key(obj)
 #             else:
@@ -290,9 +290,9 @@ class ConfigManager():
 #         elif isinstance(obj, (datetime, date)):
 #             return obj.isoformat()  # Let the base class default method raise the TypeError
 
-#         return super(CloudSendJSONEncoder,self).default(obj) #json.JSONEncoder.default(self, obj)
+#         return super(KatapultJSONEncoder,self).default(obj) #json.JSONEncoder.default(self, obj)
 
-# class CloudSendJSONDecoder(json.JSONDecoder):
+# class KatapultJSONDecoder(json.JSONDecoder):
 #     def __init__(self, *args, **kwargs):
 #         json.JSONDecoder.__init__(self, object_hook=self.object_hook, *args, **kwargs)
 #         self._references = dict()
@@ -302,28 +302,28 @@ class ConfigManager():
 #         if '__class__' in dct:
 #             class_name = dct['__class__']
 #             try :
-#                 if class_name == 'CloudSendInstance':
-#                     obj = CloudSendInstance(dct['_config'],dct['_id'],dct['_data'])
+#                 if class_name == 'KatapultInstance':
+#                     obj = KatapultInstance(dct['_config'],dct['_id'],dct['_data'])
 #                     obj.__dict__.update(dct)
-#                 elif class_name == 'CloudSendEnvironment':
-#                     obj = CloudSendEnvironment(dct['_project'],dct['_config'])
+#                 elif class_name == 'KatapultEnvironment':
+#                     obj = KatapultEnvironment(dct['_project'],dct['_config'])
 #                     obj.__dict__.update(dct)
-#                 elif class_name == 'CloudSendDeployedEnvironment':
+#                 elif class_name == 'KatapultDeployedEnvironment':
 #                     env_ref = None #self._references[dct['_env']]
 #                     ins_ref = None #self._references[dct['_instance']]
-#                     obj = CloudSendDeployedEnvironment.__new__(CloudSendDeployedEnvironment) #CloudSendDeployedEnvironment(env_ref,ins_ref)
+#                     obj = KatapultDeployedEnvironment.__new__(KatapultDeployedEnvironment) #KatapultDeployedEnvironment(env_ref,ins_ref)
 #                     obj.__dict__.update(dct)
-#                 elif class_name == 'CloudSendJob':
-#                     obj = CloudSendJob(dct['_config'],dct['_rank'])
+#                 elif class_name == 'KatapultJob':
+#                     obj = KatapultJob(dct['_config'],dct['_rank'])
 #                     obj.__dict__.update(dct)
-#                 elif class_name == 'CloudSendDeployedJob':
+#                 elif class_name == 'KatapultDeployedJob':
 #                     job_ref = None #self._references[dct['_job']]
 #                     env_ref = None #self._references[dct['_env']]
-#                     obj = CloudSendDeployedJob.__new__(CloudSendDeployedJob) #CloudSendDeployedJob(job_ref,env_ref)
+#                     obj = KatapultDeployedJob.__new__(KatapultDeployedJob) #KatapultDeployedJob(job_ref,env_ref)
 #                     obj.__dict__.update(dct)
-#                 elif class_name == 'CloudSendProcess':
+#                 elif class_name == 'KatapultProcess':
 #                     job_ref = None #self._references[dct['_job']]
-#                     obj = CloudSendProcess.__new__(CloudSendProcess) #CloudSendProcess(job_ref,dct['_uid'],dct['_pid'],dct['_batch_uid'])
+#                     obj = KatapultProcess.__new__(KatapultProcess) #KatapultProcess(job_ref,dct['_uid'],dct['_pid'],dct['_batch_uid'])
 #                     obj.__dict__.update(dct)
 #                 self._references[json_get_key(obj)] = obj
 #                 return obj
@@ -367,7 +367,7 @@ class StateSerializer():
                 lastp = job.get_last_process()
                 self._provider.debug(3,"PROCESS TO SERIALIZE",lastp)
 
-            #json_data = json.dumps(state,indent=4,cls=CloudSendJSONEncoder)
+            #json_data = json.dumps(state,indent=4,cls=KatapultJSONEncoder)
             with open(self._state_file,'wb') as state_file:
                 pickle.dump(state,state_file)#,protocol=0) # protocol 0 = readable
                 #state_file.write(json_data)
@@ -382,7 +382,7 @@ class StateSerializer():
         try:
             with open(self._state_file,'rb') as state_file:
                 #json_data = state_file.read()
-                #objects   = json.loads(json_data,cls=CloudSendJSONDecoder)
+                #objects   = json.loads(json_data,cls=KatapultJSONDecoder)
                 self._loaded = pickle.load(state_file)
         except Exception as e:
             traceback.print_exc()

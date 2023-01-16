@@ -2,7 +2,7 @@
 
 auto_init="$1"
 
-if [[ $(ps aux | grep "cloudsend.maestroserver" | grep -v 'grep') ]] ; then
+if [[ $(ps aux | grep "katapult.maestroserver" | grep -v 'grep') ]] ; then
     echo "Maestro server already running"
 else
     # make sure we kill all maestroserver processes
@@ -13,7 +13,7 @@ else
         ps -ef | awk '/[m]aestroserver/{print $2}' | xargs kill 
     fi
     echo "Starting maestro server ..."
-    cd $HOME/cloudsend
-    source $HOME/cloudsend/.venv/maestro/bin/activate
-    $HOME/cloudsend/.venv/maestro/bin/python3 -u -m cloudsend.maestroserver $auto_init
+    cd $HOME/katapult
+    source $HOME/katapult/.venv/maestro/bin/activate
+    $HOME/katapult/.venv/maestro/bin/python3 -u -m katapult.maestroserver $auto_init
 fi

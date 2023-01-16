@@ -8,13 +8,13 @@ import os
 import pytest_asyncio
 import asyncio
 from .configs import config_aws_one_instance_local
-from cloudsend.core import CloudSendInstanceState
+from katapult.core import KatapultInstanceState
 from .ssh_server_mock import ssh_mock_server
 
 @mock_ec2
 def test_client_create_one_instance(ec2):
     with patch('botocore.client.BaseClient._make_api_call', new=mock_make_api_call):
-        from cloudsend.provider import get_client
+        from katapult.provider import get_client
 
         cs = get_client(config_aws_one_instance_local)
 
@@ -27,7 +27,7 @@ def test_client_create_one_instance(ec2):
 @mock_ec2
 def test_client_create_full(ec2):
     with patch('botocore.client.BaseClient._make_api_call', new=mock_make_api_call):
-        from cloudsend.provider import get_client
+        from katapult.provider import get_client
 
         cs = get_client(os.path.join('tests','config.example.all_tests.local.py'))
 
@@ -47,7 +47,7 @@ def test_client_create_full(ec2):
 @pytest.mark.asyncio
 async def test_client_start(ec2,sts):
     with patch('botocore.client.BaseClient._make_api_call', new=mock_make_api_call):
-        from cloudsend.provider import get_client
+        from katapult.provider import get_client
 
         cs = get_client(os.path.join('tests','config.example.all_tests.local.py'))
 
@@ -59,7 +59,7 @@ async def test_client_start(ec2,sts):
             await cs._wait_for_instance(instance)
 
         for instance in objects['instances']:
-            assert instance.get_state() == CloudSendInstanceState.RUNNING
+            assert instance.get_state() == KatapultInstanceState.RUNNING
 
 
 @mock_ec2
@@ -67,7 +67,7 @@ async def test_client_start(ec2,sts):
 @pytest.mark.asyncio
 async def test_client_deploy(ec2,sts,ssh_mock_server):
     with patch('botocore.client.BaseClient._make_api_call', new=mock_make_api_call):
-        from cloudsend.provider import get_client
+        from katapult.provider import get_client
 
         cs = get_client(os.path.join('tests','config.example.all_tests.local.py'))
 

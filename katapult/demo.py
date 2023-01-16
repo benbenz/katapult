@@ -1,6 +1,6 @@
-from cloudsend import provider as cs
+from katapult import provider as cs
 import asyncio , os , sys
-from cloudsend.core import CloudSendProcessState
+from katapult.core import KatapultProcessState
 import traceback
 import json
 
@@ -41,7 +41,7 @@ async def mainloop(cs_client,reset=False):
     print("Waiting for DONE or ABORTED ...")
     # now that we have 'watch' before 'wait' , this will exit instantaneously
     # because watch includes 'wait' mode intrinsiquely
-    await cs_client.wait(CloudSendProcessState.DONE|CloudSendProcessState.ABORTED,run_session)
+    await cs_client.wait(KatapultProcessState.DONE|KatapultProcessState.ABORTED,run_session)
 
     print("\n== SUMMARY ==\n")
 
@@ -67,11 +67,11 @@ async def cliloop(config_file):
     print("\n== START ==\n")
 
     # you have to call init before start
-    os.system("python3 -m cloudsend.cli init "+config_file)
-    os.system("python3 -m cloudsend.cli start")
+    os.system("python3 -m katapult.cli init "+config_file)
+    os.system("python3 -m katapult.cli start")
 
     # clear the cache
-    os.system("python3 -m cloudsend.cli clear_results_dir")
+    os.system("python3 -m katapult.cli clear_results_dir")
 
     print("\n== DEPLOY ==\n")
 
@@ -79,12 +79,12 @@ async def cliloop(config_file):
     # it is recommended to wait here allthough run.sh should wait for bootstraping
     # currently, the bootstraping is non-blocking
     # so this will barely wait ... (the jobs will do the waiting ...)
-    os.system("python3 -m cloudsend.cli deploy")
+    os.system("python3 -m katapult.cli deploy")
 
     print("\n== RUN ==\n")
 
     # run the scripts and get a process back
-    os.system("python3 -m cloudsend.cli run")
+    os.system("python3 -m katapult.cli run")
 
     #await cs_client.kill( run_session.get_id() )
 
@@ -94,7 +94,7 @@ async def cliloop(config_file):
         print("waiting 30 seconds before adding stuff ...")
         await asyncio.sleep(30)
         print("adding config_add.py")
-        os.system("python3 -m cloudsend.cli cfg_add_config config_add.py")
+        os.system("python3 -m katapult.cli cfg_add_config config_add.py")
     else:
         print("this step is optional: you need to have a 'config_add.py' file present")
 
@@ -103,26 +103,26 @@ async def cliloop(config_file):
     print("Waiting for DONE or ABORTED ...")
     # now that we have 'watch' before 'wait' , this will exit instantaneously
     # because watch includes 'wait' mode intrinsiquely
-    os.system("python3 -m cloudsend.cli wait")
+    os.system("python3 -m katapult.cli wait")
 
     print("\n== SUMMARY ==\n")
 
     # just to show the API ...
-    os.system("python3 -m cloudsend.cli get_jobs_states")
+    os.system("python3 -m katapult.cli get_jobs_states")
 
     # print("\n== WAIT and TAIL ==\n")
 
-    os.system("python3 -m cloudsend.cli print_aborted_logs")
+    os.system("python3 -m katapult.cli print_aborted_logs")
 
     print("\n== FETCH RESULTS ==\n")
 
-    os.system("python3 -m cloudsend.cli fetch_results")
+    os.system("python3 -m katapult.cli fetch_results")
 
     print("\n== FINALIZE ==\n")
 
-    os.system("python3 -m cloudsend.cli finalize")
+    os.system("python3 -m katapult.cli finalize")
     # also shutdown the server ...
-    os.system("python3 -m cloudsend.cli shutdown")
+    os.system("python3 -m katapult.cli shutdown")
 
     print("\n== DONE ==\n")    
 
@@ -137,7 +137,7 @@ async def waitloop(cs_client):
 
     print("\n== WAIT ==\n")
     
-    await cs_client.wait(CloudSendProcessState.DONE|CloudSendProcessState.ABORTED)
+    await cs_client.wait(KatapultProcessState.DONE|KatapultProcessState.ABORTED)
 
     print("\n== SUMMARY ==\n")
 

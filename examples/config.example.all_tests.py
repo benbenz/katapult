@@ -6,8 +6,8 @@ config = {
 
     'project'      : 'test' ,                             # this will be concatenated with the instance (if not None) 
     #'profile'      : None,
-    'profile'      : 'cloudsend_benben', 
-    #'profile'      : 'cloudsend_benbenz_tlamadon' ,   
+    'profile'      : 'katapult_benben', 
+    #'profile'      : 'katapult_benbenz_tlamadon' ,   
     'dev'          : False ,                              # When True, this will ensure the same instance and dev environement are being used (while working on building up the project) 
     'debug'        : 1 ,                                  # debug level (0...3)
     'maestro'      : 'local' ,                           # where the 'maestro' resides: local' | 'remote' (nano instance) | 'lambda'

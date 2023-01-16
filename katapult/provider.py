@@ -1,12 +1,12 @@
 from abc import ABC , abstractmethod
-import cloudsend.utils as cloudsendutils
+import katapult.utils as katapultutils
 import sys , json , os , time 
 import re
 from io import BytesIO
 import csv , io
 import pkg_resources
-from cloudsend.core import *
-from cloudsend.attrs import *
+from katapult.core import *
+from katapult.attrs import *
 from enum import IntFlag
 #import multiprocessing
 import asyncio
@@ -21,7 +21,7 @@ PROVIDER_CONFIG  = 'state.config.json'
 DIRECTORY_TMP_AUTO_STOP = './tmp-auto_stop'
 DIRECTORY_TMP = './tmp'
 
-class CloudSendProvider(ABC):
+class KatapultProvider(ABC):
 
     def __init__(self, conf=None):
 
@@ -29,14 +29,14 @@ class CloudSendProvider(ABC):
             conf = dict()
 
         self._init(conf)
-        #CloudSendProvider._init(self,conf)
+        #KatapultProvider._init(self,conf)
 
         #self._instances_locks = dict()
         #self._provider_lock   = multiprocessing.Manager().Lock()
         #self._thread_safe_ultra = True # set to False if you want to try per instance locks
 
     def _init(self,conf):
-        self._state = CloudSendProviderState.NEW
+        self._state = KatapultProviderState.NEW
 
         self.DBG_LVL = conf.get('debug',1)
         self.DBG_PREFIX = None
@@ -132,7 +132,7 @@ class CloudSendProvider(ABC):
                     self._instances_states = dict()
                 self._instances_states[instance.get_name()] = { 'changed' : True }
 
-        except CloudSendError as cre:
+        except KatapultError as cre:
 
             instance.set_invalid(True)
 
@@ -159,10 +159,10 @@ class CloudSendProvider(ABC):
         if self._mutualize_uploads:
             instance = dpl_job.get_instance()
             remote_ref_dir = instance.path_join( instance.get_home_dir() , 'run' , 'files')
-            return cloudsendutils.resolve_paths(instance,upfile,ref_file,remote_ref_dir,True) 
+            return katapultutils.resolve_paths(instance,upfile,ref_file,remote_ref_dir,True) 
         else:
             instance = dpl_job.get_instance()
-            return cloudsendutils.resolve_paths(instance,upfile,ref_file,dpl_job.get_path(),False)
+            return katapultutils.resolve_paths(instance,upfile,ref_file,dpl_job.get_path(),False)
 
     # def _lock(self,instance):
     #     if not self._thread_safe_ultra:
@@ -205,18 +205,18 @@ class CloudSendProvider(ABC):
 
             lookForState = True
             # 'pending'|'running'|'shutting-down'|'terminated'|'stopping'|'stopped'
-            if instanceState == CloudSendInstanceState.STOPPED:
+            if instanceState == KatapultInstanceState.STOPPED:
                 try:
                     # restart the instance
                     self.start_instance(instance)
-                except CloudSendError:
+                except KatapultError:
                     await self.hard_reset_instance(instance)
 
 
-            elif instanceState == CloudSendInstanceState.RUNNING:
+            elif instanceState == KatapultInstanceState.RUNNING:
                 lookForState = False
 
-            elif instanceState == CloudSendInstanceState.TERMINATING or instanceState == CloudSendInstanceState.TERMINATED:
+            elif instanceState == KatapultInstanceState.TERMINATING or instanceState == KatapultInstanceState.TERMINATED:
                 try:
                     self._start_and_update_instance(instance)
                 except:
@@ -320,20 +320,20 @@ class CloudSendProvider(ABC):
             except Exception as cexc:
                 # check whats going on
                 self.update_instance_info(instance)
-                if instance.get_state() != CloudSendInstanceState.RUNNING:
+                if instance.get_state() != KatapultInstanceState.RUNNING:
                     await self._wait_for_instance(instance)
                 if retrys < 5:
                     self.debug(1,cexc)
                     await asyncio.sleep(4)
                     self.debug(1,"Retrying ...")
                     retrys = retrys + 1
-                elif retrys == 5 and instance.get_state() == CloudSendInstanceState.RUNNING:
+                elif retrys == 5 and instance.get_state() == KatapultInstanceState.RUNNING:
                     retrys = retrys + 1
                     self.debug(1,"Trying a reboot ...")
                     self.reboot_instance(instance)
                     await asyncio.sleep(4)
                     await self._wait_for_instance(instance)
-                elif retrys == 6 and instance.get_state() == CloudSendInstanceState.RUNNING:
+                elif retrys == 6 and instance.get_state() == KatapultInstanceState.RUNNING:
                     retrys = retrys + 1
                     self.debug(1,"Trying a hard reset ...")
                     await self.hard_reset_instance(instance)
@@ -433,7 +433,7 @@ class CloudSendProvider(ABC):
     def _get_instancetypes_attribute(self,inst_cfg,resource_file,type_col,attr,return_type):
 
         # Could be any dot-separated package or module name or a "Requirement"
-        resource_package = 'cloudsend'
+        resource_package = 'katapult'
         resource_path = os.sep.join(('resources', resource_file))  # Do not use os.path.join()
         #template = pkg_resources.resource_string(resource_package, resource_path)
         # or for a file-like stream:
@@ -467,7 +467,7 @@ class CloudSendProvider(ABC):
         return         
 
     def _get_resource_file(self,resource_file):
-        resource_package = 'cloudsend'
+        resource_package = 'katapult'
         resource_path = os.sep.join(('resources', resource_file))  # Do not use os.path.join()
         #return pkg_resources.resource_stream(resource_package, resource_path)  
         return pkg_resources.resource_string(resource_package, resource_path).decode()
@@ -488,9 +488,9 @@ class CloudSendProvider(ABC):
         userid = profile_name
         if not userid:
             userid = 'default'
-        #key_filename = 'cloudsend-'+str(userid)+'-'+str(region)+'.pem'
-        #key_filename = 'cloudsend-'+str(region)+'.pem'
-        key_filename = 'cloudsend-'+self.get_account_id()+'-'+str(region)+'.pem'
+        #key_filename = 'katapult-'+str(userid)+'-'+str(region)+'.pem'
+        #key_filename = 'katapult-'+str(region)+'.pem'
+        key_filename = 'katapult-'+self.get_account_id()+'-'+str(region)+'.pem'
         return key_filename
 
     def get_keypair_name(self,profile_name,region):
@@ -592,7 +592,7 @@ class CloudSendProvider(ABC):
         # config could be an array (of instances, envs or jobs specs)
         elif isinstance(config_list_obj,list):
             config = { key_name : config_list_obj }
-        # config could be a cloudsend-compatible config
+        # config could be a katapult-compatible config
         elif isinstance(config_list_obj,dict) and key_name in config_list_obj:
             config = config_list_obj
         # config could be a singleton instance,env or job config
@@ -612,7 +612,7 @@ class CloudSendProvider(ABC):
                     if K_LOADED not in cfg:
                         cfg[K_LOADED] = False # make sure we mark it as not-loaded
                     if K_CFG_UID not in cfg: 
-                        cfg[K_CFG_UID] = cloudsendutils.generate_unique_id(True) # this will help trace what's been loaded in the generated objects ..
+                        cfg[K_CFG_UID] = katapultutils.generate_unique_id(True) # this will help trace what's been loaded in the generated objects ..
 
         
     def _cfg_add_objects(self,key_name,config_list_obj,save=True,**kwargs):
@@ -639,18 +639,18 @@ class CloudSendProvider(ABC):
             self._save_config()
 
     async def cfg_add_instances(self,config,**kwargs):
-        CloudSendProvider._cfg_add_objects(self,'instances',config,True,**kwargs)
+        KatapultProvider._cfg_add_objects(self,'instances',config,True,**kwargs)
 
     async def cfg_add_environments(self,config,**kwargs):
-        CloudSendProvider._cfg_add_objects(self,'environments',config,True,**kwargs)
+        KatapultProvider._cfg_add_objects(self,'environments',config,True,**kwargs)
 
     async def cfg_add_jobs(self,config,**kwargs):
-        CloudSendProvider._cfg_add_objects(self,'jobs',config,True,**kwargs)
+        KatapultProvider._cfg_add_objects(self,'jobs',config,True,**kwargs)
 
     async def cfg_add_config(self,config,**kwargs):
-        CloudSendProvider._cfg_add_objects(self,'instances',config,False,**kwargs)
-        CloudSendProvider._cfg_add_objects(self,'environments',config,False,**kwargs)
-        CloudSendProvider._cfg_add_objects(self,'jobs',config,False,**kwargs)
+        KatapultProvider._cfg_add_objects(self,'instances',config,False,**kwargs)
+        KatapultProvider._cfg_add_objects(self,'environments',config,False,**kwargs)
+        KatapultProvider._cfg_add_objects(self,'jobs',config,False,**kwargs)
         self._save_config()
 
     async def cfg_reset(self):
@@ -743,15 +743,15 @@ def stream_dump(obj):
         for k,v in obj.items():
             strdump[k] = stream_dump(v)
         return strdump
-    elif isinstance(obj,CloudSendRunSession):
+    elif isinstance(obj,KatapultRunSession):
         return { 'class': type(obj).__name__ , 'id': obj.get_id() }
-    elif isinstance(obj,CloudSendInstance):
+    elif isinstance(obj,KatapultInstance):
         return { 'class': type(obj).__name__ , 'name':obj.get_name() , 'config':obj.get_config_DIRTY() }
-    elif isinstance(obj,CloudSendEnvironment):
+    elif isinstance(obj,KatapultEnvironment):
         return { 'class': type(obj).__name__ , 'hash':obj.get_hash() , 'config':obj.get_config_DIRTY() }
-    elif isinstance(obj,CloudSendJob):
+    elif isinstance(obj,KatapultJob):
         return { 'class': type(obj).__name__ , 'id':obj.get_id() , 'config':obj.get_config_DIRTY() }
-    # elif isinstance(obj,CloudSendProcess):
+    # elif isinstance(obj,KatapultProcess):
     #     return { 'class': type(obj).__name__ , 'job': stream_dump(obj.get_job()) , 'uid':obj.get_uid() , 'state': obj.get_state() , 'substate': obj.get_substate() , 'aborted_reason': obj.get_aborted_reason()}
     else:
         return obj      
@@ -763,18 +763,18 @@ def stream_load(cs_client,jsondata):
             result.append(stream_load(cs_client,v))
         return result
     elif isinstance(jsondata,dict):
-        if jsondata.get('class') in [ 'CloudSendRunSession' , 'CloudSendRunSessionProxy' ]:
+        if jsondata.get('class') in [ 'KatapultRunSession' , 'KatapultRunSessionProxy' ]:
             session_id     = jsondata['id'].strip()
             return cs_client.get_run_session(session_id)
-        elif jsondata.get('class') in [ 'CloudSendInstance' , 'CloudSendInstanceProxy' ]:
+        elif jsondata.get('class') in [ 'KatapultInstance' , 'KatapultInstanceProxy' ]:
             instance_name = jsondata['name'].strip()
             instance_cfg  = jsondata.get('config')
             return cs_client.get_instance(instance_name,config=instance_cfg)    
-        elif jsondata.get('class') in [ 'CloudSendEnvironment' , 'CloudSendEnvironmentProxy' ]:
+        elif jsondata.get('class') in [ 'KatapultEnvironment' , 'KatapultEnvironmentProxy' ]:
             env_hash = jsondata['hash'].strip()
             env_cfg  = jsondata.get('config')
             return cs_client.get_environment(env_hash,config=env_cfg)    
-        elif jsondata.get('class') in [ 'CloudSendJob' , 'CloudSendJobProxy' ]:
+        elif jsondata.get('class') in [ 'KatapultJob' , 'KatapultJobProxy' ]:
             job_id   = jsondata['id'].strip()
             job_cfg  = jsondata.get('config')
             return cs_client.get_job(job_id,config=job_cfg)    
@@ -831,15 +831,15 @@ def get_client(config_=None):
     if config is None:
         debug(1,"You need to specify a valid configuration path",color=bcolors.FAIL)
         debug(1,"(could also not find default config file",PROVIDER_CONFIG,")",color=bcolors.FAIL)
-        raise CloudSendError()
+        raise KatapultError()
 
     if config.get('provider','aws') == 'aws':
 
         if config.get('maestro','local') == 'local':
             
-            craws  = __import__("cloudsend.aws")
+            craws  = __import__("katapult.aws")
 
-            client = craws.aws.AWSCloudSendFatProvider(config)
+            client = craws.aws.AWSKatapultFatProvider(config)
 
             print("Using",client.version())
 
@@ -847,9 +847,9 @@ def get_client(config_=None):
 
         else:
 
-            craws  = __import__("cloudsend.aws")
+            craws  = __import__("katapult.aws")
 
-            client = craws.aws.AWSCloudSendLightProvider(config)
+            client = craws.aws.AWSKatapultLightProvider(config)
 
             print("Using",client.version())
 
@@ -859,7 +859,7 @@ def get_client(config_=None):
 
         debug(1,config.get('provider'), " not implemented yet")
 
-        raise CloudSendError()
+        raise KatapultError()
 
 def line_buffered(f):
     line_buf = ""
@@ -951,12 +951,12 @@ def debug(level,*args,**kwargs):
 
 def get_EOL_conversion(instance,files_path):
     if 'win' in sys.platform.lower():
-        this_platform = CloudSendPlatform.WINDOWS
+        this_platform = KatapultPlatform.WINDOWS
     else:
-        this_platform = CloudSendPlatform.LINUX
+        this_platform = KatapultPlatform.LINUX
     
     if this_platform != instance.get_platform():
-        if this_platform == CloudSendPlatform.WINDOWS:
+        if this_platform == KatapultPlatform.WINDOWS:
             return "sed -i -e 's/\r$//' "+files_path 
         else:
             raise Error("not implemented yet")
@@ -968,12 +968,12 @@ def convert_EOL(instance,file_content):
     UNIX_LINE_ENDING = b'\n'
     
     if 'win' in sys.platform.lower():
-        this_platform = CloudSendPlatform.WINDOWS
+        this_platform = KatapultPlatform.WINDOWS
     else:
-        this_platform = CloudSendPlatform.LINUX
+        this_platform = KatapultPlatform.LINUX
     
     if this_platform != instance.get_platform():
-        origin = WINDOWS_LINE_ENDING if this_platform==CloudSendPlatform.WINDOWS else UNIX_LINE_ENDING
-        dest   = WINDOWS_LINE_ENDING if instance.get_platform()==CloudSendPlatform.WINDOWS else UNIX_LINE_ENDING
+        origin = WINDOWS_LINE_ENDING if this_platform==KatapultPlatform.WINDOWS else UNIX_LINE_ENDING
+        dest   = WINDOWS_LINE_ENDING if instance.get_platform()==KatapultPlatform.WINDOWS else UNIX_LINE_ENDING
         file_content = file_content.replace(origin, dest)
         return file_content

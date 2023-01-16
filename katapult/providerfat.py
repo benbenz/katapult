@@ -1,16 +1,16 @@
 from abc import ABC , abstractmethod
-import cloudsend.utils as cloudsendutils
+import katapult.utils as katapultutils
 import sys , json , os , time
 import re
 #import multiprocessing
 import math , random
-import cloudsend.combopt as combopt
+import katapult.combopt as combopt
 from io import BytesIO
 import csv , io
 import pkg_resources
-from cloudsend.core import *
-from cloudsend.provider import CloudSendProvider , CloudSendProviderState , debug , PROVIDER_CONFIG , DIRECTORY_TMP_AUTO_STOP , DIRECTORY_TMP , convert_EOL , get_EOL_conversion
-from cloudsend.config_state import ConfigManager , StateSerializer , STATE_FILE
+from katapult.core import *
+from katapult.provider import KatapultProvider , KatapultProviderState , debug , PROVIDER_CONFIG , DIRECTORY_TMP_AUTO_STOP , DIRECTORY_TMP , convert_EOL , get_EOL_conversion
+from katapult.config_state import ConfigManager , StateSerializer , STATE_FILE
 from enum import IntFlag
 from threading import current_thread
 import shutil
@@ -21,17 +21,17 @@ random.seed()
 
 SLEEP_PERIOD = 15
 
-class CloudSendProviderStateWaitMode(IntFlag):
+class KatapultProviderStateWaitMode(IntFlag):
     NO_WAIT       = 0  # provider dont wait for state
     WAIT          = 1  # provider wait for state 
     WATCH         = 2  # provider watch out for state = wait + revive
 
-class CloudSendFatProvider(CloudSendProvider,ABC):
+class KatapultFatProvider(KatapultProvider,ABC):
 
     def __init__(self, conf=None):
 
         # this will call self._init
-        CloudSendProvider.__init__(self,conf)
+        KatapultProvider.__init__(self,conf)
 
         # will be called by the parent
         #self._init(conf)
@@ -98,13 +98,13 @@ class CloudSendFatProvider(CloudSendProvider,ABC):
         added_objects = self._config_manager.load()
         old_state = self._state
 
-        self.set_state( self._state & (CloudSendProviderState.NEW|CloudSendProviderState.STARTED))
-        if (old_state & CloudSendProviderState.STARTED) and len(added_objects['instances'])>0:
+        self.set_state( self._state & (KatapultProviderState.NEW|KatapultProviderState.STARTED))
+        if (old_state & KatapultProviderState.STARTED) and len(added_objects['instances'])>0:
             await self.start()
-        if (old_state & CloudSendProviderState.DEPLOYED) and len(added_objects['instances'])>0 and len(added_objects['jobs'])>0:
+        if (old_state & KatapultProviderState.DEPLOYED) and len(added_objects['instances'])>0 and len(added_objects['jobs'])>0:
             await self.deploy()
         # if we are already 
-        if (old_state & CloudSendProviderState.RUNNING) and len(added_objects['jobs'])>0:
+        if (old_state & KatapultProviderState.RUNNING) and len(added_objects['jobs'])>0:
             if kwargs.get('run_session'):
                 run_session = kwargs['run_session']
             else:
@@ -157,7 +157,7 @@ class CloudSendFatProvider(CloudSendProvider,ABC):
 
     async def _assign(self):
 
-        if self._recovery == True and self._state & CloudSendProviderState.ASSIGNED:
+        if self._recovery == True and self._state & KatapultProviderState.ASSIGNED:
             assign_jobs = False
             for job in self._jobs:
                 if not job.get_instance():
@@ -167,7 +167,7 @@ class CloudSendFatProvider(CloudSendProvider,ABC):
                 self.debug(1,"STATE RECOVERY: skipping jobs allocation dues to reloaded state...",color=bcolors.CVIOLET)
                 return 
 
-        self.set_state(self._state & (CloudSendProviderState.ANY - CloudSendProviderState.ASSIGNED))
+        self.set_state(self._state & (KatapultProviderState.ANY - KatapultProviderState.ASSIGNED))
 
         assignation = self._config.get('job_assign','multi_knapsack')
 
@@ -199,7 +199,7 @@ class CloudSendFatProvider(CloudSendProvider,ABC):
                 continue
             self.debug(1,"job",job.get_rank(),">>>> instance",job.get_instance().get_rank()) 
 
-        self.set_state( self._state | CloudSendProviderState.ASSIGNED )
+        self.set_state( self._state | KatapultProviderState.ASSIGNED )
 
         self.serialize_state()         
                
@@ -508,10 +508,10 @@ class CloudSendFatProvider(CloudSendProvider,ABC):
 
     async def start(self,reset=False):
 
-        if not reset and self._state & CloudSendProviderState.STARTED & self._recovery:
+        if not reset and self._state & KatapultProviderState.STARTED & self._recovery:
             self.debug(1,"STATE RECOVERY: we're not skipping start() in order to update instance information",color=bcolors.CVIOLET)
 
-        self.set_state( self._state & (CloudSendProviderState.ANY - CloudSendProviderState.STARTED) )
+        self.set_state( self._state & (KatapultProviderState.ANY - KatapultProviderState.STARTED) )
 
         self._instances_states = dict() 
         self.debug(3,"Starting ...")
@@ -525,7 +525,7 @@ class CloudSendFatProvider(CloudSendProvider,ABC):
                 self.debug(1,"ERROR: Your configuration is causing an instance to not be created. Please fix.",inst.get_config_DIRTY(),color=bcolors.FAIL)
                 sys.exit()
 
-        self.set_state( self._state | CloudSendProviderState.STARTED )
+        self.set_state( self._state | KatapultProviderState.STARTED )
 
     async def reset_instance(self,instance):
         self.debug(1,'RESETTING instance',instance.get_name())
@@ -559,18 +559,18 @@ class CloudSendFatProvider(CloudSendProvider,ABC):
     # - shared script files, uploads, inputs ...
     async def deploy(self):
 
-        if not self._state & CloudSendProviderState.STARTED:
+        if not self._state & KatapultProviderState.STARTED:
             self.debug(1,"Not ready. Call 'start' first",color=bcolors.WARNING)
             return
 
-        if self._state & CloudSendProviderState.DEPLOYED:
+        if self._state & KatapultProviderState.DEPLOYED:
             if self._recovery == True:
                 self.debug(1,"STATE RECOVERY: skipping deploy due to reloaded state ...",color=bcolors.CVIOLET)
             else:
                 self.debug(1,"skipping deploy (already deployed) ...",color=bcolors.OKCYAN)
             return 
 
-        self.set_state( self._state & (CloudSendProviderState.ANY - CloudSendProviderState.DEPLOYED) )
+        self.set_state( self._state & (KatapultProviderState.ANY - KatapultProviderState.DEPLOYED) )
 
         await self._assign()
 
@@ -584,13 +584,13 @@ class CloudSendFatProvider(CloudSendProvider,ABC):
             jobs.append( self._deploy_all(instance) )
         await asyncio.gather( *jobs )
 
-        self.set_state( self._state | CloudSendProviderState.DEPLOYED )
+        self.set_state( self._state | KatapultProviderState.DEPLOYED )
 
     async def _revive(self,run_session,instance):
         self.debug(1,"REVIVING instance",instance,color=bcolors.OKCYAN)
 
         jobs_can_be_saved = False
-        if instance.get_state()==CloudSendInstanceState.STOPPED or instance.get_state()==CloudSendInstanceState.STOPPING:
+        if instance.get_state()==KatapultInstanceState.STOPPED or instance.get_state()==KatapultInstanceState.STOPPING:
             self.debug(1,"Instance is stopping|stopped, we just have to re-start the instance",instance,color=bcolors.OKCYAN)
             jobs_can_be_saved = True
             #self.start_instance(instance)
@@ -617,7 +617,7 @@ class CloudSendFatProvider(CloudSendProvider,ABC):
     def _mark_aborted_processes(self,processes,state_mask,reason=None):
         for p in processes:
             if p.get_state() & state_mask:
-                p.set_state(CloudSendProcessState.ABORTED)
+                p.set_state(KatapultProcessState.ABORTED)
                 if reason:
                     p.set_aborted_reason(reason)
 
@@ -693,12 +693,12 @@ class CloudSendFatProvider(CloudSendProvider,ABC):
             # let's just run the jobs ...
             #TODO: improve precision of recovery
             self.debug(2,state_old.name,"vs",state_new.name)
-            if state_new!=CloudSendProcessState.DONE and (state_new < state_old or (state_new == CloudSendProcessState.ABORTED or state_old == CloudSendProcessState.ABORTED or state_new == CloudSendProcessState.UNKNOWN or state_old == CloudSendProcessState.UNKNOWN)):
+            if state_new!=KatapultProcessState.DONE and (state_new < state_old or (state_new == KatapultProcessState.ABORTED or state_old == KatapultProcessState.ABORTED or state_new == KatapultProcessState.UNKNOWN or state_old == KatapultProcessState.UNKNOWN)):
                 self.debug(1,"We will run the following job because of an unsatisfying state. Job#",process_new.get_job().get_rank(),"=",process_new.get_state())
                 do_run = True
                 # do not break cause we want to check all_done properly!
                 #break
-            all_done = all_done and state_new == CloudSendProcessState.DONE
+            all_done = all_done and state_new == KatapultProcessState.DONE
 
         if all_done:
             do_run = False
@@ -855,17 +855,17 @@ class CloudSendFatProvider(CloudSendProvider,ABC):
 
         # we were actually still running processes
         # >> let's use the current session that has been loaded
-        if self._recovery and self._state & CloudSendProviderState.RUNNING:
+        if self._recovery and self._state & KatapultProviderState.RUNNING:
             self.debug(1,"STATE RECOVERY: continuing run job ...",color=bcolors.CVIOLET)
             await self._run(self._current_session,None,True,False,False)
         else:
 
-            if not self._state & CloudSendProviderState.DEPLOYED:
+            if not self._state & KatapultProviderState.DEPLOYED:
                 method_to_call = self._get_method_to_call()
                 self.debug(1,"Not ready for run. Call '"+method_to_call+"' first.",color=bcolors.WARNING)
                 return
 
-            if self._recovery and self._state & CloudSendProviderState.IDLE:
+            if self._recovery and self._state & KatapultProviderState.IDLE:
                 self.debug(1,"STATE RECOVERY: jobs have been ran already - about the run again",color=bcolors.CVIOLET)
 
             if not continue_session or not self._current_session:
@@ -875,7 +875,7 @@ class CloudSendFatProvider(CloudSendProvider,ABC):
 
                 # create the new session
                 number = len(self._run_sessions)
-                self._current_session = CloudSendRunSession(number)
+                self._current_session = KatapultRunSession(number)
                 self._run_sessions.append(self._current_session)
 
                 # run the new session
@@ -888,7 +888,7 @@ class CloudSendFatProvider(CloudSendProvider,ABC):
     async def _run(self,run_session,instance_filter=None,except_done=False,do_init=True,only_new_processes=False):
 
         # update the Provider state
-        self.set_state( self._state & (CloudSendProviderState.ANY - CloudSendProviderState.RUNNING - CloudSendProviderState.IDLE) )
+        self.set_state( self._state & (KatapultProviderState.ANY - KatapultProviderState.RUNNING - KatapultProviderState.IDLE) )
 
         if instance_filter:
             instances = [ instance_filter ] 
@@ -912,7 +912,7 @@ class CloudSendFatProvider(CloudSendProvider,ABC):
         await asyncio.gather( *jobs )
 
         # update the Provider state
-        self.set_state( self._state | CloudSendProviderState.RUNNING )
+        self.set_state( self._state | KatapultProviderState.RUNNING )
 
         # Now we can start wathing !
         # NOTE: do not ensure watch at the beginning of run...
@@ -959,7 +959,7 @@ class CloudSendFatProvider(CloudSendProvider,ABC):
         await asyncio.gather( *jobs )
 
         # mark all the process aborted (except the ones that finished - too late to kill them)
-        self._mark_aborted_processes(processes,CloudSendProcessState.ANY - CloudSendProcessState.DONE,'killed')
+        self._mark_aborted_processes(processes,KatapultProcessState.ANY - KatapultProcessState.DONE,'killed')
 
     
     async def _kill(self, instance, processes):
@@ -994,7 +994,7 @@ class CloudSendFatProvider(CloudSendProvider,ABC):
                 return 
 
     def print_jobs_summary(self,run_session=None,instance=None):
-        if not self._state & CloudSendProviderState.STARTED:
+        if not self._state & KatapultProviderState.STARTED:
             self.debug(1,"Not ready to get print jobs. Call 'start' first",color=bcolors.WARNING)
             return
 
@@ -1017,7 +1017,7 @@ class CloudSendFatProvider(CloudSendProvider,ABC):
                     self.debug(1,"|_",process.str_simple())
 
     async def print_aborted_logs(self,run_session=None,instance=None):
-        if not self._state & CloudSendProviderState.STARTED:
+        if not self._state & KatapultProviderState.STARTED:
             self.debug(1,"Not ready to get logs. Call 'start' first",color=bcolors.WARNING)
             return
 
@@ -1032,7 +1032,7 @@ class CloudSendFatProvider(CloudSendProvider,ABC):
                 process = job.get_last_process()
                 if process is None: # should not really happened but it did while writing code
                     continue
-                if process.get_state() == CloudSendProcessState.ABORTED:
+                if process.get_state() == KatapultProcessState.ABORTED:
                     if run_session:
                         session = process.get_batch().get_session()
                         if run_session != session:
@@ -1089,11 +1089,11 @@ class CloudSendFatProvider(CloudSendProvider,ABC):
             self.debug(1,job)
 
     def _get_method_to_call(self):
-        if not self._state   & CloudSendProviderState.STARTED:
+        if not self._state   & KatapultProviderState.STARTED:
             return 'start'
-        elif not self._state & CloudSendProviderState.DEPLOYED:
+        elif not self._state & KatapultProviderState.DEPLOYED:
             return 'deploy'
-        elif not self._state & CloudSendProviderState.RUNNING:
+        elif not self._state & KatapultProviderState.RUNNING:
             return 'run'
         else:
             return ''  
@@ -1140,10 +1140,10 @@ class CloudSendFatProvider(CloudSendProvider,ABC):
         if use_cached and os.path.exists(auto_dir):
             return auto_dir
 
-        # special case - we may reach this point with a shallow CloudSendRunSessionProxy object
+        # special case - we may reach this point with a shallow KatapultRunSessionProxy object
         # this is to allow the FatClient to search the cache (see above)
         # but we cant go further than that
-        if isinstance(run_session,CloudSendRunSessionProxy):
+        if isinstance(run_session,KatapultRunSessionProxy):
             self.debug(1,"Failed finding session results",color=bcolors.FAIL)
             return None
 
@@ -1182,7 +1182,7 @@ class CloudSendFatProvider(CloudSendProvider,ABC):
 
         for process in processes:
 
-            if process.get_state() != CloudSendProcessState.DONE and process.get_state() != CloudSendProcessState.ABORTED:
+            if process.get_state() != KatapultProcessState.DONE and process.get_state() != KatapultProcessState.ABORTED:
                 self.debug(2,"Skipping process import",process.get_uid(),process.get_state())
             
             dpl_job  = process.get_job()
@@ -1192,7 +1192,7 @@ class CloudSendFatProvider(CloudSendProvider,ABC):
             retrys = 0 
             while True:
                 try :
-                    if process.get_state() == CloudSendProcessState.ABORTED:
+                    if process.get_state() == KatapultProcessState.ABORTED:
                         local_path = os.path.join(session_out_dir,'job_'+str(rank).zfill(3)+'_error.log')
                         log = await self.get_log(process,ssh_conn)
                         try:
@@ -1201,7 +1201,7 @@ class CloudSendFatProvider(CloudSendProvider,ABC):
                         except:
                             pass
 
-                    elif process.get_state() == CloudSendProcessState.DONE:
+                    elif process.get_state() == KatapultProcessState.DONE:
                         out_files = dpl_job.get_config('output_files') # this file is written for the local machine
                         for out_file in out_files:
                             remote_file_path = instance.path_join( process.get_path() , out_file )
@@ -1336,7 +1336,7 @@ class CloudSendFatProvider(CloudSendProvider,ABC):
 
         # let the priority to the watching/reviving process (should only be one)
         # this is really just in case ...
-        # this is especially for the test below: instance.get_state() == CloudSendInstanceState.RUNNING:
+        # this is especially for the test below: instance.get_state() == KatapultInstanceState.RUNNING:
         # we want to make sure that no other process may have re-started (quickly) the instance
         # NOTE: this was relevant when we had *concurrent* and *similar* watch and wait processes
         # not the case anymore.... wait is now leveraging watch
@@ -1363,7 +1363,7 @@ class CloudSendFatProvider(CloudSendProvider,ABC):
             return None 
 
         # this is an Internet error
-        if instance.get_state() == CloudSendInstanceState.RUNNING:
+        if instance.get_state() == KatapultInstanceState.RUNNING:
             ssh_conn = await self._connect_to_instance(instance)
             if ssh_conn is None:
                 self.debug(1,"FATAL ERROR(0):",msgs,instance,color=bcolors.FAIL)
@@ -1373,12 +1373,12 @@ class CloudSendFatProvider(CloudSendProvider,ABC):
 
         self.debug(1,"ERROR:",msg,instance,color=bcolors.FAIL)
         if run_session:
-            if instance.get_state() & (CloudSendInstanceState.STOPPING | CloudSendInstanceState.STOPPED) :
+            if instance.get_state() & (KatapultInstanceState.STOPPING | KatapultInstanceState.STOPPED) :
                 # mark any type of process as aborted, but DONE
-                self._mark_aborted(run_session,instance,CloudSendProcessState.ANY - CloudSendProcessState.DONE,"instance stopped") 
-            elif instance.get_state() & (CloudSendInstanceState.TERMINATING | CloudSendInstanceState.TERMINATED):
+                self._mark_aborted(run_session,instance,KatapultProcessState.ANY - KatapultProcessState.DONE,"instance stopped") 
+            elif instance.get_state() & (KatapultInstanceState.TERMINATING | KatapultInstanceState.TERMINATED):
                 # mark any type of process as aborted
-                self._mark_aborted(run_session,instance,CloudSendProcessState.ANY,"instance terminated") 
+                self._mark_aborted(run_session,instance,KatapultProcessState.ANY,"instance terminated") 
             if do_revive:
                 await self._revive(run_session,instance)
         ssh_conn = await self._connect_to_instance(instance)
@@ -1520,13 +1520,13 @@ class CloudSendFatProvider(CloudSendProvider,ABC):
                     except:
                         pass
                 try:
-                    state = CloudSendProcessState[statestr.upper()]
+                    state = KatapultProcessState[statestr.upper()]
                     # let's keep as much history as we know 
                     # ABORTED state has more info than UNKNOWN ...
                     # on a new state recovery, the newly created instance is returining UNKNOWN
                     # but if the maestro witnessed an ABORTED state
                     # we prefer to keep this ...
-                    if not (process.get_state() == CloudSendProcessState.ABORTED and state == CloudSendProcessState.UNKNOWN):
+                    if not (process.get_state() == KatapultProcessState.ABORTED and state == KatapultProcessState.UNKNOWN):
                         process.set_state(state)
                     if substate:
                         process.set_substate(substate)
@@ -1539,7 +1539,7 @@ class CloudSendFatProvider(CloudSendProvider,ABC):
                 except Exception as e:
                     debug(1,"\nUnhandled state received by state.sh!!!",statestr,"\n")
                     debug(2,e)
-                    state = CloudSendProcessState.UNKNOWN
+                    state = KatapultProcessState.UNKNOWN
             else:
                 debug(2,"Received UID info that was not requested")
 
@@ -1550,13 +1550,13 @@ class CloudSendFatProvider(CloudSendProvider,ABC):
         instance_name = instance.get_name()
         try:
 
-            if wait_mode & CloudSendProviderStateWaitMode.WATCH:
+            if wait_mode & KatapultProviderStateWaitMode.WATCH:
                 self._instances_watching[instance_name] = True
                 self._instances_reviving[instance_name] = False
             
             ssh_conn = await self._connect_to_instance(instance)
 
-            do_revive = (wait_mode & CloudSendProviderStateWaitMode.WATCH)!=0
+            do_revive = (wait_mode & KatapultProviderStateWaitMode.WATCH)!=0
 
             if ssh_conn is None:
                 ssh_conn = await self._handle_instance_disconnect(run_session,instance,do_revive,"could not get jobs states for instance")
@@ -1593,7 +1593,7 @@ class CloudSendFatProvider(CloudSendProvider,ABC):
 
                 self.serialize_state()
 
-                if wait_mode & CloudSendProviderStateWaitMode.WAIT:
+                if wait_mode & KatapultProviderStateWaitMode.WAIT:
                     try:
                         await asyncio.sleep(SLEEP_PERIOD)
                     except asyncio.exceptions.CancelledError:
@@ -1605,7 +1605,7 @@ class CloudSendFatProvider(CloudSendProvider,ABC):
 
             self.serialize_state()
 
-            if wait_mode & CloudSendProviderStateWaitMode.WATCH:
+            if wait_mode & KatapultProviderStateWaitMode.WATCH:
                 self._instances_watching[instance.get_name()] = False        
                 any_watching = any( self._instances_watching.values() )
                 debug(2,self._instances_watching)
@@ -1614,7 +1614,7 @@ class CloudSendFatProvider(CloudSendProvider,ABC):
                     self.debug(1,"WATCHING has ended",color=bcolors.OKCYAN)
                     run_session.deactivate()
                     # we mark it specifically as IDLE so we know it's been ran once ... (could be useful)
-                    self.set_state(  (CloudSendProviderState.IDLE | self._state) & (CloudSendProviderState.ANY - CloudSendProviderState.WATCHING - CloudSendProviderState.RUNNING) )
+                    self.set_state(  (KatapultProviderState.IDLE | self._state) & (KatapultProviderState.ANY - KatapultProviderState.WATCHING - KatapultProviderState.RUNNING) )
                     self.debug(2,"entering IDLE state",self._state)
 
                 # lets wait 1 minutes before stopping
@@ -1638,7 +1638,7 @@ class CloudSendFatProvider(CloudSendProvider,ABC):
 
         except Exception as e:
             # make sure we catch any exception and unlock those variables
-            if wait_mode & CloudSendProviderStateWaitMode.WATCH:
+            if wait_mode & KatapultProviderStateWaitMode.WATCH:
                 self._instances_watching[instance_name] = False
                 self._instances_reviving[instance_name] = False
             raise e
@@ -1689,7 +1689,7 @@ class CloudSendFatProvider(CloudSendProvider,ABC):
             num_workers = len(self._instances)
         return num_workers
 
-    async def __wait_jobs_state( self, run_session , wait_state = CloudSendProviderStateWaitMode.NO_WAIT , job_state = CloudSendProcessState.ANY , daemon = False ):   
+    async def __wait_jobs_state( self, run_session , wait_state = KatapultProviderStateWaitMode.NO_WAIT , job_state = KatapultProcessState.ANY , daemon = False ):   
 
         if not run_session:
             return None
@@ -1701,7 +1701,7 @@ class CloudSendFatProvider(CloudSendProvider,ABC):
         if not daemon:
             await asyncio.gather( *jobs )
         else:
-            if wait_state & CloudSendProviderStateWaitMode.WATCH:
+            if wait_state & KatapultProviderStateWaitMode.WATCH:
                 await self._cancel_watch()
                 # spawn it ...
                 self._watcher_task = asyncio.ensure_future( asyncio.gather( *jobs ) )            
@@ -1717,18 +1717,18 @@ class CloudSendFatProvider(CloudSendProvider,ABC):
         # done
 
     async def wakeup(self):
-        # if self._state != CloudSendProviderState.WATCHING:
+        # if self._state != KatapultProviderState.WATCHING:
         #     self.debug(1,"Provider was not watching: cancelling automatic wakeup")
         #     return 
         # else:
         if self._recovery:
-            if self._state & CloudSendProviderState.STARTED:
+            if self._state & KatapultProviderState.STARTED:
                 await self.start()
-            if self._state & CloudSendProviderState.DEPLOYED:
+            if self._state & KatapultProviderState.DEPLOYED:
                 await self.deploy()
             # should we have those here ? Or just let watch do it's thing ? 
             # actually, thanks to state recovery, run_jobs should be smart enough to not run DONE jobs again...
-            if self._state & CloudSendProviderState.RUNNING:
+            if self._state & KatapultProviderState.RUNNING:
                 await self.run()
         else:
             # self.start()
@@ -1755,23 +1755,23 @@ class CloudSendFatProvider(CloudSendProvider,ABC):
     def is_watching(self):
         res = self._watcher_task is not None 
         res = res and not self._watcher_task.cancelled() and not self._watcher_task.done() 
-        res = res and self._state & CloudSendProviderState.WATCHING 
+        res = res and self._state & KatapultProviderState.WATCHING 
         return res
 
     async def _watch(self):
 
-        if not self._state & CloudSendProviderState.STARTED:
+        if not self._state & KatapultProviderState.STARTED:
             self.debug(1,"Not ready to watch. Call 'start' first",color=bcolors.WARNING)
             return
 
-        job_state = CloudSendProcessState.DONE|CloudSendProcessState.ABORTED
+        job_state = KatapultProcessState.DONE|KatapultProcessState.ABORTED
         
         # switch the state to watch mode ... 
         # this will allow to check if the Provider needs to run all methods until watch, on wakeup
         # (no matter the state recovery)
-        self.set_state( self._state | CloudSendProviderState.WATCHING )
+        self.set_state( self._state | KatapultProviderState.WATCHING )
 
-        await self.__wait_jobs_state(self._current_session , CloudSendProviderStateWaitMode.WAIT|CloudSendProviderStateWaitMode.WATCH,job_state,True)
+        await self.__wait_jobs_state(self._current_session , KatapultProviderStateWaitMode.WAIT|KatapultProviderStateWaitMode.WATCH,job_state,True)
 
     async def _wait(self,job_state,run_session,instance):
         while True:
@@ -1810,7 +1810,7 @@ class CloudSendFatProvider(CloudSendProvider,ABC):
         # OLD METHOD
         # we used to fetch the same way watch was fetching but this is redundant
         # and it was causing issues between lists of processes etc.
-        #return await self.__get_or_wait_jobs_state(CloudSendProviderStateWaitMode.WAIT,job_state)
+        #return await self.__get_or_wait_jobs_state(KatapultProviderStateWaitMode.WAIT,job_state)
         
         # NEW METHOD
         jobs = []
@@ -1841,7 +1841,7 @@ class CloudSendFatProvider(CloudSendProvider,ABC):
 
         self.debug(2,'Getting Jobs States ...')
 
-        if not self._state & CloudSendProviderState.STARTED:
+        if not self._state & KatapultProviderState.STARTED:
             self.debug(1,"Not ready to get job states. Call 'start' first")
             return None
 

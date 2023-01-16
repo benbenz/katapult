@@ -1,4 +1,4 @@
-import cloudsend
+import katapult
 import asyncio
 import sys 
 import psutil
@@ -6,21 +6,21 @@ import subprocess
 import multiprocessing 
 import time
 import copy
-from cloudsend.maestroserver import main as server_main
-from cloudsend.maestroclient import maestro_client
-from cloudsend.provider import make_client_command , stream_dump  
+from katapult.maestroserver import main as server_main
+from katapult.maestroclient import maestro_client
+from katapult.provider import make_client_command , stream_dump  
 
-# if [[ $(ps aux | grep "cloudsend.maestroserver" | grep -v 'grep') ]] ; then
-#     echo "CloudSend server already running"
+# if [[ $(ps aux | grep "katapult.maestroserver" | grep -v 'grep') ]] ; then
+#     echo "Katapult server already running"
 # else
 #     if [[ $(ps -ef | awk '/[m]aestroserver/{print $2}') ]] ; then
 #         ps -ef | awk '/[m]aestroserver/{print $2}' | xargs kill 
 #     fi
-#     echo "Starting CloudSend server ..."
-#     python3 -u -m cloudsend.maestroserver
+#     echo "Starting Katapult server ..."
+#     python3 -u -m katapult.maestroserver
 # fi
 
-def cloudsend_kill(p):
+def katapult_kill(p):
     try:
         p.kill()
     except:
@@ -30,7 +30,7 @@ def cloudsend_kill(p):
     except:
         pass
 
-def is_cloudsend_process(p,name='maestroserver'):
+def is_katapult_process(p,name='maestroserver'):
     try:
         if name in p.name():
             return True
@@ -52,8 +52,8 @@ def start_server():
     for pid in psutil.pids():
         try:
             p = psutil.Process(pid)
-            if is_cloudsend_process(p,"cloudsend.maestroserver"):
-                print("[CloudSend server already started]")
+            if is_katapult_process(p,"katapult.maestroserver"):
+                print("[Katapult server already started]")
                 server_started = True
                 break
         except psutil.NoSuchProcess:
@@ -64,14 +64,14 @@ def start_server():
             try:
                 p = psutil.Process(pid)
                 for pp in p.children(recursive=True):
-                    if is_cloudsend_process(pp):
-                        cloudsend_kill(pp)
-                if is_cloudsend_process(p):
-                    cloudsend_kill(p)
+                    if is_katapult_process(pp):
+                        katapult_kill(pp)
+                if is_katapult_process(p):
+                    katapult_kill(p)
             except psutil.NoSuchProcess:
                 pass
-        print("[Starting CloudSend server ...]")
-        subprocess.Popen(['python3','-u','-m','cloudsend.maestroserver'])
+        print("[Starting Katapult server ...]")
+        subprocess.Popen(['python3','-u','-m','katapult.maestroserver'])
         time.sleep(1)
         #q = multiprocessing.Queue()
         #p = multiprocessing.Process(target=server_main,args=(q,))
@@ -124,7 +124,7 @@ def cli_translate(command,args):
             job_state = int(args[0])
             new_args.append(job_state)
         if args and len(args) >= 2:
-            run_session = CloudSendRunSessionProxy( args[1] )
+            run_session = KatapultRunSessionProxy( args[1] )
             new_args.append( stream_dump(run_session) )
         return new_args 
 
@@ -132,7 +132,7 @@ def cli_translate(command,args):
 
         new_args = []
         if args and len(args) >= 1:
-            run_session = CloudSendRunSessionProxy( args[0] )
+            run_session = KatapultRunSessionProxy( args[0] )
             new_args.append( stream_dump(run_session) )
         return new_args 
 
@@ -142,27 +142,27 @@ def cli_translate(command,args):
     elif command == 'get_states' or command == 'get_jobs_states':
         new_args = []
         if args and len(args) >= 1:
-            run_session = CloudSendRunSessionProxy( args[0] )
+            run_session = KatapultRunSessionProxy( args[0] )
             new_args.append( stream_dump(run_session) )
         return new_args 
 
     elif command == 'print_summary' or command == 'print':
         new_args = []
         if args and len(args) >= 1:
-            run_session = CloudSendRunSessionProxy( args[0] )
+            run_session = KatapultRunSessionProxy( args[0] )
             new_args.append( stream_dump(run_session) )
         if args and len(args) >= 2:
-            instance = CloudSendInstanceProxy( args[1] )
+            instance = KatapultInstanceProxy( args[1] )
             new_args.append( stream_dump(instance) )
         return new_args 
 
     elif command == 'print_aborted' or command == 'print_aborted_logs':
         new_args = []
         if args and len(args) >= 1:
-            run_session = CloudSendRunSessionProxy( args[0] )
+            run_session = KatapultRunSessionProxy( args[0] )
             new_args.append( stream_dump(run_session) )
         if args and len(args) >= 2:
-            instance = CloudSendInstanceProxy( args[1] )
+            instance = KatapultInstanceProxy( args[1] )
             new_args.append( stream_dump(instance) )
         return new_args 
         
@@ -182,7 +182,7 @@ def cli_translate(command,args):
                 directory = None
             new_args.append(directory)
         if args and len(args)>=2:
-            run_session = CloudSendRunSessionProxy( args[1] )
+            run_session = KatapultRunSessionProxy( args[1] )
             new_args.append( stream_dump(run_session) )
         if args and len(args)>=3:
             use_cached = args[2].lower().strip() == "true"
@@ -208,7 +208,7 @@ def main():
     multiprocessing.set_start_method('spawn')
 
     if len(sys.argv)<2:
-        print("python3 -m cloudsend.cli CMD [ARGS]")
+        print("python3 -m katapult.cli CMD [ARGS]")
         sys.exit()
 
     args = copy.deepcopy(sys.argv)

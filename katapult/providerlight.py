@@ -1,8 +1,8 @@
 
 from abc import ABC , abstractmethod
-from cloudsend.provider import CloudSendProvider , stream_load , stream_dump , line_buffered , make_client_command , STREAM_RESULT, DIRECTORY_TMP , get_EOL_conversion
-from cloudsend.core import *
-from cloudsend.attrs import *
+from katapult.provider import KatapultProvider , stream_load , stream_dump , line_buffered , make_client_command , STREAM_RESULT, DIRECTORY_TMP , get_EOL_conversion
+from katapult.core import *
+from katapult.attrs import *
 import copy , io
 from zipfile import ZipFile
 import sys , os , fnmatch
@@ -22,11 +22,11 @@ random.seed()
 # Client handling MAESTRO instance #
 ####################################
 
-class CloudSendLightProvider(CloudSendProvider,ABC):
+class KatapultLightProvider(KatapultProvider,ABC):
 
     def __init__(self,conf=None):
 
-        CloudSendProvider.__init__(self,conf)
+        KatapultProvider.__init__(self,conf)
 
         #self._install_maestro()
 
@@ -68,7 +68,7 @@ class CloudSendLightProvider(CloudSendProvider,ABC):
                     'region'       : region ,
                     '_maestro_name_proj' : self._config.get('_maestro_name_proj',False)
                 }
-                self._maestro = CloudSendInstance(maestro_cfg,None)
+                self._maestro = KatapultInstance(maestro_cfg,None)
 
     async def _deploy_maestro(self,reset):
         # deploy the maestro ...
@@ -80,33 +80,33 @@ class CloudSendLightProvider(CloudSendProvider,ABC):
         instanceid , ssh_conn , ftp_client = await self._wait_and_connect(self._maestro)
 
         home_dir = self._maestro.get_home_dir()
-        cloudsend_dir = self._maestro.path_join( home_dir , 'cloudsend' )
-        files_dir = self._maestro.path_join( cloudsend_dir , 'files' )
-        ready_file = self._maestro.path_join( cloudsend_dir , 'ready' )
+        katapult_dir = self._maestro.path_join( home_dir , 'katapult' )
+        files_dir = self._maestro.path_join( katapult_dir , 'files' )
+        ready_file = self._maestro.path_join( katapult_dir , 'ready' )
         maestro_file = self._maestro.path_join( home_dir , 'maestro' )
         aws_dir = self._maestro.path_join( home_dir , '.aws' )
         aws_config = self._maestro.path_join( aws_dir , 'config' )
-        if self._maestro.get_platform() == CloudSendPlatform.LINUX or self._maestro.get_platform() == CloudSendPlatform.WINDOWS_WSL :
-            activate_file = self._maestro.path_join( cloudsend_dir , '.venv' , 'maestro' , 'bin' , 'activate' )
-        elif self._maestro.get_platform() == CloudSendPlatform.WINDOWS:
-            activate_file = self._maestro.path_join( cloudsend_dir , '.venv' , 'maestro' , 'Scripts' , 'activate.bat' )
-        elif self._maestro.get_platform() == CloudSendPlatform.UNKNOWN:
+        if self._maestro.get_platform() == KatapultPlatform.LINUX or self._maestro.get_platform() == KatapultPlatform.WINDOWS_WSL :
+            activate_file = self._maestro.path_join( katapult_dir , '.venv' , 'maestro' , 'bin' , 'activate' )
+        elif self._maestro.get_platform() == KatapultPlatform.WINDOWS:
+            activate_file = self._maestro.path_join( katapult_dir , '.venv' , 'maestro' , 'Scripts' , 'activate.bat' )
+        elif self._maestro.get_platform() == KatapultPlatform.UNKNOWN:
             if 'windows' in platform.system().lower():
-                activate_file = os.path.join( cloudsend_dir , '.venv' , 'maestro' , 'Scripts' , 'activate.bat' )
+                activate_file = os.path.join( katapult_dir , '.venv' , 'maestro' , 'Scripts' , 'activate.bat' )
             else:
-                activate_file = self._maestro.path_join( cloudsend_dir , '.venv' , 'maestro' , 'bin' , 'activate' )
-        elif self._maestro.get_platform() == CloudSendPlatform.MOCK:
+                activate_file = self._maestro.path_join( katapult_dir , '.venv' , 'maestro' , 'bin' , 'activate' )
+        elif self._maestro.get_platform() == KatapultPlatform.MOCK:
             if 'windows' in platform.system().lower():
-                activate_file = os.path.join( cloudsend_dir , '.venv' , 'maestro' , 'Scripts' , 'activate.bat' )
+                activate_file = os.path.join( katapult_dir , '.venv' , 'maestro' , 'Scripts' , 'activate.bat' )
             else:
-                activate_file = self._maestro.path_join( cloudsend_dir , '.venv' , 'maestro' , 'bin' , 'activate' )
+                activate_file = self._maestro.path_join( katapult_dir , '.venv' , 'maestro' , 'bin' , 'activate' )
 
         re_init  = await self._test_reupload(self._maestro,ready_file, ssh_conn)
 
         if re_init:
             # remove the file
             stdout , stderr , ssh_conn , ftp_client = await self._exec_maestro_command_simple(ssh_conn,ftp_client,'rm -f ' + ready_file )
-            # make cloudsend dir
+            # make katapult dir
             stdout , stderr , ssh_conn , ftp_client = await self._exec_maestro_command_simple(ssh_conn,ftp_client,'mkdir -p ' + files_dir ) 
             # mark it as maestro...
             stdout , stderr , ssh_conn , ftp_client = await self._exec_maestro_command_simple(ssh_conn,ftp_client,'echo "" > ' + maestro_file ) 
@@ -120,8 +120,8 @@ class CloudSendLightProvider(CloudSendProvider,ABC):
             self.grant_admin_rights(self._maestro)
             # setup auto_stop behavior for maestro
             self.setup_auto_stop(self._maestro)
-            # deploy CloudSend on the maestro
-            await self._deploy_cloudsend(ssh_conn,ftp_client)
+            # deploy Katapult on the maestro
+            await self._deploy_katapult(ssh_conn,ftp_client)
             # mark as ready
             stdout , stderr , ssh_conn , ftp_client = await self._exec_maestro_command_simple(ssh_conn,ftp_client,'if [ -f '+activate_file+' ]; then echo "" > '+ready_file+' ; fi')
 
@@ -130,7 +130,7 @@ class CloudSendLightProvider(CloudSendProvider,ABC):
 
         # let's redeploy the code every time for now ... (if not already done in re_init)
         if not re_init and reset:
-            await self._deploy_cloudsend_files(ssh_conn,ftp_client)
+            await self._deploy_katapult_files(ssh_conn,ftp_client)
 
         # start the server (if not already started)
         await self._run_server(ssh_conn)
@@ -148,17 +148,17 @@ class CloudSendLightProvider(CloudSendProvider,ABC):
         self.debug(1,"MAESTRO is READY",color=bcolors.OKCYAN)
 
 
-    async def _deploy_cloudsend_files(self,ssh_conn,ftp_client):
-        await ftp_client.chdir(self._get_cloudsend_dir())
+    async def _deploy_katapult_files(self,ssh_conn,ftp_client):
+        await ftp_client.chdir(self._get_katapult_dir())
         # CP437 is IBM zip file encoding
-        await self.sftp_put_bytes(ftp_client,'cloudsend.zip',self._create_cloudsend_zip(),'CP437')
+        await self.sftp_put_bytes(ftp_client,'katapult.zip',self._create_katapult_zip(),'CP437')
         commands = [
-            { 'cmd' : 'cd '+self._get_cloudsend_dir()+' && unzip -o cloudsend.zip && rm cloudsend.zip' , 'out' : True } ,
+            { 'cmd' : 'cd '+self._get_katapult_dir()+' && unzip -o katapult.zip && rm katapult.zip' , 'out' : True } ,
         ]
         await self._run_ssh_commands(self._maestro,ssh_conn,commands) 
         
         filesOfDirectory = os.listdir('.')
-        pattern = "cloudsend*.pem"
+        pattern = "katapult*.pem"
         for file in filesOfDirectory:
             if fnmatch.fnmatch(file, pattern):
                 await ftp_client.put(os.path.abspath(file),os.path.basename(file))
@@ -173,13 +173,13 @@ class CloudSendLightProvider(CloudSendProvider,ABC):
         await self._run_ssh_commands(self._maestro,ssh_conn,commands) 
 
 
-    async def _deploy_cloudsend(self,ssh_conn,ftp_client):
+    async def _deploy_katapult(self,ssh_conn,ftp_client):
 
-        # upload cloudsend files
-        await self._deploy_cloudsend_files(ssh_conn,ftp_client)
+        # upload katapult files
+        await self._deploy_katapult_files(ssh_conn,ftp_client)
         
         maestroenv_sh = self._get_remote_files_path( 'maestroenv.sh' )
-        # unzip cloudsend files, install and run
+        # unzip katapult files, install and run
         commands = [
             { 'cmd' : maestroenv_sh , 'out' : True } ,
         ]
@@ -220,7 +220,7 @@ class CloudSendLightProvider(CloudSendProvider,ABC):
         #         config['_kwargs'][k] = stream_dump(v)
 
         # serialize the config and send it to the maestro
-        await ftp_client.chdir(self._get_cloudsend_dir())
+        await ftp_client.chdir(self._get_katapult_dir())
         await self.sftp_put_string(ftp_client,config_filename,json.dumps(config))
         # execute the mkdir_cmd
         if mkdir_cmd:
@@ -264,12 +264,12 @@ class CloudSendLightProvider(CloudSendProvider,ABC):
 
         if config.get('environments'):
             for i , env_cfg in enumerate(config.get('environments')):
-                # Note: we are using a simple CloudSendEnvironment here 
+                # Note: we are using a simple KatapultEnvironment here 
                 # we're not deploying at this stage
-                # but this will help use re-use all the business logic in cloudsendutils envs
+                # but this will help use re-use all the business logic in katapultutils envs
                 # in order to standardize the environment and create an inline version 
-                # through the CloudSendEnvironment::json() method
-                env = CloudSendEnvironment(self._config.get('project'),env_cfg)
+                # through the KatapultEnvironment::json() method
+                env = KatapultEnvironment(self._config.get('project'),env_cfg)
                 config['environments'][i] = env.get_env_obj()
                 config['environments'][i][K_COMPUTED] = True
 
@@ -277,7 +277,7 @@ class CloudSendLightProvider(CloudSendProvider,ABC):
 
         if config.get('jobs'):
             for i , job_cfg in enumerate(config.get('jobs')):
-                job = CloudSendJob(job_cfg,i)
+                job = KatapultJob(job_cfg,i)
                 if job.get_config('run_script'):
                     run_script = job.get_config('run_script')  
                     ref_file0  = run_script
@@ -329,19 +329,19 @@ class CloudSendLightProvider(CloudSendProvider,ABC):
 
     def _resolve_maestro_job_paths(self,upfile,ref_file,home_dir):
         files_path = self._maestro.path_join( home_dir , 'files' )
-        return cloudsendutils.resolve_paths(self._maestro,upfile,ref_file,files_path,True) # True for mutualized 
+        return katapultutils.resolve_paths(self._maestro,upfile,ref_file,files_path,True) # True for mutualized 
 
     def _get_home_dir(self):
         return self._maestro.get_home_dir()
 
-    def _get_cloudsend_dir(self):
-        return self._maestro.path_join( self._get_home_dir() , 'cloudsend' )
+    def _get_katapult_dir(self):
+        return self._maestro.path_join( self._get_home_dir() , 'katapult' )
 
     def _get_remote_files_path(self,files=None):
         if not files:
-            return self._maestro.path_join( self._get_cloudsend_dir() , 'cloudsend' , 'resources' , 'remote_files' )        
+            return self._maestro.path_join( self._get_katapult_dir() , 'katapult' , 'resources' , 'remote_files' )        
         else:
-            return self._maestro.path_join( self._get_cloudsend_dir() , 'cloudsend' , 'resources' , 'remote_files' , files )        
+            return self._maestro.path_join( self._get_katapult_dir() , 'katapult' , 'resources' , 'remote_files' , files )        
 
     def _zip_package(self,package_name,src,dest,zipObj):
         dest = os.path.join( dest , os.path.basename(src) ).rstrip( os.sep )
@@ -358,17 +358,17 @@ class CloudSendLightProvider(CloudSendProvider,ABC):
                 self.debug(2,"Writing",src)
                 zipObj.writestr(dest,data_str)
 
-    def _create_cloudsend_zip(self):
+    def _create_katapult_zip(self):
         zip_buffer = io.BytesIO()
         # create a ZipFile object
         with ZipFile(zip_buffer, 'w') as zipObj:    
-            import cloudsend as cs
-            cloudsendinit = os.path.abspath(cs.__file__) # this is the __init__.py file
-            cloudsendmodu = os.path.dirname(cloudsendinit)
-            cloudsendroot = os.path.dirname(cloudsendmodu)
+            import katapult as cs
+            katapultinit = os.path.abspath(cs.__file__) # this is the __init__.py file
+            katapultmodu = os.path.dirname(katapultinit)
+            katapultroot = os.path.dirname(katapultmodu)
             for otherfilepath in [ 'requirements.txt' ]:
                 opened = False
-                for thedir in [cloudsendmodu , cloudsendroot ]: # not sure why: Kyel bug Windows
+                for thedir in [katapultmodu , katapultroot ]: # not sure why: Kyel bug Windows
                     thefilepath = os.path.join(thedir,otherfilepath)
                     if os.path.exists(thefilepath):
                         try:
@@ -382,7 +382,7 @@ class CloudSendLightProvider(CloudSendProvider,ABC):
                 if not opened:
                     self.debug(1,"Could not open file ",otherfilepath,color=bcolors.FAIL)
             # write the package
-            self._zip_package("cloudsend",".","cloudsend",zipObj)
+            self._zip_package("katapult",".","katapult",zipObj)
 
         self.debug(2,"ZIP BUFFER SIZE =",zip_buffer.getbuffer().nbytes)
 
@@ -461,9 +461,9 @@ class CloudSendLightProvider(CloudSendProvider,ABC):
         
         # -u for no buffering
         waitmaestro_sh = self._get_remote_files_path( 'waitmaestro.sh' )
-        venv_python    = self._maestro.path_join( self._get_cloudsend_dir() , '.venv' , 'maestro' , 'bin' , 'python3' )
+        venv_python    = self._maestro.path_join( self._get_katapult_dir() , '.venv' , 'maestro' , 'bin' , 'python3' )
 
-        cmd = "cd "+self._get_cloudsend_dir()+ " && "+waitmaestro_sh+" && sudo "+venv_python+" -u -m cloudsend.maestroclient " + the_command
+        cmd = "cd "+self._get_katapult_dir()+ " && "+waitmaestro_sh+" && sudo "+venv_python+" -u -m katapult.maestroclient " + the_command
 
         retrys = 0 
 
@@ -569,7 +569,7 @@ class CloudSendLightProvider(CloudSendProvider,ABC):
         # wait for maestro to be ready
         instanceid , ssh_conn , ftp_client = await self._wait_and_connect(self._maestro)
         # config_name
-        config_name = 'config_add-' + cloudsendutils.generate_unique_id() + '.json'
+        config_name = 'config_add-' + katapultutils.generate_unique_id() + '.json'
         # deploy the new config to the maestro (every time)
         # (this ensures the deployment of dependent files)
         translated_config = await self._deploy_config(ssh_conn,ftp_client,config_name,True) #True = only new stuff
@@ -685,7 +685,7 @@ class CloudSendLightProvider(CloudSendProvider,ABC):
 
         if self._maestro:
             homedir     = self._maestro.get_home_dir()
-            maestro_dir = self._maestro.path_join( homedir , "cloudsend_tmp_fetch" )
+            maestro_dir = self._maestro.path_join( homedir , "katapult_tmp_fetch" )
             await self._exec_maestro_command("clear_results_dir",maestro_dir)
 
 
@@ -724,7 +724,7 @@ class CloudSendLightProvider(CloudSendProvider,ABC):
 
         randnum          = str(random.randrange(1000))
         homedir          = self._maestro.get_home_dir()
-        maestro_dir      = self._maestro.path_join( homedir , "cloudsend_tmp_fetch" ) #+ randnum )
+        maestro_dir      = self._maestro.path_join( homedir , "katapult_tmp_fetch" ) #+ randnum )
         maestro_tar_file = "maestro"+randnum+".tar"
         maestro_tar_path = self._maestro.path_join( homedir , maestro_tar_file )
         session_out_dir_remote = self._get_session_out_dir(maestro_dir,run_session,self._maestro)
@@ -785,21 +785,21 @@ class CloudSendLightProvider(CloudSendProvider,ABC):
     def setup_auto_stop(self,instance):
         pass
 
-    # needed by CloudSendProvider::_wait_for_instance 
+    # needed by KatapultProvider::_wait_for_instance 
     def serialize_state(self):
         pass
 
     def get_run_session(self,session_id):
-        return CloudSendRunSessionProxy( session_id )
+        return KatapultRunSessionProxy( session_id )
 
     def get_instance(self,instance_name,**kwargs):
-        return CloudSendInstanceProxy( instance_name , kwargs.get('config') )
+        return KatapultInstanceProxy( instance_name , kwargs.get('config') )
 
     def get_environment(self,env_hash,**kwargs):
-        return CloudSendEnvironmentProxy( env_hash , kwargs.get('config') )
+        return KatapultEnvironmentProxy( env_hash , kwargs.get('config') )
 
     def get_job(self,job_id,**kwargs):
-        return CloudSendJobProxy( job_id , kwargs.get('config') )
+        return KatapultJobProxy( job_id , kwargs.get('config') )
 
     async def get_num_active_processes(self,run_session=None):
         if run_session is None:

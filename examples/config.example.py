@@ -12,7 +12,7 @@ config = {
     'auto_stop'    : True ,                               # will automatically stop the instances and the maestro, once the jobs are done
     'provider'     : 'aws' ,                              # the provider name ('aws' | 'azure' | ...)
     'job_assign'   : None ,                               # algorithm used for job assignation / task scheduling ('random' | 'multi_knapsack')
-    'recover'      : True ,                               # if True, CloudSend will always save the state and try to recover this state on the next execution
+    'recover'      : True ,                               # if True, Katapult will always save the state and try to recover this state on the next execution
     'print_deploy' : False ,                              # if True, this will cause the deploy stage to print more (and lock)
     'mutualize_uploads' : True ,                          # adjusts the directory structure of the uploads ... (False = per job or True = global/mutualized)
 

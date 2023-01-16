@@ -6,11 +6,11 @@ import traceback
 import fnmatch
 from datetime import datetime
 from scriptflow.runners import AbstractRunner
-from cloudsend.provider import get_client
-from cloudsend.core import CloudSendProcessState
-from cloudsend.utils import generate_unique_id
+from katapult.provider import get_client
+from katapult.core import KatapultProcessState
+from katapult.utils import generate_unique_id
 
-TASK_PROP_UID = 'cloudsend_uid'
+TASK_PROP_UID = 'katapult_uid'
 TASK_DICT_HANDLED = '_handled'
 JOB_CFG_T_UID = 'task_uid'
 SLEEP_PERIOD_SHORT = 0.1
@@ -18,10 +18,10 @@ SLEEP_PERIOD_LONG  = 15
 
 # Runner for tlamadon/scriptflow
 
-class CloudSendRunner(AbstractRunner):
+class KatapultRunner(AbstractRunner):
 
     def __init__(self, conf, **kwargs):
-        self._cloudsend         = get_client(conf)
+        self._katapult         = get_client(conf)
         self._run_session       = None
         self._processes         = {}
         self._num_instances     = 0 
@@ -86,7 +86,7 @@ class CloudSendRunner(AbstractRunner):
         if self._handle_task_queue:
             # always available slots
             # this will cause the controller to add all the tasks at once
-            # cloudsend will handle the stacking with its own batch_run feature ...
+            # katapult will handle the stacking with its own batch_run feature ...
             return self._num_instances
         else:
             return self._num_instances - len(self._processes)
@@ -111,7 +111,7 @@ class CloudSendRunner(AbstractRunner):
         self._processes[task.hash] = {
             "task": task , 
             "job":  None , # we have a one-to-one relationship between job and task (no demultiplier)
-            "state" : CloudSendProcessState.UNKNOWN ,
+            "state" : KatapultProcessState.UNKNOWN ,
             'start_time': datetime.now().strftime("%d/%m/%Y %H:%M:%S")
         }
 
@@ -121,12 +121,12 @@ class CloudSendRunner(AbstractRunner):
     async def loop(self, controller):
 
         # start the provider and get remote instances information
-        await self._cloudsend.start(self._do_reset)
+        await self._katapult.start(self._do_reset)
         # delete the fetch results directory
-        await self._cloudsend.clear_results_dir()
+        await self._katapult.clear_results_dir()
 
         # cache the number of instances
-        self._num_instances = await self._cloudsend.get_num_instances()
+        self._num_instances = await self._katapult.get_num_instances()
 
         while True:
             try:
@@ -203,18 +203,18 @@ class CloudSendRunner(AbstractRunner):
         # add the new jobs and get jobs objects back
         if len(jobs_cfg)>0:
 
-            objects = await self._cloudsend.cfg_add_jobs(jobs_cfg,run_session=self._run_session)
+            objects = await self._katapult.cfg_add_jobs(jobs_cfg,run_session=self._run_session)
 
             # 1 task <-> 1 job
             assert( objects and len(objects['jobs']) == len(jobs_cfg) )
 
             # run the jobs
             if self._run_session is None:
-                await self._cloudsend.deploy() # deploy the new jobs etc.
-                self._run_session = await self._cloudsend.run() 
+                await self._katapult.deploy() # deploy the new jobs etc.
+                self._run_session = await self._katapult.run() 
             else:
-                await self._cloudsend.deploy() # deploy the new jobs etc.
-                await self._cloudsend.run(True) # continue_session
+                await self._katapult.deploy() # deploy the new jobs etc.
+                await self._katapult.run(True) # continue_session
 
             # associate task <-> job
             self._associate_jobs_to_tasks(objects)
@@ -222,7 +222,7 @@ class CloudSendRunner(AbstractRunner):
         if len(self._processes)>0:
             # fetch statusses here ...
             # True stands for 'last_running_processes' meaning we will only get one process per job (the last one)
-            processes_states = await self._cloudsend.get_jobs_states(self._run_session,True)
+            processes_states = await self._katapult.get_jobs_states(self._run_session,True)
 
             # augment the period now ...
             if processes_states and len(processes_states)>0:
@@ -247,7 +247,7 @@ class CloudSendRunner(AbstractRunner):
                 if pstatus['job_config'][JOB_CFG_T_UID] == p["task"].get_prop(TASK_PROP_UID):
 
                     # we match with runner-managed task id, but the job_id should also be right
-                    # (we self manage this match in case cloudsend internal api changes)
+                    # (we self manage this match in case katapult internal api changes)
                     assert pstatus['job_id'] == job.get_id() , "Internal Error: task<->job<->last_process: it looks like something is wrong ! Fix it"
                     
                     p["state"] = pstatus['state']
@@ -257,16 +257,16 @@ class CloudSendRunner(AbstractRunner):
             # should not happen
             assert found_process , "Internal Error: task<->job<->last_process: We couldn't find a process in the results"
 
-            if p["state"] & ( CloudSendProcessState.DONE | CloudSendProcessState.ABORTED):
+            if p["state"] & ( KatapultProcessState.DONE | KatapultProcessState.ABORTED):
                 to_remove.append(k)
-                has_aborted_process = has_aborted_process or p["state"] == CloudSendProcessState.ABORTED
+                has_aborted_process = has_aborted_process or p["state"] == KatapultProcessState.ABORTED
 
         # we got some jobs to fetch
         if len(to_remove)>0:
-            results_dir = await self._cloudsend.fetch_results('tmp',self._run_session,True,True)
+            results_dir = await self._katapult.fetch_results('tmp',self._run_session,True,True)
             self._move_results(results_dir)
             if has_aborted_process:
-                await self._cloudsend.print_aborted_logs(self._run_session)
+                await self._katapult.print_aborted_logs(self._run_session)
 
         # signal completed tasks
         for k in to_remove:

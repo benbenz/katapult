@@ -41,7 +41,7 @@ def maestro_client(command):
 
 def main():
     if len(sys.argv)<2:
-        print("python3 -m cloudsend.maestroclient CMD [IP_ADDR]")
+        print("python3 -m katapult.maestroclient CMD [IP_ADDR]")
         sys.exit()
 
     #print(sys.argv)

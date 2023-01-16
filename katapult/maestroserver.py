@@ -1,7 +1,7 @@
-from cloudsend import provider as cs
-from cloudsend.provider import COMMAND_ARGS_SEP , ARGS_SEP , STREAM_RESULT , debug , stream_load , stream_dump
+from katapult import provider as cs
+from katapult.provider import COMMAND_ARGS_SEP , ARGS_SEP , STREAM_RESULT , debug , stream_load , stream_dump
 import asyncio , os , sys , time
-from cloudsend.core import CloudSendProcessState , bcolors , CloudSendRunSession , CloudSendRunSessionProxy
+from katapult.core import KatapultProcessState , bcolors , KatapultRunSession , KatapultRunSessionProxy
 import traceback
 import json
 import socket
@@ -127,11 +127,11 @@ class ServerContext:
             err_level = bcolors.FAIL if not allow_proxied else bcolors.WARNING
             debug(1,label,"This session object has expired and can not be found in the server anymore",session_arg,color=err_level)
             if allow_proxied:
-                debug(1,label,"Using CloudSendRunSessionProxy as argument",color=bcolors.WARNING)
+                debug(1,label,"Using KatapultRunSessionProxy as argument",color=bcolors.WARNING)
                 try:
                     session_number = int(session_arg['number'])
                     session_id     = session_arg['id'].strip()
-                    run_session    = CloudSendRunSessionProxy(session_number,session_id)
+                    run_session    = KatapultRunSessionProxy(session_number,session_id)
                     return run_session
                 except:
                     debug(1,label,"Could not create proxied session",session_arg,color=bcolors.FAIL)
@@ -280,7 +280,7 @@ class ServerContext:
             
             elif command == 'wait':
 
-                job_state   = CloudSendProcessState.DONE|CloudSendProcessState.ABORTED
+                job_state   = KatapultProcessState.DONE|KatapultProcessState.ABORTED
                 run_session = None
                 if args and len(args) >= 1:
                     job_state = int(args[0])

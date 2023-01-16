@@ -1,5 +1,5 @@
 """
-Simple example with dependencies running with light CloudSend client.
+Simple example with dependencies running with light Katapult client.
 
 > scriptflow run sleepit
 
@@ -10,12 +10,12 @@ import scriptflow as sf
 import logging
 import asyncio
 from omegaconf import OmegaConf
-from cloudsend.scriptflow.runner import CloudSendRunner
+from katapult.scriptflow.runner import KatapultRunner
 
 config = {
     'project'      : 'scriptflow' ,
     '_maestro_name_proj' : True , # so we can test different projects concurrently (maestro is not handling multi-projects yet)
-    'profile'      : 'cloudsend_benben', 
+    'profile'      : 'katapult_benben', 
     'debug'        : 1 ,
     'maestro'      : 'remote' ,
     'auto_stop'    : True ,
@@ -30,8 +30,8 @@ config = {
         {
             'name'      : 'env_python' ,
             # everything below is just so we can run 'sflow.compare_file()' ...
-            'env_conda' : [ 'python>=3.9' ] , # this is because cloudsend requires python 3.9 
-            'env_pypi'  : [ 'scriptflow' , 'cloudsend>=0.6.2' ] # sflow.py requires this
+            'env_conda' : [ 'python>=3.9' ] , # this is because katapult requires python 3.9 
+            'env_pypi'  : [ 'scriptflow' , 'katapult>=0.6.2' ] # sflow.py requires this
         }
     ]
 }
@@ -41,12 +41,12 @@ def init(config):
     logging.basicConfig(filename='scriptflow.log', level=logging.DEBUG)
     # set main maestro
     try:
-        cloudsend = CloudSendRunner(config,reset=True,upload_python_files=True)
+        katapult = KatapultRunner(config,reset=True,upload_python_files=True)
     except Exception as e:
-        print("Error while initializing cloudsend",e)
+        print("Error while initializing katapult",e)
         return
     
-    sf.set_main_controller(sf.core.Controller(conf,cloudsend))
+    sf.set_main_controller(sf.core.Controller(conf,katapult))
     
     if conf.debug:
         asyncio.get_event_loop().set_debug(True)

@@ -3,7 +3,7 @@ import jcs , yaml
 import uuid
 import os
 import re
-from cloudsend.attrs import K_COMPUTED
+from katapult.attrs import K_COMPUTED
 import pkg_resources
 
 # keys used for hash computation

@@ -1,11 +1,11 @@
 import boto3
 import os , sys
 from .utils import *
-from cloudsend.core     import CloudSendError , CloudSendInstance , CloudSendInstanceState , CloudSendPlatform
-from cloudsend.core     import bcolors , cs_keypairName , cs_secGroupName , cs_secGroupNameMaestro , cs_bucketName , cs_vpcName , cs_maestroRoleName , cs_maestroProfileName, cs_maestroPolicyName , init_instance_name
-from cloudsend.provider import debug
-from cloudsend.providerfat import CloudSendFatProvider
-from cloudsend.providerlight import CloudSendLightProvider
+from katapult.core     import KatapultError , KatapultInstance , KatapultInstanceState , KatapultPlatform
+from katapult.core     import bcolors , cs_keypairName , cs_secGroupName , cs_secGroupNameMaestro , cs_bucketName , cs_vpcName , cs_maestroRoleName , cs_maestroProfileName, cs_maestroPolicyName , init_instance_name
+from katapult.provider import debug
+from katapult.providerfat import KatapultFatProvider
+from katapult.providerlight import KatapultLightProvider
 from botocore.exceptions import ClientError
 from datetime import datetime , timedelta
 from botocore.config import Config
@@ -116,7 +116,7 @@ def aws_create_keypair(session,region,keypair_name,key_filename):
             debug(1,"The account is not authorized to create a keypair, please specify an existing keypair in the configuration or add Administrator privileges to the account")
             keypair = None
             #sys.exit()
-            raise CloudSendError()
+            raise KatapultError()
 
         elif 'DryRunOperation' in errmsg: # we are good with credentials
             try :
@@ -151,13 +151,13 @@ def aws_create_keypair(session,region,keypair_name,key_filename):
                     debug(2,errmsg2)
                     #sys.exit()
                     created = False
-                    raise CloudSendError()
+                    raise KatapultError()
         else:
             debug(1,"An unknown error occured while creating the KeyPair")
             debug(2,errmsg)
             #sys.exit()
             created = False
-            raise CloudSendError()
+            raise KatapultError()
     
     return keypair , created 
 
@@ -250,7 +250,7 @@ def aws_create_security_group(session,region,vpc):
     if secGroup is None:
         debug(1,"An unknown error occured while creating the security group")
         #sys.exit()
-        raise CloudSendError()
+        raise KatapultError()
     
     debug(2,secGroup) 
 
@@ -298,7 +298,7 @@ def aws_add_maestro_security_group(session,instance):
     if secGroup is None:
         debug(1,"An unknown error occured while creating the security group")
         #sys.exit()
-        raise CloudSendError()
+        raise KatapultError()
     
     debug(2,secGroup) 
 
@@ -396,7 +396,7 @@ def aws_find_instance(session,instance_config):
         instance_data = existing['Reservations'][0]['Instances'][0]
         debug(1,"Found existing instance !",instance_data['InstanceId'],instanceName)
         debug(3,instance_data)
-        instance = CloudSendInstance( instance_config , instance_data['InstanceId'] , instance_data )
+        instance = KatapultInstance( instance_config , instance_data['InstanceId'] , instance_data )
         return instance 
     
     else:
@@ -442,7 +442,7 @@ def aws_create_instance(session,instance_config,vpc,subnet,secGroup,keypair_name
         instance_data = existing['Reservations'][0]['Instances'][0]
         debug(1,"Found existing instance !",instance_data['InstanceId'])
         debug(3,instance_data)
-        instance = CloudSendInstance( instance_config, instance_data['InstanceId'] , instance_data )
+        instance = KatapultInstance( instance_config, instance_data['InstanceId'] , instance_data )
         return instance , created
 
     if instance_config.get('cpus') is not None:
@@ -545,14 +545,14 @@ def aws_create_instance(session,instance_config,vpc,subnet,secGroup,keypair_name
             sys.exit()
         else:
             debug(1,"An error occured while trying to create this instance",errmsg)
-        raise CloudSendError()
+        raise KatapultError()
 
 
     created = True
 
     debug(2,instances["Instances"][0])
 
-    instance = CloudSendInstance( instance_config, instances["Instances"][0]["InstanceId"] , instances["Instances"][0] )
+    instance = KatapultInstance( instance_config, instances["Instances"][0]["InstanceId"] , instances["Instances"][0] )
 
     return instance , created
 
@@ -586,12 +586,12 @@ def aws_start_instance(session,instance):
                 errmsg2 = str(botoerr2)
                 if 'IncorrectSpotRequestState' in errmsg2:
                     debug(1,"Could not reboot instance because of SPOT ... ",errmsg2)
-                    raise CloudSendError()
+                    raise KatapultError()
                     # terminate_instance(config,instance)
                 
         else:
             debug(2,botoerr)
-            raise CloudSendError()
+            raise KatapultError()
 
 def aws_stop_instance(session,instance):
     region  = instance.get_region()
@@ -629,7 +629,7 @@ def aws_update_instance_info(session,instance):
 
     debug(3,instance_new_data)
 
-    #instance = CloudSendInstance( region , instance.get_name() , instance.get_id() , instance_config, instance_new )
+    #instance = KatapultInstance( region , instance.get_name() , instance.get_id() , instance_config, instance_new )
     # proprietary values
     instance.set_dns_addr(instance_new_data.get('PublicDnsName'))
     instance.set_ip_addr(instance_new_data.get('PublicIpAddress'))
@@ -637,25 +637,25 @@ def aws_update_instance_info(session,instance):
     instance.set_ip_addr_priv(instance_new_data.get('PrivateIpAddress'))
     statestr = instance_new_data.get('State').get('Name').lower()
     #'terminated' | 'shutting-down' | 'pending' | 'running' | 'stopping' | 'stopped'
-    state = CloudSendInstanceState.UNKNOWN
+    state = KatapultInstanceState.UNKNOWN
     if statestr == "pending":
-        state = CloudSendInstanceState.STARTING
+        state = KatapultInstanceState.STARTING
     elif statestr == "running":
-        state = CloudSendInstanceState.RUNNING
+        state = KatapultInstanceState.RUNNING
     elif statestr == 'stopping':
-        state = CloudSendInstanceState.STOPPING
+        state = KatapultInstanceState.STOPPING
     elif statestr == 'stopped':
-        state = CloudSendInstanceState.STOPPED
+        state = KatapultInstanceState.STOPPED
     elif statestr == 'shutting-down':
-        state = CloudSendInstanceState.TERMINATING
+        state = KatapultInstanceState.TERMINATING
     elif statestr == 'terminated':
-        state = CloudSendInstanceState.TERMINATED
+        state = KatapultInstanceState.TERMINATED
     instance.set_state(state)
     instance.set_data(instance_new_data)
     instance.set_reachability(False)
 
     # check further status
-    if state == CloudSendInstanceState.RUNNING:
+    if state == KatapultInstanceState.RUNNING:
         status_res = ec2_client.describe_instance_status( InstanceIds=[instance.get_id()] )
         status_res = status_res['InstanceStatuses'][0]
         if status_res['InstanceStatus']['Status'] == 'ok' and status_res['SystemStatus']['Status'] == 'ok':
@@ -664,13 +664,13 @@ def aws_update_instance_info(session,instance):
     if instance_new_data.get('PlatformDetails'):
         platform_details = instance_new_data.get('PlatformDetails').lower()
         if 'linux' in platform_details:
-            instance.set_platform(CloudSendPlatform.LINUX)
+            instance.set_platform(KatapultPlatform.LINUX)
         elif 'windows' in platform_details:
-            instance.set_platform(CloudSendPlatform.WINDOWS_WSL)
+            instance.set_platform(KatapultPlatform.WINDOWS_WSL)
         elif 'mock' in platform_details: # to handle old moto version >> will perform the same as the running plaform ...
-            instance.set_platform(CloudSendPlatform.MOCK)
+            instance.set_platform(KatapultPlatform.MOCK)
     else: 
-        instance.set_platform(CloudSendPlatform.UNKNOWN)
+        instance.set_platform(KatapultPlatform.UNKNOWN)
 
     return instance
 
@@ -706,7 +706,7 @@ def aws_grant_admin_rights(session,instance):
         create_role_res = iam_client.create_role(
             RoleName=cs_maestroRoleName,
             AssumeRolePolicyDocument=json.dumps(trust_relationship_policy_another_aws_service),
-            Description='CloudSend Admin Role'
+            Description='Katapult Admin Role'
         )
     except ClientError as error:
         if error.response['Error']['Code'] == 'EntityAlreadyExists':
@@ -859,7 +859,7 @@ def aws_get_suggested_image(session,region):
 # PUBLIC #
 ##########
 
-class AWSCloudSendProviderImpl():
+class AWSKatapultProviderImpl():
 
     def find_instance(self,config):
         session = self.get_session(config)
@@ -930,52 +930,52 @@ class AWSCloudSendProviderImpl():
         return "BOTO3 version {0}".format(boto3.__version__)
 
 
-class AWSCloudSendFatProvider(CloudSendFatProvider,AWSCloudSendProviderImpl):
+class AWSKatapultFatProvider(KatapultFatProvider,AWSKatapultProviderImpl):
 
     def __init__(self, conf):
-        CloudSendFatProvider.__init__(self,conf)
+        KatapultFatProvider.__init__(self,conf)
 
     def version(self):
-        return AWSCloudSendProviderImpl.version(self)
+        return AWSKatapultProviderImpl.version(self)
 
     def find_instance(self,config):
-        return AWSCloudSendProviderImpl.find_instance(self,config)
+        return AWSKatapultProviderImpl.find_instance(self,config)
 
     def update_instance_info(self,instance):
-        AWSCloudSendProviderImpl.update_instance_info(self,instance)
+        AWSKatapultProviderImpl.update_instance_info(self,instance)
 
     def retrieve_keypair(self,region):
-        return AWSCloudSendProviderImpl.retrieve_keypair(self,region)
+        return AWSKatapultProviderImpl.retrieve_keypair(self,region)
 
     def create_keypair(self,region):
-        return AWSCloudSendProviderImpl.create_keypair(self,region)
+        return AWSKatapultProviderImpl.create_keypair(self,region)
 
     def create_instance_objects(self,config):
-        return AWSCloudSendProviderImpl.create_instance_objects(self,config)
+        return AWSKatapultProviderImpl.create_instance_objects(self,config)
 
     def start_instance(self,instance):
-        AWSCloudSendProviderImpl.start_instance(self,instance)
+        AWSKatapultProviderImpl.start_instance(self,instance)
 
     def stop_instance(self,instance):
-        AWSCloudSendProviderImpl.stop_instance(self,instance)
+        AWSKatapultProviderImpl.stop_instance(self,instance)
 
     def terminate_instance(self,instance):
-        AWSCloudSendProviderImpl.terminate_instance(self,instance)
+        AWSKatapultProviderImpl.terminate_instance(self,instance)
 
     def reboot_instance(self,instance):
-        AWSCloudSendProviderImpl.reboot_instance(self,instance)
+        AWSKatapultProviderImpl.reboot_instance(self,instance)
 
     def get_region(self):
-        return AWSCloudSendProviderImpl.get_region(self)
+        return AWSKatapultProviderImpl.get_region(self)
     
     def get_account_id(self):
-        return AWSCloudSendProviderImpl.get_account_id(self)
+        return AWSKatapultProviderImpl.get_account_id(self)
 
     def set_profile(self,profile_name):
-        AWSCloudSendProviderImpl.set_profile(self,profile_name)     
+        AWSKatapultProviderImpl.set_profile(self,profile_name)     
 
     def get_suggested_image(self,region):
-        return AWSCloudSendProviderImpl.get_suggested_image(self,region)
+        return AWSKatapultProviderImpl.get_suggested_image(self,region)
 
     def get_recommended_cpus(self,inst_cfg):
         return self._get_instancetypes_attribute(inst_cfg,"instancetypes-aws.csv","Instance type","Valid cores",list)
@@ -984,52 +984,52 @@ class AWSCloudSendFatProvider(CloudSendFatProvider,AWSCloudSendProviderImpl):
         return self._get_instancetypes_attribute(inst_cfg,"instancetypes-aws.csv","Instance type","Cores",int)
 
 
-class AWSCloudSendLightProvider(CloudSendLightProvider,AWSCloudSendProviderImpl):        
+class AWSKatapultLightProvider(KatapultLightProvider,AWSKatapultProviderImpl):        
 
     def __init__(self, conf):
-        CloudSendLightProvider.__init__(self,conf)
+        KatapultLightProvider.__init__(self,conf)
 
     def version(self):
-        return AWSCloudSendProviderImpl.version(self)
+        return AWSKatapultProviderImpl.version(self)
 
     def find_instance(self,config):
-        return AWSCloudSendProviderImpl.find_instance(self,config)
+        return AWSKatapultProviderImpl.find_instance(self,config)
 
     def update_instance_info(self,instance):
-        AWSCloudSendProviderImpl.update_instance_info(self,instance)
+        AWSKatapultProviderImpl.update_instance_info(self,instance)
 
     def retrieve_keypair(self,region):
-        return AWSCloudSendProviderImpl.retrieve_keypair(self,region)
+        return AWSKatapultProviderImpl.retrieve_keypair(self,region)
 
     def create_keypair(self,region):
-        return AWSCloudSendProviderImpl.create_keypair(self,region)
+        return AWSKatapultProviderImpl.create_keypair(self,region)
 
     def create_instance_objects(self,config):
-        return AWSCloudSendProviderImpl.create_instance_objects(self,config)
+        return AWSKatapultProviderImpl.create_instance_objects(self,config)
 
     def start_instance(self,instance):
-        AWSCloudSendProviderImpl.start_instance(self,instance)
+        AWSKatapultProviderImpl.start_instance(self,instance)
 
     def stop_instance(self,instance):
-        AWSCloudSendProviderImpl.stop_instance(self,instance)
+        AWSKatapultProviderImpl.stop_instance(self,instance)
 
     def terminate_instance(self,instance):
-        AWSCloudSendProviderImpl.terminate_instance(self,instance)
+        AWSKatapultProviderImpl.terminate_instance(self,instance)
 
     def reboot_instance(self,instance):
-        AWSCloudSendProviderImpl.reboot_instance(self,instance)
+        AWSKatapultProviderImpl.reboot_instance(self,instance)
 
     def get_region(self):
-        return AWSCloudSendProviderImpl.get_region(self)
+        return AWSKatapultProviderImpl.get_region(self)
     
     def get_account_id(self):
-        return AWSCloudSendProviderImpl.get_account_id(self)
+        return AWSKatapultProviderImpl.get_account_id(self)
 
     def set_profile(self,profile_name):
-        AWSCloudSendProviderImpl.set_profile(self,profile_name)   
+        AWSKatapultProviderImpl.set_profile(self,profile_name)   
 
     def get_suggested_image(self,region):
-        return AWSCloudSendProviderImpl.get_suggested_image(self,region)
+        return AWSKatapultProviderImpl.get_suggested_image(self,region)
 
     def grant_admin_rights(self,instance):
         session = self.get_session(instance)

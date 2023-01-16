@@ -1,28 +1,28 @@
 from enum import IntFlag
 from abc import ABC , abstractmethod
-import cloudsend.utils as cloudsendutils
+import katapult.utils as katapultutils
 import json
 import copy
 import os
 import re
 import ntpath , posixpath
-from cloudsend.attrs import *
+from katapult.attrs import *
 
-cs_keypairName         = 'cloudsend-keypair'
-cs_secGroupName        = 'cloudsend-sec-group-allow-ssh'
-cs_secGroupNameMaestro = 'cloudsend-sec-group-allow-maestro'
-cs_bucketName          = 'cloudsend-bucket'
-cs_vpcName             = 'cloudsend-vpc'
-cs_instanceNameRoot    = 'cloudsend-instance'
-cs_instanceMaestro     = 'cloudsend-maestro'
-cs_environmentNameRoot = 'cloudsend-env'
-cs_maestroProfileName  = 'cloudsend-maestro-profile'
-cs_maestroRoleName     = 'cloudsend-maestro-role'
-cs_maestroPolicyName   = 'cloudsend-maestro-policy'
+cs_keypairName         = 'katapult-keypair'
+cs_secGroupName        = 'katapult-sec-group-allow-ssh'
+cs_secGroupNameMaestro = 'katapult-sec-group-allow-maestro'
+cs_bucketName          = 'katapult-bucket'
+cs_vpcName             = 'katapult-vpc'
+cs_instanceNameRoot    = 'katapult-instance'
+cs_instanceMaestro     = 'katapult-maestro'
+cs_environmentNameRoot = 'katapult-env'
+cs_maestroProfileName  = 'katapult-maestro-profile'
+cs_maestroRoleName     = 'katapult-maestro-role'
+cs_maestroPolicyName   = 'katapult-maestro-policy'
 
 # NEW > STARTED > ASSIGNED > DEPLOYED > ( RUNNING | WATCHING <-> IDLE )
 
-class CloudSendProviderState(IntFlag):
+class KatapultProviderState(IntFlag):
     NEW           = 0  # provider created
     STARTED       = 1  # provider started
     ASSIGNED      = 2  # provider assigned jobs
@@ -61,10 +61,10 @@ class bcolors:
     CBEIGEBG  = '\33[46m'
     CWHITEBG  = '\33[47m'        
 
-class CloudSendError(Exception):
+class KatapultError(Exception):
     pass
 
-class CloudSendInstanceState(IntFlag):
+class KatapultInstanceState(IntFlag):
     UNKNOWN     = 0
     STARTING    = 1  # instance starting
     RUNNING     = 2  # instance running
@@ -75,7 +75,7 @@ class CloudSendInstanceState(IntFlag):
     ANY         = 32 + 16 + 8 + 4 + 2 + 1     
 
 
-class CloudSendProcessState(IntFlag):
+class KatapultProcessState(IntFlag):
 #    FOO = 100
     CREATED   = 0  # when created
     WAIT      = 1  # waiting for bootstraping
@@ -87,14 +87,14 @@ class CloudSendProcessState(IntFlag):
     UNKNOWN   = 64 # set != 0 otherwise it may test positive when watching
     ANY       = 64 + 32 + 16 + 8 + 4 + 2 + 1 
 
-class CloudSendPlatform(IntFlag):
+class KatapultPlatform(IntFlag):
     UNKNOWN     = 0
     LINUX       = 1
     WINDOWS     = 2
     WINDOWS_WSL = 3
     MOCK        = 4 # instance = local machine (for mocking/testing)
 
-class CloudSendInstance():
+class KatapultInstance():
 
     def __init__(self,config,id,proprietaryData=None):
         # instance region
@@ -109,7 +109,7 @@ class CloudSendInstance():
         self._ip_addr_priv = None
         self._dns_addr_priv = None
         # state
-        self._state    = CloudSendProcessState.CREATED
+        self._state    = KatapultProcessState.CREATED
         # the config the instance has been created on
         self._config   = config 
         # dict data associated with it (AWS response data e.g.)
@@ -120,7 +120,7 @@ class CloudSendInstance():
         self._envs     = dict()
         # invalid
         self._invalid  = False
-        self._platform = CloudSendPlatform.UNKNOWN
+        self._platform = KatapultPlatform.UNKNOWN
         self._reachability = False
 
     def get_region(self):
@@ -170,26 +170,26 @@ class CloudSendInstance():
         return processes_res
 
     def get_home_dir(self,absolute=True):
-        if self._platform == CloudSendPlatform.LINUX or self._platform == CloudSendPlatform.WINDOWS_WSL:
+        if self._platform == KatapultPlatform.LINUX or self._platform == KatapultPlatform.WINDOWS_WSL:
             return '/home/' + self.get_config('img_username') if absolute else '%HOME'
-        elif self._platform == CloudSendPlatform.WINDOWS:
+        elif self._platform == KatapultPlatform.WINDOWS:
             return 'C:\>' + self.get_config('img_username') if absolute else '%HOME%'
-        elif self._platform == CloudSendPlatform.UNKNOWN: # those are local instances (used by Mock/Testing)
+        elif self._platform == KatapultPlatform.UNKNOWN: # those are local instances (used by Mock/Testing)
             return os.path.expanduser( '~' )
-        elif self._platform == CloudSendPlatform.MOCK: # those are local instances (used by Mock/Testing)
+        elif self._platform == KatapultPlatform.MOCK: # those are local instances (used by Mock/Testing)
             return os.path.join( os.getcwd() , 'tests_tmp' , 'instances' , self.get_name() )
 
     def get_global_dir(self):
         return self.path_join( self.get_home_dir() , 'run' )
 
     def path(self):
-        if self._platform == CloudSendPlatform.LINUX or self._platform == CloudSendPlatform.WINDOWS_WSL:
+        if self._platform == KatapultPlatform.LINUX or self._platform == KatapultPlatform.WINDOWS_WSL:
             return posixpath
-        elif self._platform == CloudSendPlatform.WINDOWS:
+        elif self._platform == KatapultPlatform.WINDOWS:
             return ntpath
-        elif self._platform == CloudSendPlatform.UNKNOWN:
+        elif self._platform == KatapultPlatform.UNKNOWN:
             return os.path
-        elif self._platform == CloudSendPlatform.MOCK:
+        elif self._platform == KatapultPlatform.MOCK:
             return os.path
 
     def path_join(self,*args):
@@ -232,9 +232,9 @@ class CloudSendInstance():
 
 
     # def path_sep(self):
-    #     if self._platform == CloudSendPlatform.LINUX or self._platform == CloudSendPlatform.WINDOWS_WSL:
+    #     if self._platform == KatapultPlatform.LINUX or self._platform == KatapultPlatform.WINDOWS_WSL:
     #         return '/'
-    #     elif self._platform == CloudSendPlatform.WINDOWS:
+    #     elif self._platform == KatapultPlatform.WINDOWS:
     #         return '\\'
 
     def set_ip_addr(self,value):
@@ -333,20 +333,20 @@ class CloudSendInstance():
         # return "{0}: ID = {1} , NAME = {2} , IP = {3} , CPUS = {4}".format(type(self).__name__,self._id,self._name,self._ip_addr,self.get_cpus())
         return "{0}: NAME = {1} , IP = {2}".format(type(self).__name__,self._name,self._ip_addr)
 
-class CloudSendInstanceProxy(CloudSendInstance):
+class KatapultInstanceProxy(KatapultInstance):
 
     def __init__(self,name,config=None):
         self._name = name
         self._config = config
 
 
-class CloudSendEnvironment():
+class KatapultEnvironment():
 
     def __init__(self,projectName,env_config):
         self._config   = env_config
         self._project  = projectName
-        _env_obj       = cloudsendutils.compute_environment_object(env_config)
-        self._hash     = cloudsendutils.compute_environment_hash(_env_obj)
+        _env_obj       = katapultutils.compute_environment_object(env_config)
+        self._hash     = katapultutils.compute_environment_hash(_env_obj)
         if not self._config.get('name'):
             self._name = cs_environmentNameRoot
 
@@ -373,7 +373,7 @@ class CloudSendEnvironment():
         return self._config
 
     def get_env_obj(self):
-        _env_obj = cloudsendutils.compute_environment_object(self._config)
+        _env_obj = katapultutils.compute_environment_object(self._config)
         return _env_obj 
 
     def get_hash(self):
@@ -383,7 +383,7 @@ class CloudSendEnvironment():
         return json.dumps(self.get_env_obj())          
 
     def deploy(self,instance):
-        return CloudSendDeployedEnvironment(self,instance)
+        return KatapultDeployedEnvironment(self,instance)
 
     def __repr__(self):
         return "{0}: NAME = {1} , HASH = {2}".format(type(self).__name__,self._name,self._hash)
@@ -391,7 +391,7 @@ class CloudSendEnvironment():
     def __str__(self):
         return "{0}: NAME = {1} , HASH = {2}".format(type(self).__name__,self._name,self._hash)
 
-class CloudSendEnvironmentProxy(CloudSendEnvironment):
+class KatapultEnvironmentProxy(KatapultEnvironment):
 
     def __init__(self,hash,config=None):
         self._hash = hash
@@ -400,7 +400,7 @@ class CloudSendEnvironmentProxy(CloudSendEnvironment):
 
 # "Temporary" objects used when starting scripts      
 
-class CloudSendDeployedEnvironment(CloudSendEnvironment):
+class KatapultDeployedEnvironment(KatapultEnvironment):
 
     # constructor by copy...
     def __init__(self, env, instance):
@@ -427,23 +427,23 @@ class CloudSendDeployedEnvironment(CloudSendEnvironment):
         # replace __REQUIREMENTS_TXT_LINK__ with the actual requirements.txt path (dependent of config and env hash)
         # the file needs to be absolute
         requirements_txt_path = self._instance.path_join(self._path,'requirements.txt')
-        _env_obj = cloudsendutils.update_requirements_path(_env_obj,requirements_txt_path)
+        _env_obj = katapultutils.update_requirements_path(_env_obj,requirements_txt_path)
         return json.dumps(_env_obj)  
 
 
-class CloudSendJob():
+class KatapultJob():
 
     def __init__(self,job_cfg,rank):
         self._config    = job_cfg
         self._rank      = rank
-        self._hash      = cloudsendutils.compute_job_hash(self._config)
-        self._id        = cloudsendutils.generate_unique_id() + '_' + str(rank)
+        self._hash      = katapultutils.compute_job_hash(self._config)
+        self._id        = katapultutils.generate_unique_id() + '_' + str(rank)
         self._env       = None
         self._instance  = None
         self._deployed = [ ]
         if (not 'input_files' in self._config) or not 'output_files' in self._config or not isinstance(self._config['input_files'],list) or not isinstance(self._config['output_files'],list):
             print("\n\n\033[91mConfiguration requires an input and output file names\033[0m\n\n")
-            raise CloudSendError() 
+            raise KatapultError() 
 
     def attach_env(self,env):
         self._env = env 
@@ -491,7 +491,7 @@ class CloudSendJob():
         # dpl_job  = self.get_deployed_job(instance)
         # if dpl_job:
         #     return dpl_job
-        dpl_job  = CloudSendDeployedJob(self,dpl_env)
+        dpl_job  = KatapultDeployedJob(self,dpl_env)
         if add_permanently:
             self._deployed.append(dpl_job)
         return dpl_job
@@ -499,7 +499,7 @@ class CloudSendJob():
     def has_completed(self):
         for dpl_job in self._deployed:
             for process in dpl_job.get_processes():
-                if process.get_state() == CloudSendProcessState.DONE:
+                if process.get_state() == KatapultProcessState.DONE:
                     return True
         return False
 
@@ -548,7 +548,7 @@ class CloudSendJob():
         return "{0}: ID = {1} , HASH = {2} , INSTANCE = {3} , ENV = {4}".format(type(self).__name__,self.get_id(),self.get_hash(),self.get_instance(),self.get_env().get_name() if self.get_env() else None)
 
 
-class CloudSendJobProxy(CloudSendJob):
+class KatapultJobProxy(KatapultJob):
 
     def __init__(self,id,config=None):
         self._id     = id 
@@ -561,7 +561,7 @@ class CloudSendJobProxy(CloudSendJob):
 # We proxy all parent methods instead of using inheritance
 # this allows to keep the same behavior while keeping the link and sharing memory objects
 
-class CloudSendDeployedJob(CloudSendJob):
+class KatapultDeployedJob(KatapultJob):
 
     def __init__(self,job,dpl_env):
         #super().__init__( job._config )
@@ -573,7 +573,7 @@ class CloudSendDeployedJob(CloudSendJob):
         self._env       = dpl_env
         self._instance  = dpl_env.get_instance()
         self._path      = self._instance.path_join( dpl_env.get_path() , self.get_hash() )
-        self._command   = cloudsendutils.compute_job_command(self._instance,self._path,self._job._config)
+        self._command   = katapultutils.compute_job_command(self._instance,self._path,self._job._config)
 
     def attach_process(self,process):
         self._processes.append(process)
@@ -585,7 +585,7 @@ class CloudSendDeployedJob(CloudSendJob):
         return self._command
 
     def attach_env(self,env):
-        raise CloudSendError('Can not attach env to deployed job')
+        raise KatapultError('Can not attach env to deployed job')
 
     # proxied
     def get_rank(self):
@@ -624,21 +624,21 @@ class CloudSendDeployedJob(CloudSendJob):
         return processes_res
 
     def deploy(self,dpl_env):
-        raise CloudSendError('Can not deploy a deployed job')
+        raise KatapultError('Can not deploy a deployed job')
 
     def set_instance(self,instance):
-        raise CloudSendError('Can not set the instance of a deployed job')
+        raise KatapultError('Can not set the instance of a deployed job')
 
 
-class CloudSendProcess():
+class KatapultProcess():
 
     def __init__(self,dpl_job,batch,pid=None):
         self._job   = dpl_job
-        self._uid   = cloudsendutils.generate_unique_id() 
+        self._uid   = katapultutils.generate_unique_id() 
         self._pid   = pid
         self._pid_child    = None
         self._batch = batch
-        self._state = CloudSendProcessState.UNKNOWN
+        self._state = KatapultProcessState.UNKNOWN
         self._active = True
         self._aborted_reason = None
         self._substate = None
@@ -707,44 +707,44 @@ class CloudSendProcess():
         return self._job.get_instance()
 
     def str_simple(self):
-        if self._state != CloudSendProcessState.DONE and self._state != CloudSendProcessState.RUNNING:
+        if self._state != KatapultProcessState.DONE and self._state != KatapultProcessState.RUNNING:
             details = self._aborted_reason if self._aborted_reason else self._substate
         else:
             details = None
 
         if self._batch:
             if details:
-                return "CloudSendProcess: UID = {0} , PID = {1} , PID(child) = {2} , BATCH = {3} , STATE = {4} ({5})".format(self._uid,str(self._pid).rjust(5),str(self._pid_child).rjust(5),self._batch.get_uid(),self._state.name,details)
+                return "KatapultProcess: UID = {0} , PID = {1} , PID(child) = {2} , BATCH = {3} , STATE = {4} ({5})".format(self._uid,str(self._pid).rjust(5),str(self._pid_child).rjust(5),self._batch.get_uid(),self._state.name,details)
             else:
-                return "CloudSendProcess: UID = {0} , PID = {1} , PID(child) = {2} , BATCH = {3} , STATE = {4}".format(self._uid,str(self._pid).rjust(5),str(self._pid_child).rjust(5),self._batch.get_uid(),self._state.name)
+                return "KatapultProcess: UID = {0} , PID = {1} , PID(child) = {2} , BATCH = {3} , STATE = {4}".format(self._uid,str(self._pid).rjust(5),str(self._pid_child).rjust(5),self._batch.get_uid(),self._state.name)
         else:
             if details:
-                return "CloudSendProcess: UID = {0} , PID = {1} , PID(child) = {2} , STATE = {3} ({4})".format(self._uid,str(self._pid).rjust(5),str(self._pid_child).rjust(5),self._state.name,details)
+                return "KatapultProcess: UID = {0} , PID = {1} , PID(child) = {2} , STATE = {3} ({4})".format(self._uid,str(self._pid).rjust(5),str(self._pid_child).rjust(5),self._state.name,details)
             else:
-                return "CloudSendProcess: UID = {0} , PID = {1} , PID(child) = {2} , STATE = {3}".format(self._uid,str(self._pid).rjust(5),str(self._pid_child).rjust(5),self._state.name)
+                return "KatapultProcess: UID = {0} , PID = {1} , PID(child) = {2} , STATE = {3}".format(self._uid,str(self._pid).rjust(5),str(self._pid_child).rjust(5),self._state.name)
 
     def __repr__(self):
-        if self._state != CloudSendProcessState.DONE and self._state != CloudSendProcessState.RUNNING:
+        if self._state != KatapultProcessState.DONE and self._state != KatapultProcessState.RUNNING:
             details = self._aborted_reason if self._aborted_reason else self._substate
         else:
             details = None
         if details:
-            return "CloudSendProcess: job = {0} , UID = {1} , PID = {2} , PID(child) = {3} , STATE = {4} ({5})".format(self._job,self._uid,str(self._pid).rjust(5),str(self._pid_child).rjust(5),self._state.name,details)
+            return "KatapultProcess: job = {0} , UID = {1} , PID = {2} , PID(child) = {3} , STATE = {4} ({5})".format(self._job,self._uid,str(self._pid).rjust(5),str(self._pid_child).rjust(5),self._state.name,details)
         else:
-            return "CloudSendProcess: job = {0} , UID = {1} , PID = {2} , PID(child) = {3} , STATE = {4}".format(self._job,self._uid,str(self._pid).rjust(5),str(self._pid_child).rjust(5),self._state.name)
+            return "KatapultProcess: job = {0} , UID = {1} , PID = {2} , PID(child) = {3} , STATE = {4}".format(self._job,self._uid,str(self._pid).rjust(5),str(self._pid_child).rjust(5),self._state.name)
          
     def __str__(self):
         return self.__repr__()
 
-class CloudSendRunSession():
+class KatapultRunSession():
 
     def __init__(self,number):
         self._number  = number 
-        self._id      = cloudsendutils.generate_unique_id() + '_' + str(number)
+        self._id      = katapultutils.generate_unique_id() + '_' + str(number)
         self._batches = []
 
     def create_batch(self):
-        batch = CloudSendBatch(self)
+        batch = KatapultBatch(self)
         self._batches.append(batch)
         return batch
 
@@ -808,16 +808,16 @@ class CloudSendRunSession():
                 return batch
         return None
 
-class CloudSendRunSessionProxy(CloudSendRunSession):
+class KatapultRunSessionProxy(KatapultRunSession):
 
     def __init__(self,session_id):
         self._id     = session_id
         self._number = int( re.sub(r'[0-9a-zA-Z]+_','',self._id) )
 
-class CloudSendBatch():
+class KatapultBatch():
 
     def __init__(self,run_session):
-        self._uid      = cloudsendutils.generate_unique_id()
+        self._uid      = katapultutils.generate_unique_id()
         self._session  = run_session
         self._instances_processes = dict()
 
@@ -828,7 +828,7 @@ class CloudSendBatch():
         return self._session
 
     def create_process(self,dpl_job):
-        process   = CloudSendProcess( dpl_job , self )
+        process   = KatapultProcess( dpl_job , self )
         instance  = dpl_job.get_instance()
         inst_name = instance.get_name()
         if not inst_name in self._instances_processes:
@@ -867,7 +867,7 @@ class CloudSendBatch():
     def mark_aborted(self,instance,state_mask,reason=None):
         for process in self.get_active_processes(instance):
             if process.get_state() & state_mask:
-                process.set_state(CloudSendProcessState.ABORTED)
+                process.set_state(KatapultProcessState.ABORTED)
                 if reason:
                     process.set_aborted_reason(reason)
 
@@ -878,7 +878,7 @@ def init_instance_name(instance_config):
         if instance_config.get('dev',False)==True:
             append_str = '' 
         else:
-            append_str = '-' + cloudsendutils.compute_instance_hash(instance_config)
+            append_str = '-' + katapultutils.compute_instance_hash(instance_config)
 
         if 'rank' not in instance_config:
             debug(1,"\033[93mDeveloper: you need to set dynamically a 'rank' attribute in the config for the new instance\033[0m")

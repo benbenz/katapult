@@ -1,6 +1,6 @@
 # Description
 
-CloudSend is a Python package that allows you to run any script on a cloud service (for now AWS only).
+Katapult is a Python package that allows you to run any script on a cloud service (for now AWS only).
 
 # Features
 
@@ -9,12 +9,12 @@ CloudSend is a Python package that allows you to run any script on a cloud servi
 - Handles PyPi , Conda/Mamba, Apt-get and Julia environments
 - Concurrent instance support
 - Handles disconnections from instances, including stopped or terminated instances
-- Handles interruption of CloudSend, with state recovery
+- Handles interruption of Katapult, with state recovery
 - Runs locally or on a remote instance, with 'watcher' functionality 
 
 | Important Note |
 | --- |
-| CloudSend helps you easily create instances on AWS so that you can focus on your scripts. It is important to realize that it can and **will likely generate extra costs**. If you want to minimize those costs, activate the `eco` mode in the configuration or make sure you monitor the resources created by CloudSend. Those include: <ul><li>VPCs</li><li>Subnets</li><li>Security Groups</li><li>Instances</li><li>Device Mappings / Disks</li><li>Policies &amp; Roles</li><li>KeyPairs</li></ul>|
+| Katapult helps you easily create instances on AWS so that you can focus on your scripts. It is important to realize that it can and **will likely generate extra costs**. If you want to minimize those costs, activate the `eco` mode in the configuration or make sure you monitor the resources created by Katapult. Those include: <ul><li>VPCs</li><li>Subnets</li><li>Security Groups</li><li>Instances</li><li>Device Mappings / Disks</li><li>Policies &amp; Roles</li><li>KeyPairs</li></ul>|
 
 # Pre-requisites
 
@@ -63,8 +63,8 @@ aws_secret_access_key = YOUR_SECRET_ACCESS_KEY
 
 ## Setting up a separate user with least permissions (manually) 
 
-1. In the AWS web console, in the IAM service, create a group 'cloudsend-users' with `AmazonEC2FullAccess` and `IAMFullAccess` permissions
-2. In the AWS web console, in the IAM service, create a user USERNAME attached to the 'cloudsend-users' group:
+1. In the AWS web console, in the IAM service, create a group 'katapult-users' with `AmazonEC2FullAccess` and `IAMFullAccess` permissions
+2. In the AWS web console, in the IAM service, create a user USERNAME attached to the 'katapult-users' group:
 ### Step 1
 ![add user 1](./images/adduser1.jpg)
 ### Step 2
@@ -83,7 +83,7 @@ aws_secret_access_key = YOUR_SECRET_ACCESS_KEY
 region = eu-west-3
 output = json
 
-[profile cloudsend]
+[profile katapult]
 region = eu-west-3
 output = json
 ```
@@ -95,12 +95,12 @@ output = json
 aws_access_key_id = YOUR_ACCESS_KEY_ID
 aws_secret_access_key = YOUR_SECRET_ACCESS_KEY
 
-[cloudsend]
+[katapult]
 aws_access_key_id = YOU_PROFILE_ACCESS_KEY_ID
 aws_secret_access_key = YOUR_PROFILE_SECRET_ACCESS_KEY
 ```
 
-4. add the 'profile' : 'cloudsend_USERNAME' to the configuration
+4. add the 'profile' : 'katapult_USERNAME' to the configuration
 
 ```python
 config = {
@@ -110,7 +110,7 @@ config = {
     ################################################################################
 
     'project'      : 'test' ,                             # this will be concatenated with the instance hashes (if not None) 
-    'profile'      : 'cloudsend' ,
+    'profile'      : 'katapult' ,
     ...
 ```
 
@@ -162,9 +162,9 @@ cp examples/config.example.py config.py
 #
 
 # to run with pip
-python3 -m cloudsend.demo config
+python3 -m katapult.demo config
 # to run with pip with reset (maestro and instances)
-python3 -m cloudsend.demo config reset
+python3 -m katapult.demo config reset
 # to run with poetry
 poetry run demo config
 # to run with poetry with reset (maestro and the instances)
@@ -194,7 +194,7 @@ config = {
     'auto_stop'    : True ,                               # will automatically stop the instances and the maestro, once the jobs are done
     'provider'     : 'aws' ,                              # the provider name ('aws' | 'azure' | ...)
     'job_assign'   : None ,                               # algorithm used for job assignation / task scheduling ('random' | 'multi_knapsack')
-    'recover'      : True ,                               # if True, CloudSend will always save the state and try to recover this state on the next execution
+    'recover'      : True ,                               # if True, Katapult will always save the state and try to recover this state on the next execution
     'print_deploy' : False ,                              # if True, this will cause the deploy stage to print more (and lock)
     'mutualize_uploads' : True ,                          # adjusts the directory structure of the uploads ... (False = per job or True = global/mutualized)
 
@@ -320,20 +320,20 @@ config = {
 # Python API
 
 ```python
-class CloudSendLightProvider(ABC):
-class CloudSendFatProvider(ABC):
+class KatapultLightProvider(ABC):
+class KatapultFatProvider(ABC):
 
     def debug(self,level,*args,**kwargs):
 
     # start the provider: creates the instances
-    # if reset = True, CloudSend forces a process cleanup as well as more re-uploads
+    # if reset = True, Katapult forces a process cleanup as well as more re-uploads
     def start(self,reset):
 
     # deploy all materials (environments, files, scripts etc.)
     def deploy(self):
 
     # run the jobs
-    # returns a CloudSendRunSession
+    # returns a KatapultRunSession
     def run(self,wait=False):
 
     # wait for the processes to reach a state
@@ -386,23 +386,23 @@ class CloudSendFatProvider(ABC):
 def get_client(provider='aws',maestro='local')
 ```
 
-# CloudSend usage
+# Katapult usage
 
 ## Python programmatic use
 
-Note: this demo works the same way, whether CloudSend runs locally or remotely
+Note: this demo works the same way, whether Katapult runs locally or remotely
 
 ```python
 
-from cloudsend      import provider as cloudsend
-from cloudsend.core import CloudSendProcessState
+from katapult      import provider as katapult
+from katapult.core import KatapultProcessState
 import asyncio 
 
 # load config
 config = __import__(config).config
 
 # create provider: this loads the config
-provider = cloudsend.get_client(config)
+provider = katapult.get_client(config)
 
 # start the provider: this attempts to create the instances
 await provider.start()
@@ -414,7 +414,7 @@ await provider.deploy()
 run_session = await provider.run()
 
 # wait for the active proccesses to be done or aborted:
-await provider.wait(CloudSendProcessState.DONE|CloudSendProcessState.ABORTED)
+await provider.wait(KatapultProcessState.DONE|KatapultProcessState.ABORTED)
 
 # you can get the state of all jobs this way:
 await provider.get_jobs_states()
@@ -431,7 +431,7 @@ await provider.fetch_results('./tmp')
 
 ## CLI use
 
-Note: the commands below work the same way, whether CloudSend runs locally or remotely
+Note: the commands below work the same way, whether Katapult runs locally or remotely
 
 ### with Poetry
 
@@ -458,21 +458,21 @@ poetry run cli shutdown
 
 ```bash
 # init the client with global params and add instances, envs and jobs (if any)
-python3 -m cloudsend.cli init config.py
+python3 -m katapult.cli init config.py
 # add more jobs
-python3 -m cloudsend.cli cfg_add_jobs config_jobs.py
+python3 -m katapult.cli cfg_add_jobs config_jobs.py
 # add more stuff
-python3 -m cloudsend.cli cfg_add_config config_more.py
+python3 -m katapult.cli cfg_add_config config_more.py
 # deploy the material onto the instances
-python3 -m cloudsend.cli deploy
+python3 -m katapult.cli deploy
 # run the jobs
-python3 -m cloudsend.cli run
+python3 -m katapult.cli run
 # wait for the jobs to be done
-python3 -m cloudsend.cli wait
+python3 -m katapult.cli wait
 # get the results
-python3 -m cloudsend.cli fetch_results
+python3 -m katapult.cli fetch_results
  # shutdown the daemon
-python3 -m cloudsend.cli shutdown
+python3 -m katapult.cli shutdown
 ```
 
 # Contributing
