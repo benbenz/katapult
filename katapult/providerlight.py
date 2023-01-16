@@ -277,9 +277,8 @@ class KatapultLightProvider(KatapultProvider,ABC):
 
         if config.get('jobs'):
             for i , job_cfg in enumerate(config.get('jobs')):
-                job = KatapultJob(job_cfg,i)
-                if job.get_config('run_script'):
-                    run_script = job.get_config('run_script')  
+                if job_cfg.get('run_script'):
+                    run_script = job_cfg.get('run_script')  
                     ref_file0  = run_script
                     args       = ref_file0.split(' ')
                     if args and len(args)>0:
