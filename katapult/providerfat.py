@@ -21,6 +21,8 @@ random.seed()
 
 SLEEP_PERIOD = 15
 
+RUNNER_FILES = ['env_check.py','env_state.sh','config.py','bootstrap.sh','run.sh','microrun.sh','state.sh','tail.sh','getpid.sh','reset.sh','kill.sh']
+
 class KatapultProviderStateWaitMode(IntFlag):
     NO_WAIT       = 0  # provider dont wait for state
     WAIT          = 1  # provider wait for state 
@@ -86,7 +88,7 @@ class KatapultFatProvider(KatapultProvider,ABC):
 
         self._save_config() 
 
-    def get_objects(self):
+    async def get_objects(self):
         return {
             'instances' : self._instances ,
             'environments' : self._environments ,
@@ -230,7 +232,7 @@ class KatapultFatProvider(KatapultProvider,ABC):
 
             # change dir to global dir (should be done once)
             await ftp_client.chdir(global_path)
-            for file in ['env_check.py','env_state.sh','config.py','bootstrap.sh','run.sh','microrun.sh','state.sh','tail.sh','getpid.sh','reset.sh','kill.sh']:
+            for file in RUNNER_FILES:
                 await self.sftp_put_remote_file(ftp_client,file) 
 
             self.debug(1,"Installing PyYAML for newly created instance ...")

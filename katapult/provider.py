@@ -727,6 +727,10 @@ class KatapultProvider(ABC):
     async def finalize(self):
         pass 
 
+    @abstractmethod
+    async def get_objects(self):
+        pass 
+
 # COMM between light and fat client
 def stream_dump(obj):
     if isinstance(obj,list):

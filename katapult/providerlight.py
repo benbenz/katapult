@@ -757,12 +757,16 @@ class KatapultLightProvider(KatapultProvider,ABC):
         return session_out_dir
 
     async def finalize(self):
-        # triggers maestro::print_aborted_logs
+        # triggers maestro::finalize
         try:
             await self._exec_maestro_command("finalize")
         # this will likely happen if auto_stop is one
         except asyncssh.misc.ConnectionLost as cle:
             pass
+
+    async def get_objects(self):
+        # triggers maestro::get_objects
+        await self._exec_maestro_command("get_objects")
 
     def _get_or_create_instance(self,instance):
         instance , created = super()._get_or_create_instance(instance)

@@ -174,7 +174,7 @@ class KatapultInstance():
             return '/home/' + self.get_config('img_username') if absolute else '%HOME'
         elif self._platform == KatapultPlatform.WINDOWS:
             return 'C:\>' + self.get_config('img_username') if absolute else '%HOME%'
-        elif self._platform == KatapultPlatform.UNKNOWN: # those are local instances (used by Mock/Testing)
+        elif self._platform == KatapultPlatform.UNKNOWN: 
             return os.path.expanduser( '~' )
         elif self._platform == KatapultPlatform.MOCK: # those are local instances (used by Mock/Testing)
             return os.path.join( os.getcwd() , 'tests_tmp' , 'instances' , self.get_name() )

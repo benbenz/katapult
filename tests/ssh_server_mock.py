@@ -13,6 +13,10 @@ from asyncio.subprocess import create_subprocess_exec, PIPE
 import pytest
 import asyncssh
 
+from io import StringIO 
+
+MKCFG_REUPLOAD = 'reupload'
+
 
 class NoAuthSSHServer(asyncssh.SSHServer):
     """An ssh server without authentification."""
@@ -36,18 +40,28 @@ class MySFTPServer(asyncssh.SFTPServer):
         #os.makedirs(root, exist_ok=True)
         #super().__init__(chan, chroot=root)            
         super().__init__(chan)
+        self._files = dict()
 
-    def  open(self, path, pflags, attrs):
-        print("open",path)
-        super().open(path, pflags, attrs)
+    def open(self, path, pflags, attrs):
+        #print("open",path)
+        iofile = StringIO()
+        #return super().open(path, pflags, attrs)
+        self._files[path] = iofile
+        return iofile
 
     def close(self, file_obj):
-        print("close",file_obj)
+        #print("close",file_obj)
         super().close(file_obj)
 
-    def  read(self,file_obj, offset, size):
-        print("read",file_obj)
+    def read(self, file_obj, offset, size):
+        #print("read",file_obj)
         super().read(file_obj,offset, size)
+
+    def write(self, file_obj, offset, data):
+        #print("write",file_obj)
+        if isinstance(data,bytearray) or isinstance(data,bytes):
+            data = data.decode()
+        super().write(file_obj,offset, data)
 
 @asynccontextmanager
 async def simple_ssh_server(handler, port=0):
@@ -77,7 +91,7 @@ async def simple_ssh_server(handler, port=0):
         if socket.family == AF_INET
     )
     async with server:
-        yield port , private_key
+        yield port , private_key , acceptor
 
 
 @pytest.fixture(scope="function")
@@ -107,19 +121,55 @@ async def ssh_mock_server():
 
     def get_return_value(process):
         # get the return_value set by ssh_mock_server.return_value (from the test)
+        # always force re-upload
+        cmd = process.command
+
+        # re-upload query
+        # TODO: add more control/granularity
+        if 'ready' in cmd and '"ok"' in cmd:
+            if mock.config.get(MKCFG_REUPLOAD,True):
+                return "not_ok"
+            else:
+                return "ok"
+        # pyyaml install
+        elif cmd.strip() == 'pip install pyyaml':
+            return ""
+        # making .sh executables
+        elif 'chmod +x' in cmd:
+            return ""
+        # EOL thing.            
+        elif "sed -i -e 's/\r$//' " in cmd:
+            return ""
+        # configure the environment
+        elif 'run/config.py' in cmd:
+            return ""
+        # bootstrap env
+        elif 'generate_envs.sh' in cmd:
+            return ""
+        # reset directory / ready
+        elif 'mkdir' in cmd and 'rm' in cmd and 'ready' in cmd:
+            return ""
+        # misc. directory manip
+        elif 'mkdir' in cmd:
+            return ""
+
         return mock(process.command)
 
     def handler(process):
         #value = mock(process.get_command())
 
         #value = mock(process.command)
+        sftp_server = mock.sftp_server
+
         value = get_return_value(process)
         process.stdout.write(value)
         process.exit(0)
 
-    async with simple_ssh_server(handler) as port_private_key:
-        port = port_private_key[0]
-        private_key = port_private_key[1]
+    async with simple_ssh_server(handler) as server_stuff:
+        port = server_stuff[0]
+        private_key = server_stuff[1]
+        acceptor = server_stuff[2]
+        sftp_server = acceptor._options.sftp_factory
         ssh_options = [
             "-o UserKnownHostsFile=/dev/null",
             "-o StrictHostKeyChecking=no",
@@ -143,8 +193,18 @@ async def ssh_mock_server():
                 **kwargs,
             )
 
+        def file_exists(path):
+            return path in mock.config
+
+        def num_files():
+            return len(mock.config.values())
+
         mock.run_mock_shell = run_mock_shell
-        mock.port = port 
-        mock.private_key = private_key
-        mock.hostname = 'localhost'
+        mock.file_exists    = file_exists
+        mock.port           = port 
+        mock.private_key    = private_key
+        mock.hostname       = 'localhost'
+        mock.sftp_server    = sftp_server
+        mock.config         = dict()
+        
         yield mock
