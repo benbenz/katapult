@@ -74,9 +74,7 @@ async def test_client_deploy(ec2,sts,ssh_mock_server):
         await cs.start()
 
         ssh_mock_server.return_value = "test"
-        port = ssh_mock_server.port
-        priv = ssh_mock_server.private_key
-        cs.set_ssh_server('localhost',port,priv)
+        cs.set_mock_server(ssh_mock_server)
 
         await cs.deploy()
 

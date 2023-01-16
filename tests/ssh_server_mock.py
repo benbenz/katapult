@@ -146,4 +146,5 @@ async def ssh_mock_server():
         mock.run_mock_shell = run_mock_shell
         mock.port = port 
         mock.private_key = private_key
+        mock.hostname = 'localhost'
         yield mock

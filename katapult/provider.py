@@ -54,9 +54,7 @@ class KatapultProvider(ABC):
 
         self._save_config()
 
-        self._ssh_hostname = None 
-        self._ssh_port     = None
-        self._ssh_privkey  = None
+        self._mock_server = None 
 
     def debug_set_prefix(self,value):
         self.DBG_PREFIX = value
@@ -263,10 +261,8 @@ class KatapultProvider(ABC):
             await self.hard_reset_instance(instance)
             await self._wait_for_instance(instance) 
 
-    def set_ssh_server( self , hostname , port , privkey ):
-        self._ssh_hostname = hostname 
-        self._ssh_port     = port
-        self._ssh_privkey  = privkey
+    def set_mock_server( self , mock_server ):
+        self._mock_server  = mock_server 
 
     async def _connect_to_instance(self,instance,**kwargs):
         # ssh into instance and run the script 
@@ -275,8 +271,8 @@ class KatapultProvider(ABC):
         #    region = self.get_user_region(self._config.get('profile'))
 
         # for mocking/testing
-        if self._ssh_privkey:
-            k = self._ssh_privkey
+        if self._mock_server:
+            k = self._mock_server.privkey
         else:
             keypair_filename = self.get_key_filename(self._config.get('profile'),region)
             if not os.path.exists(keypair_filename):
@@ -295,8 +291,8 @@ class KatapultProvider(ABC):
         retrys_key = 0
         while True:
             try:
-                if self._ssh_hostname: # mock/testing mode
-                    conn = await asyncssh.connect(host=self._ssh_hostname,port=self._ssh_port,client_keys=[k],known_hosts=None,**kwargs)
+                if self._mock_server: # mock/testing mode
+                    conn = await asyncssh.connect(host=self._mock_server.hostname,port=self._mock_server.port,client_keys=[k],known_hosts=None,**kwargs)
                 else:
                     conn = await asyncssh.connect(host=instance.get_dns_addr(),username=instance.get_config('img_username'),client_keys=[k],known_hosts=None,**kwargs) #,password=’mypassword’)
                 break

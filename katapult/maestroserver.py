@@ -176,7 +176,7 @@ class ServerContext:
 
                 await self.wakeup() 
 
-                init_objects = self.cs_client.get_objects()
+                init_objects = self.cs_client.get_objects() # this is a fat client
                 self.send_result(init_objects)               
 
             elif command == 'wakeup':
