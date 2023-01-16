@@ -14,6 +14,8 @@ import pytest
 import asyncssh
 import sys
 import os
+from datetime import datetime
+import re
 
 from io import StringIO 
 
@@ -61,7 +63,14 @@ class MySFTPServer(asyncssh.SFTPServer):
 
     def close(self, file_obj):
         #print("close",file_obj)
+        file_obj.seek(0)
+        file_content = file_obj.read()
+        for k,v in self._ssh_server.files.items():
+            if v is file_obj:
+                self._ssh_server.files[k] = file_content
+                break
         super().close(file_obj)
+
 
     def read(self, file_obj, offset, size):
         #print("read",file_obj)
@@ -84,6 +93,7 @@ class SSHServerEmul:
         self.sftp_server = None
         self.server = None
         self.files  = dict()
+        self.batches = dict()
 
     async def listen(self,port=0):
         
@@ -139,8 +149,27 @@ class SSHServerEmul:
         # misc. directory manip
         elif 'mkdir' in cmd:
             return ""
+        # remove ready
+        elif 'rm' in cmd and 'ready' in cmd:
+            return ""
+        # the execution of the batch
+        elif 'rm' in cmd and 'out.log' in cmd and 'batch_run' in cmd:
+            # batch_run-1619b8a5eb424da08945c2b6134879d1.sh
+            result = re.search(r"batch_run\-([0-9a-zA-Z]+)\.sh", cmd)
+            uid    = result.group(1)
+            batch_path = re.search(r"\;(.*batch_run\-[0-9a-zA-Z]+\.sh)", cmd).group(1)
+            batch_content = self.files.get(batch_path)
+            batch_content = re.sub(r"^rm .*$\n","",batch_content,flags=re.M)
+            batch_content = re.sub(r"^mkdir .*$\n","",batch_content,flags=re.M)
+            self.batches[uid] = {
+                'start_time' : datetime.now() ,
+                'file' : batch_path ,
+                'content' : batch_content ,
+            }
+            return ""
         # otherwise
         else:
+            print("USING DEFAULT COMMAND ANSWER !")
             return ""
 
     def handler(self,process):

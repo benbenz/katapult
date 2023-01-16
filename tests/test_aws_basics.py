@@ -12,14 +12,24 @@ from katapult.core import KatapultInstanceState
 from .ssh_server_mock import ssh_mock_server , MKCFG_REUPLOAD
 from .ssh_server_emul import SSHServerEmul
 from katapult.providerfat import RUNNER_FILES
+from pathlib import Path
 
-def check_file_uploaded(ssh_server,instance,file_list,split=False):
+def check_file_uploaded(ssh_server,instance,file_list,ref_file,split=False):
     if not file_list:
         return
+    if ref_file:
+        ref_file = ref_file.split()
+        ref_file = ref_file[0]
+        ref_file_path = Path(ref_file)
+        ref_file_dir = ref_file_path.parent.absolute()
+    else:
+        ref_file_dir = os.getcwd()
+
     if split:
         args = file_list.split()
         file_list = args[0]
-        if os.path.isfile(file_list):
+        is_file = os.path.isfile(file_list) if ref_file_dir is None else os.path.isfile(os.path.join(ref_file_dir,file_list))
+        if is_file:
             assert ssh_server.has_file( instance , file_list )
         else:
             print('skipping test for uploaded due to missing file',file_list)
@@ -27,11 +37,11 @@ def check_file_uploaded(ssh_server,instance,file_list,split=False):
         if not isinstance(file_list,list):
             file_list = [ file_list ]
         for f in file_list:
-            if os.path.isfile(f):
+            is_file = os.path.isfile(f) if ref_file_dir is None else os.path.isfile(os.path.join(ref_file_dir,f))
+            if is_file:
                 assert ssh_server.has_file( instance , f )
             else:
                 print('skipping test for uploaded due to missing file',f)
-
 
 @mock_ec2
 @pytest.mark.asyncio
@@ -99,9 +109,8 @@ async def test_client_start(ec2,sts):
 async def test_client_deploy(ec2,sts):
     with patch('botocore.client.BaseClient._make_api_call', new=mock_make_api_call):
 
-        from katapult.provider import get_client , get_config
+        from katapult.provider import get_client
 
-        # cs is also mocked
         cs = get_client(os.path.join('tests','config.example.all_tests.local.py'))
 
         await cs.start()
@@ -116,7 +125,6 @@ async def test_client_deploy(ec2,sts):
 
         await cs.deploy()
 
-        # cs is patched 
         #assert cs._deploy_jobs.call_count == 2 # we have two instances so this should be called twice
         num_files = ssh_server.num_files()
         assert num_files >= ( 7 + len(RUNNER_FILES) ) * 2 # we should have at least 7 files uploaded per instance
@@ -136,9 +144,35 @@ async def test_client_deploy(ec2,sts):
 
         for job in objs['jobs']:
             instance = job.get_instance()
-            check_file_uploaded(ssh_server,instance,job.get_config('run_script'),True)
-            check_file_uploaded(ssh_server,instance,job.get_config('upload_files'),False)
-            check_file_uploaded(ssh_server,instance,job.get_config('input_files'),False)
+            check_file_uploaded(ssh_server,instance,job.get_config('run_script'),None,True)
+            check_file_uploaded(ssh_server,instance,job.get_config('upload_files'),job.get_config('run_script'),False)
+            check_file_uploaded(ssh_server,instance,job.get_config('input_files'),job.get_config('run_script'),False)
+
+
+
+@mock_ec2
+@mock_sts
+@pytest.mark.asyncio
+async def test_client_run(ec2,sts):
+    with patch('botocore.client.BaseClient._make_api_call', new=mock_make_api_call):
+
+        from katapult.provider import get_client
+
+        cs = get_client(os.path.join('tests','config.example.all_tests.local.py'))
+
+        await cs.start()
+
+        # configure the server
+        ssh_server = SSHServerEmul()
+        await ssh_server.listen()
+        ssh_server.set_config(MKCFG_REUPLOAD,True) # will always reupload files
+
+        # attach the server to the client
+        cs.set_mock_server(ssh_server)
+
+        await cs.deploy()
+
+        await cs.run()         
 
 # working
 # @mock_ec2
