@@ -269,7 +269,7 @@ class ConfigManager():
 #     elif isinstance(obj,KatapultProcess):
 #         return "__katapult_process:" + obj.get_uid()
 #     else:
-#         return str(cs_obj)
+#         return str(obj)
 
 # class KatapultJSONEncoder(json.JSONEncoder):
 

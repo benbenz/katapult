@@ -8,17 +8,17 @@ import re
 import ntpath , posixpath
 from katapult.attrs import *
 
-cs_keypairName         = 'katapult-keypair'
-cs_secGroupName        = 'katapult-sec-group-allow-ssh'
-cs_secGroupNameMaestro = 'katapult-sec-group-allow-maestro'
-cs_bucketName          = 'katapult-bucket'
-cs_vpcName             = 'katapult-vpc'
-cs_instanceNameRoot    = 'katapult-instance'
-cs_instanceMaestro     = 'katapult-maestro'
-cs_environmentNameRoot = 'katapult-env'
-cs_maestroProfileName  = 'katapult-maestro-profile'
-cs_maestroRoleName     = 'katapult-maestro-role'
-cs_maestroPolicyName   = 'katapult-maestro-policy'
+kt_keypairName         = 'katapult-keypair'
+kt_secGroupName        = 'katapult-sec-group-allow-ssh'
+kt_secGroupNameMaestro = 'katapult-sec-group-allow-maestro'
+kt_bucketName          = 'katapult-bucket'
+kt_vpcName             = 'katapult-vpc'
+kt_instanceNameRoot    = 'katapult-instance'
+kt_instanceMaestro     = 'katapult-maestro'
+kt_environmentNameRoot = 'katapult-env'
+kt_maestroProfileName  = 'katapult-maestro-profile'
+kt_maestroRoleName     = 'katapult-maestro-role'
+kt_maestroPolicyName   = 'katapult-maestro-policy'
 
 # NEW > STARTED > ASSIGNED > DEPLOYED > ( RUNNING | WATCHING <-> IDLE )
 
@@ -348,15 +348,15 @@ class KatapultEnvironment():
         _env_obj       = katapultutils.compute_environment_object(env_config)
         self._hash     = katapultutils.compute_environment_hash(_env_obj)
         if not self._config.get('name'):
-            self._name = cs_environmentNameRoot
+            self._name = kt_environmentNameRoot
 
             append_str = '-' + self._hash
             if env_config.get('dev',False) == True:
                 append_str = ''
             if projectName:
-                self._name = cs_environmentNameRoot + '-' + projectName + append_str
+                self._name = kt_environmentNameRoot + '-' + projectName + append_str
             else:
-                self._name = cs_environmentNameRoot + append_str
+                self._name = kt_environmentNameRoot + append_str
         else:
             self._name = self._config.get('name')
 
@@ -479,13 +479,6 @@ class KatapultJob():
                 return dpl_job
         return None
 
-    def get_active_processes(self):
-        processes_res = []
-        for dpl_job in self._deployed:
-            for p in dpl_job.get_active_processes():
-                processes_res.append(p)
-        return processes_res
-
     def deploy(self,dpl_env,add_permanently=True):
         # instance = dpl_env.get_instance()
         # dpl_job  = self.get_deployed_job(instance)
@@ -524,6 +517,13 @@ class KatapultJob():
                 last_process = process
                 count = count + 1
         return last_process
+
+    # def get_active_processes(self):
+    #     processes_res = []
+    #     for dpl_job in self._deployed:
+    #         for p in dpl_job.get_active_processes():
+    #             processes_res.append(p)
+    #     return processes_res
 
     def get_active_processes(self):
         if not self._deployed or len(self._deployed)==0:
@@ -885,19 +885,19 @@ def init_instance_name(instance_config):
             sys.exit(300) # this is a developer error, this should never happen so we can use exit here
             
         if 'project' in instance_config:
-            return cs_instanceNameRoot + '-' + instance_config['project'] + '-' + instance_config['rank'] + append_str
+            return kt_instanceNameRoot + '-' + instance_config['project'] + '-' + instance_config['rank'] + append_str
         else:
-            return cs_instanceNameRoot + '-' + instance_config['rank'] + append_str
+            return kt_instanceNameRoot + '-' + instance_config['rank'] + append_str
     
     else:
 
         # if 'project' in instance_config:
-        #     return cs_instanceMaestro + '-' + instance_config['project'] 
+        #     return kt_instanceMaestro + '-' + instance_config['project'] 
         # else:
-        #     return cs_instanceMaestro
+        #     return kt_instanceMaestro
 
         # ultimately, the maestro will be shared across projects... (to save $)
         if instance_config.get('_maestro_name_proj',False)==True:
-            return cs_instanceMaestro + '-' + instance_config['project'] 
+            return kt_instanceMaestro + '-' + instance_config['project'] 
         else:
-            return cs_instanceMaestro
+            return kt_instanceMaestro

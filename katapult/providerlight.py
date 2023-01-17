@@ -361,8 +361,8 @@ class KatapultLightProvider(KatapultProvider,ABC):
         zip_buffer = io.BytesIO()
         # create a ZipFile object
         with ZipFile(zip_buffer, 'w') as zipObj:    
-            import katapult as cs
-            katapultinit = os.path.abspath(cs.__file__) # this is the __init__.py file
+            import katapult as kt
+            katapultinit = os.path.abspath(kt.__file__) # this is the __init__.py file
             katapultmodu = os.path.dirname(katapultinit)
             katapultroot = os.path.dirname(katapultmodu)
             for otherfilepath in [ 'requirements.txt' ]:

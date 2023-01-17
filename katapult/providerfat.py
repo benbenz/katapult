@@ -23,6 +23,10 @@ SLEEP_PERIOD = 15
 
 RUNNER_FILES = ['env_check.py','env_state.sh','config.py','bootstrap.sh','run.sh','microrun.sh','state.sh','tail.sh','getpid.sh','reset.sh','kill.sh']
 
+def set_sleep_period(value):
+    global SLEEP_PERIOD
+    SLEEP_PERIOD = value
+
 class KatapultProviderStateWaitMode(IntFlag):
     NO_WAIT       = 0  # provider dont wait for state
     WAIT          = 1  # provider wait for state 
@@ -1444,9 +1448,9 @@ class KatapultFatProvider(KatapultProvider,ABC):
             pid         = process.get_pid()
             pid_child  = process.get_pid_child()
             if jobsinfo:
-                jobsinfo = jobsinfo + " " + dpl_env.get_name_with_hash() + " " + str(shash) + " " + str(uid) + " " + str(pid) + " " + str(pid_child) + " \"" + "|".join(job.get_config('output_files')) + "\""
+                jobsinfo = jobsinfo + " \"" + dpl_env.get_name_with_hash() + "\" " + str(shash) + " " + str(uid) + " " + str(pid) + " " + str(pid_child) + " \"" + "|".join(job.get_config('output_files')) + "\""
             else:
-                jobsinfo = dpl_env.get_name_with_hash() + " " + str(shash) + " " + str(uid) + " " + str(pid) + " " + str(pid_child) + " \"" + "|".join(job.get_config('output_files')) + "\""
+                jobsinfo = "\"" + dpl_env.get_name_with_hash() + "\" " + str(shash) + " " + str(uid) + " " + str(pid) + " " + str(pid_child) + " \"" + "|".join(job.get_config('output_files')) + "\""
             
         return jobsinfo 
     
@@ -1472,7 +1476,7 @@ class KatapultFatProvider(KatapultProvider,ABC):
                 stdout, stderr = await self._exec_command(ssh_conn,cmd)
                 data = await stdout.read()
                 break
-            except (OSError, asyncssh.Error):
+            except (OSError, asyncssh.Error) as e:
                 self.debug(1,"SSH connection error while sending state.sh command")
                 ssh_conn = await self._handle_instance_disconnect(run_session,instance,do_revive,"could not get jobs states for instance. SSH connection lost with")
                 if ssh_conn is None:

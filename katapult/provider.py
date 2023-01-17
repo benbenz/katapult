@@ -493,8 +493,8 @@ class KatapultProvider(ABC):
         userid = profile_name
         if not userid:
             userid = 'default'
-        #key_filename = cs_keypairName+'-'+str(userid)+'-'+str(region)
-        key_filename = cs_keypairName+'-'+str(region)
+        #key_filename = kt_keypairName+'-'+str(userid)+'-'+str(region)
+        key_filename = kt_keypairName+'-'+str(region)
         return key_filename
 
     @abstractmethod
@@ -756,32 +756,32 @@ def stream_dump(obj):
     else:
         return obj      
 
-def stream_load(cs_client,jsondata):
+def stream_load(kt_client,jsondata):
     if isinstance(jsondata,list):
         result = []
         for v in jsondata:
-            result.append(stream_load(cs_client,v))
+            result.append(stream_load(kt_client,v))
         return result
     elif isinstance(jsondata,dict):
         if jsondata.get('class') in [ 'KatapultRunSession' , 'KatapultRunSessionProxy' ]:
             session_id     = jsondata['id'].strip()
-            return cs_client.get_run_session(session_id)
+            return kt_client.get_run_session(session_id)
         elif jsondata.get('class') in [ 'KatapultInstance' , 'KatapultInstanceProxy' ]:
             instance_name = jsondata['name'].strip()
             instance_cfg  = jsondata.get('config')
-            return cs_client.get_instance(instance_name,config=instance_cfg)    
+            return kt_client.get_instance(instance_name,config=instance_cfg)    
         elif jsondata.get('class') in [ 'KatapultEnvironment' , 'KatapultEnvironmentProxy' ]:
             env_hash = jsondata['hash'].strip()
             env_cfg  = jsondata.get('config')
-            return cs_client.get_environment(env_hash,config=env_cfg)    
+            return kt_client.get_environment(env_hash,config=env_cfg)    
         elif jsondata.get('class') in [ 'KatapultJob' , 'KatapultJobProxy' ]:
             job_id   = jsondata['id'].strip()
             job_cfg  = jsondata.get('config')
-            return cs_client.get_job(job_id,config=job_cfg)    
+            return kt_client.get_job(job_id,config=job_cfg)    
         else:        
             result = {}
             for k,v in jsondata.items():
-                result[k] = stream_load(cs_client,v)
+                result[k] = stream_load(kt_client,v)
             return result
     else:
         return jsondata             

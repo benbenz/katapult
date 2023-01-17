@@ -1,4 +1,4 @@
-from katapult import provider as cs
+from katapult import provider as kt
 from katapult.provider import COMMAND_ARGS_SEP , ARGS_SEP , STREAM_RESULT , debug , stream_load , stream_dump
 import asyncio , os , sys , time
 from katapult.core import KatapultProcessState , bcolors , KatapultRunSession , KatapultRunSessionProxy
@@ -51,20 +51,20 @@ class ByteStreamWriter():
 
 class ServerContext:
     def __init__(self,args):
-        self.cs_client  = None
+        self.kt_client  = None
         self.old_stdout = sys.stdout
         self.old_stderr = sys.stderr
         self.auto_init = any( arg == 'auto_init' for arg in args )
 
     async def init(self):
         if self.auto_init: # set to True by the crontab in case maestro crashed
-            self.cs_client = cs.get_client(None)
+            self.kt_client = kt.get_client(None)
             # we've just restarted a crashed maestro server process
             # let's test for WATCH state and reach it back again if thats needed
             await self.wakeup()
 
     async def wakeup(self):
-        await self.cs_client.wakeup()
+        await self.kt_client.wakeup()
 
     async def handle_client(self, reader, writer):
         while True:
@@ -122,7 +122,7 @@ class ServerContext:
     def get_run_session(self,label,session_arg,allow_proxied=False):
         if session_arg is None:
             return None
-        run_session = stream_load(self.cs_client,session_arg)
+        run_session = stream_load(self.kt_client,session_arg)
         if run_session is None:
             err_level = bcolors.FAIL if not allow_proxied else bcolors.WARNING
             debug(1,label,"This session object has expired and can not be found in the server anymore",session_arg,color=err_level)
@@ -141,7 +141,7 @@ class ServerContext:
         return run_session
 
     def get_instance(self,label,instance_arg):
-        instance = stream_load(self.cs_client,instance_arg)
+        instance = stream_load(self.kt_client,instance_arg)
         if instance is None:
             debug(1,label,"This instance object has expired and can not be found in the server anymore",arg,color=bcolors.FAIL)
             return None
@@ -157,7 +157,7 @@ class ServerContext:
         sys.stdout = string_writer
         sys.stderr = string_writer
 
-        if self.cs_client is None:
+        if self.kt_client is None:
             if command != 'init' and command != 'shutdown':
                 print(bcolors.WARNING+"Server not ready. Run 'init CONFIG_FILE' or 'start' command first"+bcolors.ENDC)
                 await writer.drain()
@@ -172,21 +172,21 @@ class ServerContext:
                     config_ = args[0].strip() 
                 else:
                     config_ = None
-                self.cs_client  = cs.get_client(config_)
+                self.kt_client  = kt.get_client(config_)
 
                 await self.wakeup() 
 
-                init_objects = await self.cs_client.get_objects() 
+                init_objects = await self.kt_client.get_objects() 
                 self.send_result(init_objects)    
 
             elif command == 'get_objects':
 
-                objs = await self.cs_client.get_objects()
+                objs = await self.kt_client.get_objects()
                 self.send_result(objs)
 
             elif command == 'wakeup':
 
-                await self.cs_client.wakeup()
+                await self.kt_client.wakeup()
 
             elif command == 'start':
 
@@ -197,7 +197,7 @@ class ServerContext:
                 else:
                     reset = False
 
-                await self.cs_client.start(reset)
+                await self.kt_client.start(reset)
 
             elif command == 'cfg_add_instances':
                 config = None
@@ -206,12 +206,12 @@ class ServerContext:
                     config = args[0]
                 elif args and len(args)>=2:
                     config = args[0]
-                    kwargs = stream_load(self.cs_client,args[1])
+                    kwargs = stream_load(self.kt_client,args[1])
                 else:
                     print("Error: you need to send a JSON stream for config")
                     await writer.drain()
                     return
-                added_objects = await self.cs_client.cfg_add_instances(config,**kwargs)
+                added_objects = await self.kt_client.cfg_add_instances(config,**kwargs)
                 self.send_result(added_objects)
 
             elif command == 'cfg_add_en((vironments':
@@ -221,12 +221,12 @@ class ServerContext:
                     config = args[0]
                 elif args and len(args)>=2:
                     config = args[0]
-                    kwargs = stream_load(self.cs_client,args[1])
+                    kwargs = stream_load(self.kt_client,args[1])
                 else:
                     print("Error: you need to send a JSON stream for config")
                     await writer.drain()
                     return
-                added_objects = await self.cs_client.cfg_add_environments(config,**kwargs)
+                added_objects = await self.kt_client.cfg_add_environments(config,**kwargs)
                 self.send_result(added_objects)
 
             elif command == 'cfg_add_jobs':
@@ -236,12 +236,12 @@ class ServerContext:
                     config = args[0]
                 elif args and len(args)>=2:
                     config = args[0]
-                    kwargs = stream_load(self.cs_client,args[1])
+                    kwargs = stream_load(self.kt_client,args[1])
                 else:
                     print("Error: you need to send a JSON stream for config")
                     await writer.drain()
                     return
-                added_objects = await self.cs_client.cfg_add_jobs(config,**kwargs)
+                added_objects = await self.kt_client.cfg_add_jobs(config,**kwargs)
                 self.send_result(added_objects)
 
             elif command == 'cfg_add_config':
@@ -251,29 +251,29 @@ class ServerContext:
                     config = args[0]
                 elif args and len(args)>=2:
                     config = args[0]
-                    kwargs = stream_load(self.cs_client,args[1])
+                    kwargs = stream_load(self.kt_client,args[1])
                 else:
                     print("Error: you need to send a JSON stream for config")
                     await writer.drain()
                     return
-                added_objects = await self.cs_client.cfg_add_config(config,**kwargs)
+                added_objects = await self.kt_client.cfg_add_config(config,**kwargs)
                 self.send_result(added_objects)
 
             elif command == 'cfg_reset':
 
-                await self.cs_client.cfg_reset()
+                await self.kt_client.cfg_reset()
 
             elif command == 'deploy':
 
-                await self.cs_client.deploy()
+                await self.kt_client.deploy()
 
             elif command == 'run':
 
                 if args and len(args)==1:
                     continue_session = args[0]
-                    run_session = await self.cs_client.run(continue_session)
+                    run_session = await self.kt_client.run(continue_session)
                 else:
-                    run_session = await self.cs_client.run()
+                    run_session = await self.kt_client.run()
 
                 self.send_result(run_session)
             
@@ -281,7 +281,7 @@ class ServerContext:
 
                 if args and len(args)==1:
                     identifier = args[0].strip()
-                    await self.cs_client.kill(identifier)
+                    await self.kt_client.kill(identifier)
             
             elif command == 'wait':
 
@@ -292,7 +292,7 @@ class ServerContext:
                 if args and len(args) >= 2:
                     run_session = self.get_run_session("WAIT:",args[1])
 
-                await self.cs_client.wait(job_state,run_session)
+                await self.kt_client.wait(job_state,run_session)
 
             elif command == 'get_num_active_processes':
 
@@ -300,12 +300,12 @@ class ServerContext:
                 if args and len(args) >= 1:
                     run_session = self.get_run_session("GET_NUM_ACTIVE_PROCESSES:",args[0])
 
-                result = await self.cs_client.get_num_active_processes(run_session)                
+                result = await self.kt_client.get_num_active_processes(run_session)                
                 self.send_result(result)
 
             elif command == 'get_num_instances':
 
-                result = await self.cs_client.get_num_instances()                
+                result = await self.kt_client.get_num_instances()                
                 self.send_result(result)
 
             elif command == 'get_states' or command == 'get_jobs_states':
@@ -318,7 +318,7 @@ class ServerContext:
                     run_session = self.get_run_session("GET STATES:",args[0]) 
                     last_running_processes = args[1]
 
-                result = await self.cs_client.get_jobs_states(run_session,last_running_processes)
+                result = await self.kt_client.get_jobs_states(run_session,last_running_processes)
                 self.send_result(result)
 
             elif command == 'print_summary' or command == 'print':
@@ -332,7 +332,7 @@ class ServerContext:
 
                 debug(2,run_session,instance)
 
-                await self.cs_client.print_jobs_summary(run_session,instance)
+                await self.kt_client.print_jobs_summary(run_session,instance)
 
             elif command == 'print_aborted' or command == 'print_aborted_logs':
 
@@ -345,19 +345,19 @@ class ServerContext:
 
                 debug(2,run_session,instance)
 
-                await self.cs_client.print_aborted_logs(run_session,instance)
+                await self.kt_client.print_aborted_logs(run_session,instance)
 
             elif command == 'print_objects':
 
-                await self.cs_client.print_objects()
+                await self.kt_client.print_objects()
 
             elif command == 'clear_results_dir':
 
                 if args and len(args)>0:
                     directory = args[0].strip()
-                    await self.cs_client.clear_results_dir(directory)
+                    await self.kt_client.clear_results_dir(directory)
                 else:
-                    await self.cs_client.clear_results_dir()
+                    await self.kt_client.clear_results_dir()
 
             elif command == 'fetch_results':
 
@@ -377,13 +377,13 @@ class ServerContext:
                 if args and len(args)>=4:
                     use_normal_output = args[3]
 
-                out_dir = await self.cs_client.fetch_results(directory,run_session,use_cached,use_normal_output)
+                out_dir = await self.kt_client.fetch_results(directory,run_session,use_cached,use_normal_output)
                 
                 self.send_result(out_dir)
 
             elif command == 'finalize':
                 
-                await self.cs_client.finalize()
+                await self.kt_client.finalize()
 
             elif command == 'shutdown':
 

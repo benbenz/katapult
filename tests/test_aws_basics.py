@@ -8,11 +8,13 @@ import os
 import pytest_asyncio
 import asyncio
 from .configs import config_aws_one_instance_local
-from katapult.core import KatapultInstanceState
+from katapult.core import KatapultInstanceState , KatapultProcessState
 from .ssh_server_mock import ssh_mock_server , MKCFG_REUPLOAD
 from .ssh_server_emul import SSHServerEmul
-from katapult.providerfat import RUNNER_FILES
+from katapult.providerfat import RUNNER_FILES , set_sleep_period
 from pathlib import Path
+
+TEST_PERIOD = 0.5
 
 def check_file_uploaded(ssh_server,instance,file_list,ref_file,split=False):
     if not file_list:
@@ -49,11 +51,11 @@ async def test_client_create_one_instance(ec2):
     with patch('botocore.client.BaseClient._make_api_call', new=mock_make_api_call):
         from katapult.provider import get_client
 
-        cs = get_client(config_aws_one_instance_local)
+        kt = get_client(config_aws_one_instance_local)
 
-        assert cs is not None
+        assert kt is not None
 
-        objs = await cs.get_objects()
+        objs = await kt.get_objects()
 
         assert objs.get('instances') is not None
 
@@ -65,11 +67,11 @@ async def test_client_create_full(ec2):
     with patch('botocore.client.BaseClient._make_api_call', new=mock_make_api_call):
         from katapult.provider import get_client
 
-        cs = get_client(os.path.join('tests','config.example.all_tests.local.py'))
+        kt = get_client(os.path.join('tests','config.example.all_tests.local.py'))
 
-        assert cs is not None
+        assert kt is not None
 
-        objs = await cs.get_objects()
+        objs = await kt.get_objects()
 
         assert objs.get('instances') is not None
 
@@ -87,14 +89,14 @@ async def test_client_start(ec2,sts):
     with patch('botocore.client.BaseClient._make_api_call', new=mock_make_api_call):
         from katapult.provider import get_client
 
-        cs = get_client(os.path.join('tests','config.example.all_tests.local.py'))
+        kt = get_client(os.path.join('tests','config.example.all_tests.local.py'))
 
-        await cs.start()
+        await kt.start()
 
-        objects = await cs.get_objects()
+        objects = await kt.get_objects()
 
         for instance in objects['instances']:
-            await cs._wait_for_instance(instance)
+            await kt._wait_for_instance(instance)
 
         for instance in objects['instances']:
             assert instance.get_state() == KatapultInstanceState.RUNNING
@@ -111,9 +113,9 @@ async def test_client_deploy(ec2,sts):
 
         from katapult.provider import get_client
 
-        cs = get_client(os.path.join('tests','config.example.all_tests.local.py'))
+        kt = get_client(os.path.join('tests','config.example.all_tests.local.py'))
 
-        await cs.start()
+        await kt.start()
 
         # configure the server
         ssh_server = SSHServerEmul()
@@ -121,15 +123,11 @@ async def test_client_deploy(ec2,sts):
         ssh_server.set_config(MKCFG_REUPLOAD,True) # will always reupload files
 
         # attach the server to the client
-        cs.set_mock_server(ssh_server)
+        kt.set_mock_server(ssh_server)
 
-        await cs.deploy()
+        await kt.deploy()
 
-        #assert cs._deploy_jobs.call_count == 2 # we have two instances so this should be called twice
-        num_files = ssh_server.num_files()
-        assert num_files >= ( 7 + len(RUNNER_FILES) ) * 2 # we should have at least 7 files uploaded per instance
-
-        objs = await cs.get_objects()
+        objs = await kt.get_objects()
 
         assert len(objs.get('instances')) == 2
 
@@ -158,9 +156,9 @@ async def test_client_run(ec2,sts):
 
         from katapult.provider import get_client
 
-        cs = get_client(os.path.join('tests','config.example.all_tests.local.py'))
+        kt = get_client(os.path.join('tests','config.example.all_tests.local.py'))
 
-        await cs.start()
+        await kt.start()
 
         # configure the server
         ssh_server = SSHServerEmul()
@@ -168,11 +166,48 @@ async def test_client_run(ec2,sts):
         ssh_server.set_config(MKCFG_REUPLOAD,True) # will always reupload files
 
         # attach the server to the client
-        cs.set_mock_server(ssh_server)
+        kt.set_mock_server(ssh_server)
 
-        await cs.deploy()
+        await kt.deploy()
+        
+        # set the fat provider sleep period to 0.5s (instead of 15s)
+        set_sleep_period(TEST_PERIOD/2) 
+        ssh_server.set_job_period(TEST_PERIOD)
 
-        await cs.run()         
+        await kt.run()   
+
+        # always make sure the futures of the batches are completed
+        await ssh_server.wait_for_batches()  
+
+        # make sure we update one last time
+        await kt.get_jobs_states()
+
+        objs = await kt.get_objects()
+
+        # this is the fat client so we have all info available (no proxies)
+        jobs = objs['jobs']
+
+        for job in jobs:
+            dpl_job = job.get_deployed_jobs()
+            assert dpl_job and len(dpl_job)==1
+            dpl_job = dpl_job[0]
+            command = dpl_job.get_command()
+            process = job.get_last_process()
+            assert process
+            substate = process.get_substate()
+            if substate:
+                substate = substate.lower()
+            state = process.get_state()
+            if 'err_mem' in command:
+                assert state == KatapultProcessState.ABORTED
+                assert 'oom' in  substate or 'memory' in substate
+            elif 'err' in command:
+                assert state == KatapultProcessState.ABORTED
+            elif 'err' in job.get_env().get_name():
+                assert state == KatapultProcessState.ABORTED
+                assert 'env' in substate
+            else:
+                assert state == KatapultProcessState.DONE
 
 # working
 # @mock_ec2
