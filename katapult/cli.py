@@ -6,9 +6,12 @@ import subprocess
 import multiprocessing 
 import time
 import copy
+import argparse
+import os
+import re
 from katapult.maestroserver import main as server_main
 from katapult.maestroclient import maestro_client
-from katapult.provider import make_client_command , stream_dump  
+from katapult.provider import make_client_command , stream_dump , guess_environment , get_client
 
 # if [[ $(ps aux | grep "katapult.maestroserver" | grep -v 'grep') ]] ; then
 #     echo "Katapult server already running"
@@ -46,6 +49,94 @@ def is_katapult_process(p,name='maestroserver'):
 def cli(command):
     start_server() # locally we use python to start the server. maximizes the chance to be Windows complatible
     maestro_client(command)
+
+# basically this: https://dev.to/cindyledev/remote-development-with-visual-studio-code-on-aws-ec2-4cla
+# in one CLI ...
+async def cli_one_shot():
+    argParser = argparse.ArgumentParser(prog = 'katapult.cli',
+                    description = 'runs one shot commands',
+                    epilog = '--Thanks!')  
+    argParser.add_argument('command') 
+    argParser.add_argument("-p", "--profile", help="your aws profile name")
+    argParser.add_argument("-t", "--type", help="the aws instance type")
+    argParser.add_argument("-r", "--region", help="the aws region")
+    args = argParser.parse_args()
+
+    instance_type = args.type or 't3.micro'
+
+    env_obj , the_files = guess_environment('vscode','.')
+    
+    config = {
+        'project'      : 'vscode' ,
+        'profile'      : args.profile , 
+        'debug'        : 1 ,
+        'maestro'      : 'local' , # one shot is local
+        'auto_stop'    : False ,
+        'recover'      : True ,
+        'instances'    : [
+            {
+                'type'         : instance_type ,
+                'number'       : 1 ,
+                'region'       : args.region
+            }
+        ] ,
+        'environments' : [ env_obj ] ,
+        'job' : [
+            {
+                'run_command' : 'ls' , # foo command ,
+                'upload_files' : the_files , # we're using this feature to upload files
+                'input_files' : 'foo_in.dat' , # foo
+                'output_files' : 'foo_out.dat' # foo
+            }
+        ]
+    }
+
+    kt = get_client(config)
+    await kt.start()
+    await kt.deploy()
+
+    objs = await kt.get_objects()
+    instance = objs['instances'][0]
+
+    key_file_name = kt.get_key_filename(config.get('profile'),instance.get_config('region'))
+    key_file_path = os.path.join(os.getcwd(),key_file_name)
+
+    nu_fragment = """Host {0}
+    Hostname {1}
+    User {2}
+    Port {3}
+    IdentityFile {4}""".format("katapult.vscode",instance.get_ip_addr(),"ubuntu",22,key_file_path)
+
+    # edit the ssh config
+    home_dir = os.path.expanduser('~')
+    ssh_config_path = os.path.join(home_dir,'.ssh','config')
+    try:
+        with open(ssh_config_path,'r') as ssh_config:
+            ssh_config_content = ssh_config.read()
+    except FileNotFoundError as e:
+        with open(ssh_config_path,'w') as ssh_config:
+            ssh_config.write("")
+        ssh_config_content = ""
+    
+    if 'katapult.vscode' in ssh_config_content:
+        with open(ssh_config_path,'w') as ssh_config:
+            new_content = re.sub(r"""Host katapult.vscode
+    Hostname [^\n]+
+    User [^\n]+
+    Port [^\n]+
+    IdentityFile [^\n]+""",nu_fragment,ssh_config_content)
+            ssh_config.write(new_content)
+    else:
+        with open(ssh_config_path,'a') as ssh_config:
+            ssh_config.write('\n')
+            ssh_config.write(nu_fragment)
+
+    # https://stackoverflow.com/questions/54402104/how-to-connect-ec2-instance-with-vscode-directly-using-pem-file-in-sftp/60305052#60305052
+    # https://stackoverflow.com/questions/60144074/how-to-open-a-remote-folder-from-command-line-in-vs-code
+    #
+    # on OSX:
+    # /Applications/Visual\ Studio\ Code.app/Contents/MacOS/Electron --folder-uri=vscode-remote://ubuntu@13.38.11.243/home/ubuntu/
+    os.system( "/Applications/Visual\ Studio\ Code.app/Contents/MacOS/Electron --folder-uri=vscode-remote://katapult.vscode/home/ubuntu/")
 
 def start_server():
     server_started = False
@@ -217,10 +308,15 @@ def main():
         cmd_arg = args.pop(0)
     command = args.pop(0)
 
-    ser_args = cli_translate(command,args)
-    # lets not escape the command, we're not sending it to a stream
-    the_command = make_client_command( command , ser_args , False)
-    cli(the_command)
+    one_shot_command = command in [ 'vscode' , 'run_dir' ]
+
+    if one_shot_command:
+        asyncio.run( cli_one_shot() )
+    else:
+        ser_args = cli_translate(command,args)
+        # lets not escape the command, we're not sending it to a stream
+        the_command = make_client_command( command , ser_args , False)
+        cli(the_command)
 
 
 if __name__ == '__main__':     

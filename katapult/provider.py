@@ -819,6 +819,106 @@ def get_config(path):
         return None
     return config
 
+def get_standard_python_librairies():
+    #https://stackoverflow.com/questions/6463918/how-to-get-a-list-of-all-the-python-standard-library-modules
+    import distutils.sysconfig as sysconfig
+    import os
+    result = []
+    std_lib = sysconfig.get_python_lib(standard_lib=True)
+    for top, dirs, files in os.walk(std_lib):
+        for nm in files:
+            if nm != '__init__.py' and nm[-3:] == '.py':
+                result.append( os.path.join(top, nm)[len(std_lib)+1:-3].replace(os.sep, '.') )
+    
+    # double it with this ...
+    from katapult.isort.stdlibs.py39 import stdlib
+    for lib in stdlib:
+        result.append(lib)
+    result.append('.code')
+    result.append('.pytest')
+    return result
+
+def guess_environment(envname,dir):
+    environment_obj = {
+        # 'command'    : None ,
+        # 'env_aptget' : None , 
+        'env_conda'  : [] , 
+        'env_pypi'   : [] , 
+        'env_julia'  : [] ,
+        'name'       : envname 
+    }
+
+    librairies = get_standard_python_librairies()
+
+    julia_added = False
+
+    files_to_upload = []
+
+    for root, dirs, files in os.walk(".", topdown=False):
+        for name in files:
+            file_path = os.path.join(root, name)
+            file_name, file_extension = os.path.splitext(name)   
+            if file_extension:
+                file_extension = file_extension.lower()   
+
+            if file_extension == '.py':
+                files_to_upload.append(file_path)
+                with open(file_path,'r') as the_file:
+                    try:
+                        file_content = the_file.read()
+                    except:
+                        continue
+                    packages = re.findall(r"\s*(from\s+([^\s]+)\s+import\s+([^\s]+)|import\s+([^\s]+).*)",file_content)
+                    for pkg in packages:
+                        if pkg[3]:
+                            pkg_name = pkg[3]
+                        elif pkg[1] and pkg[2]:
+                            pkg_name = pkg[1] #"{0}.{1}".format(pkg[1],pkg[2])
+                        else:
+                            pkg_name = None
+                        if pkg_name.startswith('.'):
+                            continue
+                        if pkg_name.startswith('_'):
+                            continue
+                        #if '#' in pkg[0] and pkg[0].index('#') < pkg[0].
+                        if '.' in pkg_name:
+                            pkg_name = pkg_name[:pkg_name.index('.')]
+                        if not pkg_name:
+                            continue
+                        if pkg_name in librairies:
+                            continue
+                        if pkg_name in environment_obj['env_pypi']:
+                            continue
+                        environment_obj['env_pypi'].append(pkg_name)
+            
+            elif file_extension == '.jl':
+                files_to_upload.append(file_path)
+                if not julia_added:
+                    environment_obj['env_conda'].append('julia')
+                    julia_added = True
+
+                with open(file_path,'r') as the_file:
+                    try:
+                        file_content = the_file.read()
+                    except:
+                        continue
+                    packages = re.findall(r"(Pkg\.add\(\"([^\^\")]+)\"\)|using\s+([^\s]+))",file_content)
+                    for pkg in packages:
+                        if pkg[2]:
+                            pkg_name = pkg[2]
+                        elif pkg[1]:
+                            pkg_name = pkg[1]
+                        else:
+                            pkg_name = None
+                        if not pkg_name:
+                            continue
+                        if pkg_name in environment_obj['env_julia']:
+                            continue
+                        environment_obj['env_julia'].append(pkg_name)
+
+    return environment_obj , files_to_upload      
+
+
 def get_client(config_=None):
 
     if isinstance(config_,str): 

@@ -179,16 +179,15 @@ async def test_client_run(ec2,sts):
         # always make sure the futures of the batches are completed
         await ssh_server.wait_for_batches()  
 
-        # make sure we update one last time
-        await kt.get_jobs_states()
         # just for good measure
         await kt.wait(KatapultProcessState.DONE|KatapultProcessState.ABORTED)
+        # make sure we update one last time
+        await kt.get_jobs_states()
 
         objs = await kt.get_objects()
 
         # this is the fat client so we have all info available (no proxies)
         jobs = objs['jobs']
-
         for job in jobs:
             dpl_job = job.get_deployed_jobs()
             assert dpl_job and len(dpl_job)==1
