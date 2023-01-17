@@ -181,6 +181,8 @@ async def test_client_run(ec2,sts):
 
         # make sure we update one last time
         await kt.get_jobs_states()
+        # just for good measure
+        await kt.wait(KatapultProcessState.DONE|KatapultProcessState.ABORTED)
 
         objs = await kt.get_objects()
 
