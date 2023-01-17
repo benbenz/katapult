@@ -62,8 +62,6 @@ async def cli_one_shot():
     argParser.add_argument("-r", "--region", help="the aws region")
     args = argParser.parse_args()
 
-    instance_type = args.type or 't3.micro'
-
     env_obj , the_files = guess_environment('vscode','.')
     
     config = {
@@ -75,7 +73,7 @@ async def cli_one_shot():
         'recover'      : True ,
         'instances'    : [
             {
-                'type'         : instance_type ,
+                'type'         : args.type or 't3.micro' ,
                 'number'       : 1 ,
                 'region'       : args.region
             }
@@ -130,6 +128,10 @@ async def cli_one_shot():
         with open(ssh_config_path,'a') as ssh_config:
             ssh_config.write('\n')
             ssh_config.write(nu_fragment)
+
+    print("Enabling TCP forwarding for instance ...")
+    await kt.enable_ssh_tcp_forwarding(instance)
+    print("done")
 
     # https://stackoverflow.com/questions/54402104/how-to-connect-ec2-instance-with-vscode-directly-using-pem-file-in-sftp/60305052#60305052
     # https://stackoverflow.com/questions/60144074/how-to-open-a-remote-folder-from-command-line-in-vs-code

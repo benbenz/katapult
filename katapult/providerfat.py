@@ -1870,6 +1870,14 @@ class KatapultFatProvider(KatapultProvider,ABC):
             result[process.get_uid()] = process.get_state_object(True,True)
         return result
 
+    async def enable_ssh_tcp_forwarding(self,instance):
+
+        instanceid, ssh_conn , sftp = await self._wait_and_connect(instance)
+
+        stdout , stderr = await self._exec_command(ssh_conn,"sudo find /etc/ssh/sshd_config -type f -exec sed -i \"s/#AllowTcpForwarding yes/AllowTcpForwarding yes/g\" {} \\; && sudo systemctl restart sshd")
+        self.debug(1,(await stdout.read()))
+        self.debug(1,(await stderr.read()))
+
     @abstractmethod
     def get_recommended_cpus(self,inst_cfg):
         pass
