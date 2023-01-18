@@ -16,6 +16,7 @@ poetry.lock
 __pycache__
 state.json
 state.pickle
+state.*.pickle
 state.config.json
 commits.log
 watch.log

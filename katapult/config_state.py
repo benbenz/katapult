@@ -340,10 +340,14 @@ STATE_FILE = 'state.pickle'
 
 class StateSerializer():
 
-    def __init__(self,provider):
+    def __init__(self,provider,**kwargs):
         self._provider = provider
 
-        self._state_file = STATE_FILE
+        if kwargs.get('state_file'):
+            self._state_file = kwargs.get('state_file')
+        else:
+            self._state_file = STATE_FILE
+
         self._loaded = None
 
     def reset(self):

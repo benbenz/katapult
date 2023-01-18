@@ -70,7 +70,7 @@ async def cli_one_shot():
         'debug'        : 1 ,
         'maestro'      : 'local' , # one shot is local
         'auto_stop'    : False ,
-        'recover'      : True ,
+        'recover'      : False ,
         'instances'    : [
             {
                 'type'         : args.type or 't3.micro' ,
@@ -79,7 +79,7 @@ async def cli_one_shot():
             }
         ] ,
         'environments' : [ env_obj ] ,
-        'job' : [
+        'jobs' : [
             {
                 'run_command' : 'ls' , # foo command ,
                 'upload_files' : the_files , # we're using this feature to upload files
@@ -88,52 +88,8 @@ async def cli_one_shot():
             }
         ]
     }
-
-    kt = get_client(config)
-    await kt.start()
-    await kt.deploy()
-
-    objs = await kt.get_objects()
-    instance = objs['instances'][0]
-
-    key_file_name = kt.get_key_filename(config.get('profile'),instance.get_config('region'))
-    key_file_path = os.path.join(os.getcwd(),key_file_name)
-
-    nu_fragment = """Host {0}
-    Hostname {1}
-    User {2}
-    Port {3}
-    StrictHostKeyChecking no
-    IdentityFile {4}""".format("katapult.vscode",instance.get_ip_addr(),"ubuntu",22,key_file_path)
-
-    # edit the ssh config
-    home_dir = os.path.expanduser('~')
-    ssh_config_path = os.path.join(home_dir,'.ssh','config')
-    try:
-        with open(ssh_config_path,'r') as ssh_config:
-            ssh_config_content = ssh_config.read()
-    except FileNotFoundError as e:
-        with open(ssh_config_path,'w') as ssh_config:
-            ssh_config.write("")
-        ssh_config_content = ""
-    
-    if 'katapult.vscode' in ssh_config_content:
-        with open(ssh_config_path,'w') as ssh_config:
-            new_content = re.sub(r"""Host katapult.vscode
-    Hostname [^\n]+
-    User [^\n]+
-    Port [^\n]+
-    StrictHostKeyChecking no
-    IdentityFile [^\n]+""",nu_fragment,ssh_config_content)
-            ssh_config.write(new_content)
-    else:
-        with open(ssh_config_path,'a') as ssh_config:
-            ssh_config.write('\n')
-            ssh_config.write(nu_fragment)
-
-    print("Enabling TCP forwarding for instance ...")
-    await kt.enable_ssh_tcp_forwarding(instance)
-    print("done")
+    kt = get_client(config,state_file='state.vscode.pickle')
+    await kt.prepare_for_vscode()
 
     # https://stackoverflow.com/questions/54402104/how-to-connect-ec2-instance-with-vscode-directly-using-pem-file-in-sftp/60305052#60305052
     # https://stackoverflow.com/questions/60144074/how-to-open-a-remote-folder-from-command-line-in-vs-code

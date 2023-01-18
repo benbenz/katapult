@@ -34,16 +34,16 @@ class KatapultProviderStateWaitMode(IntFlag):
 
 class KatapultFatProvider(KatapultProvider,ABC):
 
-    def __init__(self, conf=None):
+    def __init__(self, conf=None, **kwargs):
 
         # this will call self._init
-        KatapultProvider.__init__(self,conf)
+        KatapultProvider.__init__(self,conf,**kwargs)
 
         # will be called by the parent
         #self._init(conf)
 
-    def _init(self,conf):
-        super()._init(conf)
+    def _init(self,conf,**kwargs):
+        super()._init(conf,**kwargs)
 
         self._instances = []
         self._environments = []
@@ -61,7 +61,7 @@ class KatapultFatProvider(KatapultProvider,ABC):
         self._state_serializer = None
         if self._config.get('recover',False):
             # load the state (if existing) and set the recovery mode accordingly
-            self._state_serializer = StateSerializer(self)
+            self._state_serializer = StateSerializer(self,**kwargs)
             self._state_serializer.load()
 
             consistency = self._state_serializer.check_consistency(self._state,self._instances,self._environments,self._jobs,self._run_sessions,self._current_session)
@@ -1870,13 +1870,67 @@ class KatapultFatProvider(KatapultProvider,ABC):
             result[process.get_uid()] = process.get_state_object(True,True)
         return result
 
-    async def enable_ssh_tcp_forwarding(self,instance):
+    async def prepare_for_vscode(self):
+
+        await self.start() 
+        await self.deploy()
+
+        instance = self._instances[0]
+
+        key_file_name = self.get_key_filename(self._config.get('profile'),instance.get_config('region'))
+        key_file_path = os.path.join(os.getcwd(),key_file_name)
+
+        nu_fragment = """Host {0}
+        Hostname {1}
+        User {2}
+        Port {3}
+        StrictHostKeyChecking no
+        IdentityFile {4}""".format("katapult.vscode",instance.get_ip_addr(),"ubuntu",22,key_file_path)
+
+        # edit the ssh config
+        home_dir = os.path.expanduser('~')
+        ssh_config_path = os.path.join(home_dir,'.ssh','config')
+        try:
+            with open(ssh_config_path,'r') as ssh_config:
+                ssh_config_content = ssh_config.read()
+        except FileNotFoundError as e:
+            with open(ssh_config_path,'w') as ssh_config:
+                ssh_config.write("")
+            ssh_config_content = ""
+        
+        if 'katapult.vscode' in ssh_config_content:
+            with open(ssh_config_path,'w') as ssh_config:
+                new_content = re.sub(r"""Host katapult.vscode
+        Hostname [^\n]+
+        User [^\n]+
+        Port [^\n]+
+        StrictHostKeyChecking no
+        IdentityFile [^\n]+""",nu_fragment,ssh_config_content)
+                ssh_config.write(new_content)
+        else:
+            with open(ssh_config_path,'a') as ssh_config:
+                ssh_config.write('\n')
+                ssh_config.write(nu_fragment)        
 
         instanceid, ssh_conn , sftp = await self._wait_and_connect(instance)
 
+        self.debug(1,"Enabling TCP forwarding ...")
+
         stdout , stderr = await self._exec_command(ssh_conn,"sudo find /etc/ssh/sshd_config -type f -exec sed -i \"s/#AllowTcpForwarding yes/AllowTcpForwarding yes/g\" {} \\; && sudo systemctl restart sshd")
-        self.debug(1,(await stdout.read()))
-        self.debug(1,(await stderr.read()))
+        self.debug(2,"Stdout",(await stdout.read()))
+        self.debug(2,"Errors",(await stderr.read()))
+
+        self.debug(1,"done.")
+
+        self.debug(1,"Re-organizing files for VSCode ...")
+
+        #stdout , stderr = await self._exec_command(ssh_conn,"sudo find /etc/ssh/sshd_config -type f -exec sed -i \"s/#AllowTcpForwarding yes/AllowTcpForwarding yes/g\" {} \\; && sudo systemctl restart sshd")
+        self.debug(2,"Stdout",(await stdout.read()))
+        self.debug(2,"Errors",(await stderr.read()))
+
+        self.debug(1,"done.")
+
+        ssh_conn.close()
 
     @abstractmethod
     def get_recommended_cpus(self,inst_cfg):

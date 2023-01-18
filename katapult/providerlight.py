@@ -24,17 +24,17 @@ random.seed()
 
 class KatapultLightProvider(KatapultProvider,ABC):
 
-    def __init__(self,conf=None):
+    def __init__(self,conf=None,**kwargs):
 
-        KatapultProvider.__init__(self,conf)
+        KatapultProvider.__init__(self,conf,**kwargs)
 
         #self._install_maestro()
 
-    def _init(self,conf):
+    def _init(self,conf,**kwargs):
         self.ssh_conn   = None
         self.ftp_client = None
         self._current_session = None
-        super()._init(conf)
+        super()._init(conf,**kwargs)
         self._load()
     
     def _load(self):

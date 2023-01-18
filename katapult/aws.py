@@ -932,8 +932,8 @@ class AWSKatapultProviderImpl():
 
 class AWSKatapultFatProvider(KatapultFatProvider,AWSKatapultProviderImpl):
 
-    def __init__(self, conf):
-        KatapultFatProvider.__init__(self,conf)
+    def __init__(self, conf,**kwargs):
+        KatapultFatProvider.__init__(self,conf,**kwargs)
 
     def version(self):
         return AWSKatapultProviderImpl.version(self)
@@ -986,8 +986,8 @@ class AWSKatapultFatProvider(KatapultFatProvider,AWSKatapultProviderImpl):
 
 class AWSKatapultLightProvider(KatapultLightProvider,AWSKatapultProviderImpl):        
 
-    def __init__(self, conf):
-        KatapultLightProvider.__init__(self,conf)
+    def __init__(self, conf, **kwargs):
+        KatapultLightProvider.__init__(self,conf,**kwargs)
 
     def version(self):
         return AWSKatapultProviderImpl.version(self)

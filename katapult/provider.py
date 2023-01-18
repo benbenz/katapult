@@ -23,19 +23,19 @@ DIRECTORY_TMP = './tmp'
 
 class KatapultProvider(ABC):
 
-    def __init__(self, conf=None):
+    def __init__(self, conf=None,**kwargs):
 
         if conf is None:
             conf = dict()
 
-        self._init(conf)
+        self._init(conf,**kwargs)
         #KatapultProvider._init(self,conf)
 
         #self._instances_locks = dict()
         #self._provider_lock   = multiprocessing.Manager().Lock()
         #self._thread_safe_ultra = True # set to False if you want to try per instance locks
 
-    def _init(self,conf):
+    def _init(self,conf,**kwargs):
         self._state = KatapultProviderState.NEW
 
         self.DBG_LVL = conf.get('debug',1)
@@ -919,7 +919,7 @@ def guess_environment(envname,dir):
     return environment_obj , files_to_upload      
 
 
-def get_client(config_=None):
+def get_client(config_=None,**kwargs):
 
     if isinstance(config_,str): 
         config = get_config(config_)
@@ -939,7 +939,7 @@ def get_client(config_=None):
             
             craws  = __import__("katapult.aws")
 
-            client = craws.aws.AWSKatapultFatProvider(config)
+            client = craws.aws.AWSKatapultFatProvider(config,**kwargs)
 
             print("Using",client.version())
 
@@ -949,7 +949,7 @@ def get_client(config_=None):
 
             craws  = __import__("katapult.aws")
 
-            client = craws.aws.AWSKatapultLightProvider(config)
+            client = craws.aws.AWSKatapultLightProvider(config,**kwargs)
 
             print("Using",client.version())
 
