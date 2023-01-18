@@ -265,7 +265,11 @@ class ServerContext:
 
             elif command == 'deploy':
 
-                await self.kt_client.deploy()
+                kwargs = dict()
+                elif args and len(args)>=1:
+                    kwargs = stream_load(self.kt_client,args[0])
+
+                await self.kt_client.deploy(**kwargs)
 
             elif command == 'run':
 

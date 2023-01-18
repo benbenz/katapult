@@ -49,7 +49,7 @@ class KatapultFatProvider(KatapultProvider,ABC):
         self._environments = []
         self._jobs = []
         self._run_sessions = []
-        self._current_session = None        
+        self._current_session = None   
 
         # load the config
         self._config_manager = ConfigManager(self,self._config,self._instances,self._environments,self._jobs)
@@ -209,7 +209,7 @@ class KatapultFatProvider(KatapultProvider,ABC):
 
         self.serialize_state()         
                
-    async def _deploy_instance(self,instance,deploy_states,ssh_conn,ftp_client):
+    async def _deploy_instance(self,instance,deploy_states,ssh_conn,ftp_client,**kwargs):
 
         homedir     = instance.get_home_dir()
         global_path = instance.get_global_dir()
@@ -264,7 +264,7 @@ class KatapultFatProvider(KatapultProvider,ABC):
 
         deploy_states[instance.get_name()] = { 'upload' : re_upload } 
 
-    async def _deploy_environments(self,instance,deploy_states,ssh_conn,ftp_client):
+    async def _deploy_environments(self,instance,deploy_states,ssh_conn,ftp_client,**kwargs):
 
         re_upload_inst = deploy_states[instance.get_name()]['upload']
 
@@ -357,7 +357,7 @@ class KatapultFatProvider(KatapultProvider,ABC):
             await self._run_ssh_commands(instance,ssh_conn,commands)
         
 
-    async def _deploy_jobs(self,instance,deploy_states,ssh_conn,ftp_client):
+    async def _deploy_jobs(self,instance,deploy_states,ssh_conn,ftp_client,**kwargs):
 
         file_uploaded = dict()
 
@@ -365,7 +365,8 @@ class KatapultFatProvider(KatapultProvider,ABC):
         for job in instance.get_jobs():
             env      = job.get_env()        # get its environment
             dpl_env  = env.deploy(instance) # "deploy" the environment to the instance and get a DeployedEnvironment
-            dpl_job  = job.deploy(dpl_env,False) # do not add this dpl_job permanently (only use for utility here)
+            actual_deploy = kwargs.get('vscode_mode') == True
+            dpl_job  = job.deploy(dpl_env,actual_deploy) # do not add this dpl_job permanently (only use for utility here)
 
             input_files = self._get_files(dpl_job)            
 
@@ -437,7 +438,7 @@ class KatapultFatProvider(KatapultProvider,ABC):
 
                 self.debug(1,"uploaded.",dpl_job.get_hash())
 
-    async def _deploy_all(self,instance):
+    async def _deploy_all(self,instance,**kwargs):
 
         deploy_states = dict()
 
@@ -463,15 +464,15 @@ class KatapultFatProvider(KatapultProvider,ABC):
 
                 self.debug(1,"-- deploy instances --")
 
-                await self._deploy_instance(instance,deploy_states,ssh_conn,ftp_client)
+                await self._deploy_instance(instance,deploy_states,ssh_conn,ftp_client,**kwargs)
 
                 self.debug(1,"-- deploy environments --")
 
-                await self._deploy_environments(instance,deploy_states,ssh_conn,ftp_client)
+                await self._deploy_environments(instance,deploy_states,ssh_conn,ftp_client,**kwargs)
 
                 self.debug(1,"-- deploy jobs --")
 
-                await self._deploy_jobs(instance,deploy_states,ssh_conn,ftp_client) 
+                await self._deploy_jobs(instance,deploy_states,ssh_conn,ftp_client,**kwargs) 
 
                 #ftp_client.close()
                 ssh_conn.close()
@@ -563,7 +564,7 @@ class KatapultFatProvider(KatapultProvider,ABC):
     # - instances files
     # - environments files
     # - shared script files, uploads, inputs ...
-    async def deploy(self):
+    async def deploy(self,**kwargs):
 
         if not self._state & KatapultProviderState.STARTED:
             self.debug(1,"Not ready. Call 'start' first",color=bcolors.WARNING)
@@ -587,7 +588,7 @@ class KatapultFatProvider(KatapultProvider,ABC):
         
         jobs = []
         for instance in self._instances:
-            jobs.append( self._deploy_all(instance) )
+            jobs.append( self._deploy_all(instance,**kwargs) )
         await asyncio.gather( *jobs )
 
         self.set_state( self._state | KatapultProviderState.DEPLOYED )
@@ -1872,8 +1873,10 @@ class KatapultFatProvider(KatapultProvider,ABC):
 
     async def prepare_for_vscode(self):
 
-        await self.start() 
-        await self.deploy()
+        self._vscode_mode = True
+
+        await self.start(True) 
+        await self.deploy(vscode_mode=True)
 
         instance = self._instances[0]
 
@@ -1881,11 +1884,11 @@ class KatapultFatProvider(KatapultProvider,ABC):
         key_file_path = os.path.join(os.getcwd(),key_file_name)
 
         nu_fragment = """Host {0}
-        Hostname {1}
-        User {2}
-        Port {3}
-        StrictHostKeyChecking no
-        IdentityFile {4}""".format("katapult.vscode",instance.get_ip_addr(),"ubuntu",22,key_file_path)
+    Hostname {1}
+    User {2}
+    Port {3}
+    StrictHostKeyChecking no
+    IdentityFile {4}""".format("katapult.vscode",instance.get_ip_addr(),"ubuntu",22,key_file_path)
 
         # edit the ssh config
         home_dir = os.path.expanduser('~')
@@ -1901,11 +1904,11 @@ class KatapultFatProvider(KatapultProvider,ABC):
         if 'katapult.vscode' in ssh_config_content:
             with open(ssh_config_path,'w') as ssh_config:
                 new_content = re.sub(r"""Host katapult.vscode
-        Hostname [^\n]+
-        User [^\n]+
-        Port [^\n]+
-        StrictHostKeyChecking no
-        IdentityFile [^\n]+""",nu_fragment,ssh_config_content)
+    Hostname [^\n]+
+    User [^\n]+
+    Port [^\n]+
+    StrictHostKeyChecking no
+    IdentityFile [^\n]+""",nu_fragment,ssh_config_content)
                 ssh_config.write(new_content)
         else:
             with open(ssh_config_path,'a') as ssh_config:
@@ -1914,21 +1917,30 @@ class KatapultFatProvider(KatapultProvider,ABC):
 
         instanceid, ssh_conn , sftp = await self._wait_and_connect(instance)
 
-        self.debug(1,"Enabling TCP forwarding ...")
+        try:
 
-        stdout , stderr = await self._exec_command(ssh_conn,"sudo find /etc/ssh/sshd_config -type f -exec sed -i \"s/#AllowTcpForwarding yes/AllowTcpForwarding yes/g\" {} \\; && sudo systemctl restart sshd")
-        self.debug(2,"Stdout",(await stdout.read()))
-        self.debug(2,"Errors",(await stderr.read()))
+            self.debug(1,"Enabling TCP forwarding ...")
 
-        self.debug(1,"done.")
+            stdout , stderr = await self._exec_command(ssh_conn,"sudo find /etc/ssh/sshd_config -type f -exec sed -i \"s/#AllowTcpForwarding yes/AllowTcpForwarding yes/g\" {} \\; && sudo systemctl restart sshd")
+            self.debug(2,"Stdout",(await stdout.read()))
+            self.debug(2,"Errors",(await stderr.read()))
 
-        self.debug(1,"Re-organizing files for VSCode ...")
+            self.debug(1,"done.")
 
-        #stdout , stderr = await self._exec_command(ssh_conn,"sudo find /etc/ssh/sshd_config -type f -exec sed -i \"s/#AllowTcpForwarding yes/AllowTcpForwarding yes/g\" {} \\; && sudo systemctl restart sshd")
-        self.debug(2,"Stdout",(await stdout.read()))
-        self.debug(2,"Errors",(await stderr.read()))
+            self.debug(1,"Re-organizing files for VSCode ...")
 
-        self.debug(1,"done.")
+            job_dir = self._jobs[0].get_deployed_jobs()[0].get_path()
+            new_dir = instance.path_join(instance.get_home_dir(),'MYFILES')
+            stdout , stderr = await self._exec_command(ssh_conn,"mv {0} {1}".format(job_dir,new_dir))
+            self.debug(2,"Stdout",(await stdout.read()))
+            self.debug(2,"Errors",(await stderr.read()))
+
+            self.debug(1,"done.")
+
+        except Exception as e:
+
+            self.debug(1,"Error while preparing for VSCode",e)
+            traceback.print_exc()
 
         ssh_conn.close()
 

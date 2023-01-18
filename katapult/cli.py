@@ -89,7 +89,7 @@ async def cli_one_shot():
             }
         ]
     }
-    kt = get_client(config,state_file='state.vscode.pickle')
+    kt = get_client(config,state_file='state.vscode.pickle',provider_config='state.vscode.config.json')
     await kt.prepare_for_vscode()
 
     # https://stackoverflow.com/questions/54402104/how-to-connect-ec2-instance-with-vscode-directly-using-pem-file-in-sftp/60305052#60305052

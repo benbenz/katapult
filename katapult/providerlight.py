@@ -616,9 +616,9 @@ class KatapultLightProvider(KatapultProvider,ABC):
             ssh_conn.close()
         self.debug(1,'RESETTING done')
 
-    async def deploy(self):
+    async def deploy(self,**kwargs):
         # triggers maestro::deploy
-        await self._exec_maestro_command("deploy") # use output - the deploy part will be skipped depending on option ...
+        await self._exec_maestro_command("deploy",kwargs) # use output - the deploy part will be skipped depending on option ...
 
     async def run(self,continue_session=False):
         # triggers maestro::run

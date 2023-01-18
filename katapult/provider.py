@@ -686,7 +686,7 @@ class KatapultProvider(ABC):
         pass
         
     @abstractmethod
-    async def deploy(self):
+    async def deploy(self,**kwargs):
         pass
 
     @abstractmethod

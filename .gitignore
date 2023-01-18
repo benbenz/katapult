@@ -18,6 +18,7 @@ state.json
 state.pickle
 state.*.pickle
 state.config.json
+state.*.config.json
 commits.log
 watch.log
 /tmp
