@@ -140,7 +140,9 @@ async def cli_one_shot():
     #
     # on OSX:
     # /Applications/Visual\ Studio\ Code.app/Contents/MacOS/Electron --folder-uri=vscode-remote://ubuntu@13.38.11.243/home/ubuntu/
-    os.system( "/Applications/Visual\ Studio\ Code.app/Contents/MacOS/Electron --folder-uri=vscode-remote://katapult.vscode/home/ubuntu/")
+    os.system( "/Applications/Visual\ Studio\ Code.app/Contents/MacOS/Electron")
+    #print("Add Remote-SSH connection using:\nssh -o StrictHostKeyChecking=no katapult.vscode")
+    
 
 def start_server():
     server_started = False
