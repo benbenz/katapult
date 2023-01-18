@@ -103,6 +103,7 @@ async def cli_one_shot():
     Hostname {1}
     User {2}
     Port {3}
+    StrictHostKeyChecking no
     IdentityFile {4}""".format("katapult.vscode",instance.get_ip_addr(),"ubuntu",22,key_file_path)
 
     # edit the ssh config
@@ -122,6 +123,7 @@ async def cli_one_shot():
     Hostname [^\n]+
     User [^\n]+
     Port [^\n]+
+    StrictHostKeyChecking no
     IdentityFile [^\n]+""",nu_fragment,ssh_config_content)
             ssh_config.write(new_content)
     else:
