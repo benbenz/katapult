@@ -856,7 +856,11 @@ def guess_environment(envname,dir):
 
     files_to_upload = []
 
-    for root, dirs, files in os.walk(".", topdown=False):
+    # https://stackoverflow.com/questions/13454164/os-walk-without-hidden-folders
+    for root, dirs, files in os.walk(".", topdown=True):
+        # update dirs to ignore hidden directories for next recursion
+        dirs[:] = [d for d in dirs if not d[0] == '.']
+
         for name in files:
             file_path = os.path.join(root, name)
             file_name, file_extension = os.path.splitext(name)   

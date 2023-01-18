@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "katapult"
-version = "0.6.19"
+version = "0.6.20"
 description = "Katapult is a Python package that allows you to run any script on a cloud service (for now AWS only)."
 authors = ["Your Name <you@example.com>"]
 license = "MIT"
