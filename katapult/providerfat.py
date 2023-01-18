@@ -9,7 +9,7 @@ from io import BytesIO
 import csv , io
 import pkg_resources
 from katapult.core import *
-from katapult.provider import KatapultProvider , KatapultProviderState , debug , PROVIDER_CONFIG , DIRECTORY_TMP_AUTO_STOP , DIRECTORY_TMP , convert_EOL , get_EOL_conversion
+from katapult.provider import KatapultProvider , KatapultProviderState , debug , DIRECTORY_TMP_AUTO_STOP , DIRECTORY_TMP , convert_EOL , get_EOL_conversion
 from katapult.config_state import ConfigManager , StateSerializer , STATE_FILE
 from enum import IntFlag
 from threading import current_thread

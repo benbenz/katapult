@@ -38,6 +38,8 @@ class KatapultProvider(ABC):
     def _init(self,conf,**kwargs):
         self._state = KatapultProviderState.NEW
 
+        self._provider_config = kwargs.get('provider_config') or PROVIDER_CONFIG
+
         self.DBG_LVL = conf.get('debug',1)
         self.DBG_PREFIX = None
         global DBG_LVL
@@ -572,7 +574,7 @@ class KatapultProvider(ABC):
         pass
 
     def _save_config(self):
-        with open(PROVIDER_CONFIG,'w') as config_file:
+        with open(self._provider_config,'w') as config_file:
             config_file.write( json.dumps(self._config,indent=4) )
 
     def resolve_config(self,config_list_obj,key_name):
@@ -651,9 +653,9 @@ class KatapultProvider(ABC):
 
     async def cfg_reset(self):
         config = copy.deepcopy(self._config)
-        if os.path.isfile(PROVIDER_CONFIG):
+        if os.path.isfile(self._provider_config):
             try:
-                os.remove(PROVIDER_CONFIG)
+                os.remove(self._provider_config)
             except:
                 pass
         # removing objects from config:
@@ -661,7 +663,7 @@ class KatapultProvider(ABC):
         config['environments'] = []
         config['jobs']         = []
 
-        self._init(config)  
+        self._init(config,provider_config=self._provider_config)  
 
     @abstractmethod
     async def get_run_session(self,session_id):
@@ -921,16 +923,18 @@ def guess_environment(envname,dir):
 
 def get_client(config_=None,**kwargs):
 
+    provider_config = kwargs.get('provider_config') or PROVIDER_CONFIG
+
     if isinstance(config_,str): 
         config = get_config(config_)
     elif isinstance(config_,dict):
         config = config_
     else: # get the auto-saved config
-        config = get_config(PROVIDER_CONFIG)
+        config = get_config(provider_config)
 
     if config is None:
         debug(1,"You need to specify a valid configuration path",color=bcolors.FAIL)
-        debug(1,"(could also not find default config file",PROVIDER_CONFIG,")",color=bcolors.FAIL)
+        debug(1,"(could also not find default config file",provider_config,")",color=bcolors.FAIL)
         raise KatapultError()
 
     if config.get('provider','aws') == 'aws':

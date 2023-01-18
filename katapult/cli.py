@@ -71,6 +71,7 @@ async def cli_one_shot():
         'maestro'      : 'local' , # one shot is local
         'auto_stop'    : False ,
         'recover'      : False ,
+        'mutualize_uploads' : False , # put uploads in the job directory, cause we will move things around later...
         'instances'    : [
             {
                 'type'         : args.type or 't3.micro' ,
