@@ -817,7 +817,7 @@ class KatapultFatProvider(KatapultProvider,ABC):
             run_sh  = instance.path_join( global_path , 'run.sh' )
             run_log = instance.path_join( run_path , 'run-'+uid+'.log' )
             pid_sh  = instance.path_join( global_path , 'getpid.sh' )
-            cmd_run = cmd_run + run_sh+" \"" + dpl_env.get_name_with_hash() + "\" \""+dpl_job.get_command().replace("\"","\\\"")+"\" \"" + "|".join(job.get_config('input_files')) + "\" \"" + "|".join( job.get_config('output_files') ) + "\" " + batch.get_uid() + " " + job.get_hash()+" "+uid+">"+run_log+" 2>&1"
+            cmd_run = cmd_run + run_sh+" \"" + dpl_env.get_name_with_hash() + "\" \""+dpl_job.get_command().replace("\"","\\\"")+"\" \"" + "|".join(job.get_config('input_files')or[]) + "\" \"" + "|".join( job.get_config('output_files') or []) + "\" " + batch.get_uid() + " " + job.get_hash()+" "+uid+">"+run_log+" 2>&1"
             cmd_run = cmd_run + "\n"
             cmd_pid = cmd_pid + pid_sh + " \"" + pid_file + "\"\n"
 
@@ -1210,6 +1210,9 @@ class KatapultFatProvider(KatapultProvider,ABC):
 
                     elif process.get_state() == KatapultProcessState.DONE:
                         out_files = dpl_job.get_config('output_files') # this file is written for the local machine
+                        if out_files is None:
+                            self.debug(1,"No output defined in config for job. We won't fetch",dpl_job,color=bcolors.WARNING)
+                            break
                         for out_file in out_files:
                             remote_file_path = instance.path_join( process.get_path() , out_file )
                             directory = instance.path_dirname( remote_file_path )
@@ -1451,7 +1454,7 @@ class KatapultFatProvider(KatapultProvider,ABC):
             if jobsinfo:
                 jobsinfo = jobsinfo + " \"" + dpl_env.get_name_with_hash() + "\" " + str(shash) + " " + str(uid) + " " + str(pid) + " " + str(pid_child) + " \"" + "|".join(job.get_config('output_files')) + "\""
             else:
-                jobsinfo = "\"" + dpl_env.get_name_with_hash() + "\" " + str(shash) + " " + str(uid) + " " + str(pid) + " " + str(pid_child) + " \"" + "|".join(job.get_config('output_files')) + "\""
+                jobsinfo = "\"" + dpl_env.get_name_with_hash() + "\" " + str(shash) + " " + str(uid) + " " + str(pid) + " " + str(pid_child) + " \"" + "|".join(job.get_config('output_files')or[]) + "\""
             
         return jobsinfo 
     
@@ -1875,7 +1878,7 @@ class KatapultFatProvider(KatapultProvider,ABC):
 
         self._vscode_mode = True
 
-        await self.start(True) 
+        await self.start()
         await self.deploy(vscode_mode=True)
 
         instance = self._instances[0]

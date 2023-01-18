@@ -11,7 +11,8 @@ import os
 import re
 from katapult.maestroserver import main as server_main
 from katapult.maestroclient import maestro_client
-from katapult.provider import make_client_command , stream_dump , guess_environment , get_client
+from katapult.provider import make_client_command , stream_dump , get_client , get_vscode_client , get_rundir_client
+from katapult.core import KatapultProcessState
 
 # if [[ $(ps aux | grep "katapult.maestroserver" | grep -v 'grep') ]] ; then
 #     echo "Katapult server already running"
@@ -56,49 +57,42 @@ async def cli_one_shot():
     argParser = argparse.ArgumentParser(prog = 'katapult.cli',
                     description = 'runs one shot commands',
                     epilog = '--Thanks!')  
-    argParser.add_argument('command') 
+    
+    #argParser.add_argument('command')
+    subparsers = argParser.add_subparsers(dest='command')  
+    subparsers.required = True  
+
     argParser.add_argument("-p", "--profile", help="your aws profile name")
     argParser.add_argument("-t", "--type", help="the aws instance type")
     argParser.add_argument("-r", "--region", help="the aws region")
+
+    parser_vscode  = subparsers.add_parser('vscode')
+    parser_run_dir = subparsers.add_parser('run_dir')
+    parser_run_dir.add_argument("script_file",help="the (entry) script to run")
+    parser_run_dir.add_argument("output_files",help="the output file(s)",default=None)
+    
     args = argParser.parse_args()
 
-    env_obj , the_files = guess_environment('vscode','.')
-    
-    config = {
-        'project'      : 'vscode' ,
-        'profile'      : args.profile , 
-        'debug'        : 1 ,
-        'maestro'      : 'local' , # one shot is local
-        'auto_stop'    : False ,
-        'recover'      : False ,
-        'mutualize_uploads' : False , # put uploads in the job directory, cause we will move things around later...
-        'instances'    : [
-            {
-                'type'         : args.type or 't3.micro' ,
-                'number'       : 1 ,
-                'region'       : args.region
-            }
-        ] ,
-        'environments' : [ env_obj ] ,
-        'jobs' : [
-            {
-                'run_command' : 'ls' , # foo command ,
-                'upload_files' : the_files , # we're using this feature to upload files
-                'input_files' : 'foo_in.dat' , # foo
-                'output_files' : 'foo_out.dat' # foo
-            }
-        ]
-    }
-    kt = get_client(config,state_file='state.vscode.pickle',provider_config='state.vscode.config.json')
-    await kt.prepare_for_vscode()
+    if args.command == 'vscode':
 
-    # https://stackoverflow.com/questions/54402104/how-to-connect-ec2-instance-with-vscode-directly-using-pem-file-in-sftp/60305052#60305052
-    # https://stackoverflow.com/questions/60144074/how-to-open-a-remote-folder-from-command-line-in-vs-code
-    #
-    # on OSX:
-    # /Applications/Visual\ Studio\ Code.app/Contents/MacOS/Electron --folder-uri=vscode-remote://ubuntu@13.38.11.243/home/ubuntu/
-    os.system( "/Applications/Visual\ Studio\ Code.app/Contents/MacOS/Electron")
-    #print("Add Remote-SSH connection using:\nssh -o StrictHostKeyChecking=no katapult.vscode")
+        kt = get_vscode_client(args)
+        await kt.prepare_for_vscode()
+        # https://stackoverflow.com/questions/54402104/how-to-connect-ec2-instance-with-vscode-directly-using-pem-file-in-sftp/60305052#60305052
+        # https://stackoverflow.com/questions/60144074/how-to-open-a-remote-folder-from-command-line-in-vs-code
+        # on OSX:
+        # /Applications/Visual\ Studio\ Code.app/Contents/MacOS/Electron --folder-uri=vscode-remote://ubuntu@13.38.11.243/home/ubuntu/
+        os.system( "/Applications/Visual\ Studio\ Code.app/Contents/MacOS/Electron")
+
+    elif args.command == 'run_dir':
+
+        kt = get_rundir_client(args)
+        await kt.start()
+        await kt.deploy()
+        await kt.run()
+        await kt.wait(KatapultProcessState.DONE|KatapultProcessState.ABORTED)
+        await kt.print_aborted_logs()
+        dir = await kt.fetch_results()
+        print("FETCHED RESULTS ARE in",dir)
     
 
 def start_server():

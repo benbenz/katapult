@@ -969,6 +969,76 @@ def get_client(config_=None,**kwargs):
 
         raise KatapultError()
 
+
+def get_vscode_client(args):
+    
+    env_obj , the_files = guess_environment('vscode','.')
+    
+    config = {
+        'project'      : 'vscode' ,
+        'profile'      : args.profile , 
+        'debug'        : 1 ,
+        'maestro'      : 'local' , # one shot is local
+        'auto_stop'    : False ,
+        'recover'      : False ,
+        'mutualize_uploads' : False , # put uploads in the job directory, cause we will move things around later...
+        'instances'    : [
+            {
+                'type'         : args.type or 't3.micro' ,
+                'number'       : 1 ,
+                'region'       : args.region
+            }
+        ] ,
+        'environments' : [ env_obj ] ,
+        'jobs' : [
+            {
+                'run_command' : 'ls' , # foo command ,
+                'upload_files' : the_files , # we're using this feature to upload files
+                'input_files' : None , 
+                'output_files' : 'foo_out.dat' # foo
+            }
+        ]
+    }
+    client = get_client(config,state_file='state.vscode.pickle',provider_config='state.vscode.config.json')  
+    return client
+
+def get_rundir_client(args):
+    
+    env_obj , the_files = guess_environment('run_dir','.')
+
+    if args.output_files:
+        output_files = args.output_files.split(",")
+    else:
+        output_files = None
+    
+    config = {
+        'project'      : 'run_dir' ,
+        'profile'      : args.profile , 
+        'debug'        : 1 ,
+        'maestro'      : 'local' , # one shot is local
+        'auto_stop'    : False ,
+        'recover'      : True ,
+        'mutualize_uploads' : False , # put uploads in the job directory, cause we will move things around later...
+        'instances'    : [
+            {
+                'type'         : args.type or 't3.micro' ,
+                'number'       : 1 ,
+                'region'       : args.region
+            }
+        ] ,
+        'environments' : [ env_obj ] ,
+        'jobs' : [
+            {
+                'run_script' : args.script_file , 
+                'upload_files' : the_files , 
+                'input_files' : None ,
+                'output_files' : output_files
+            }
+        ]
+    }
+    client = get_client(config,state_file='state.rundir.pickle',provider_config='state.rundir.config.json')  
+    return client    
+
 def line_buffered(f):
     line_buf = ""
     doContinue = True

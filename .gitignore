@@ -28,5 +28,6 @@ watch.log
 /examples/scriptflow/*/.sf
 /examples/scriptflow/*/sf.json
 /examples/scriptflow/*/*.txt
+/examples/*/tmp
 
 /scriptflow

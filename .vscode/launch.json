@@ -126,6 +126,18 @@
             "env": {
                 "PYTHONPATH":"${workspaceRoot}:${workspaceRoot}/.venv/lib/python3.9/site-packages:$PYTHONPATH"
             }
+        },
+        {
+            "name": "CLI RUN_DIR",
+            "type": "python",
+            "request": "launch",
+            "program": "${workspaceFolder}/katapult/cli.py",
+            "console": "integratedTerminal",
+            "cwd": "${workspaceFolder}/examples/run_dir",
+            "args": ["run_dir","run_remote.py 5 15","output1.dat,output2.dat"],
+            "env": {
+                "PYTHONPATH":"${workspaceRoot}:${workspaceRoot}/.venv/lib/python3.9/site-packages:$PYTHONPATH"
+            }
         }
     ]
 }
