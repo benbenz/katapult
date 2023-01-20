@@ -686,6 +686,10 @@ class KatapultProvider(ABC):
         pass
         
     @abstractmethod
+    async def get_num_instances(self):
+        pass
+
+    @abstractmethod
     async def deploy(self,**kwargs):
         pass
 

@@ -53,25 +53,7 @@ def cli(command):
 
 # basically this: https://dev.to/cindyledev/remote-development-with-visual-studio-code-on-aws-ec2-4cla
 # in one CLI ...
-async def cli_one_shot():
-    argParser = argparse.ArgumentParser(prog = 'katapult.cli',
-                    description = 'runs one shot commands',
-                    epilog = '--Thanks!')  
-    
-    #argParser.add_argument('command')
-    subparsers = argParser.add_subparsers(dest='command')  
-    subparsers.required = True  
-
-    argParser.add_argument("-p", "--profile", help="your aws profile name")
-    argParser.add_argument("-t", "--type", help="the aws instance type")
-    argParser.add_argument("-r", "--region", help="the aws region")
-
-    parser_vscode  = subparsers.add_parser('vscode')
-    parser_run_dir = subparsers.add_parser('run_dir')
-    parser_run_dir.add_argument("script_file",help="the (entry) script to run")
-    parser_run_dir.add_argument("output_files",help="the output file(s)",default=None)
-    
-    args = argParser.parse_args()
+async def cli_one_shot(args):
 
     if args.command == 'vscode':
 
@@ -127,127 +109,106 @@ def start_server():
         #p.daemon = True
         #p.start()
 
-def cli_translate(command,args):
-    if command == 'init':
-        return args
+def cli_translate(args):
+    if args.command == 'init':
+        return [ args.config ]
 
-    elif command == 'wakeup':
-        return args
+    elif args.command == 'wakeup':
+        return None
 
-    elif command == 'start':
-        if not args:
-            return [False]
-        elif len(args)==1:
-            return [args[0].strip().lower() == "true"]
-        else:
-            return [False]
+    elif args.command == 'start':
+        return [ args.reset ]
 
-    elif command == 'cfg_add_instances':
-        return args
+    elif args.command == 'cfg_add_instances':
+        return [ args.config , json.loads(args.kwargs) if kwargs else {} ]
 
-    elif command == 'cfg_add_environments':
-        return args
+    elif args.command == 'cfg_add_environments':
+        return [ args.config , json.loads(args.kwargs) if kwargs else {} ]
 
-    elif command == 'cfg_add_jobs':
-        return args
+    elif args.command == 'cfg_add_jobs':
+        return [ args.config , json.loads(args.kwargs) if kwargs else {} ]
 
-    elif command == 'cfg_add_config':
-        return args
+    elif args.command == 'cfg_add_config':
+        return [ args.config , json.loads(args.kwargs) if kwargs else {} ]
 
-    elif command == 'cfg_reset':
-        return args
+    elif args.command == 'cfg_reset':
+        return [ args.config , json.loads(args.kwargs) if kwargs else {} ]
 
-    elif command == 'deploy':
-        return args
+    elif args.command == 'deploy':
+        return [ json.loads(args.kwargs) if kwargs else {} ]
 
-    elif command == 'run':
-        return args
+    elif args.command == 'run':
+        return [ args.continue_session ]
 
-    elif command == 'kill':
-        return args
+    elif args.command == 'kill':
+        return [ args.identifier ]
     
-    elif command == 'wait':
-        new_args = []
-        if args and len(args) >= 1:
-            job_state = int(args[0])
-            new_args.append(job_state)
-        if args and len(args) >= 2:
-            run_session = KatapultRunSessionProxy( args[1] )
-            new_args.append( stream_dump(run_session) )
-        return new_args 
+    elif args.command == 'wait':
+        if args.run_session:
+            return [ args.job_state , stream_dump( KatapultRunSessionProxy( args.run_session ) ) ]
+        else:
+            return [ args.job_state ]
 
-    elif command == 'get_num_active_processes':
+    elif args.command == 'get_num_active_processes':
+        if args.run_session:
+            return [ stream_dump( KatapultRunSessionProxy( args.run_session ) ) ]
+        else:
+            return None
 
-        new_args = []
-        if args and len(args) >= 1:
-            run_session = KatapultRunSessionProxy( args[0] )
-            new_args.append( stream_dump(run_session) )
-        return new_args 
+    elif args.command == 'get_num_instances':
+        return None
 
-    elif command == 'get_num_instances':
-        return args
+    elif args.command == 'get_jobs_states':
+        argsarr = []
+        if args.run_session:
+            argsarr.append( stream_dump( KatapultRunSessionProxy(args.run_session) ) )
+        if args.last_running_processes:
+            argsarr.append(args.last_running_processes)
+        return argsarr
 
-    elif command == 'get_states' or command == 'get_jobs_states':
-        new_args = []
-        if args and len(args) >= 1:
-            run_session = KatapultRunSessionProxy( args[0] )
-            new_args.append( stream_dump(run_session) )
-        return new_args 
+    elif args.command == 'print_summary':
+        argsarr = []
+        if args.run_session:
+            argsarr.append( stream_dump( KatapultRunSessionProxy(args.run_session) ) )
+        if args.instance:
+            argsarr.append( stream_dump( KatapultInstanceProxy(args.instance) ) )
+        return argsarr
 
-    elif command == 'print_summary' or command == 'print':
-        new_args = []
-        if args and len(args) >= 1:
-            run_session = KatapultRunSessionProxy( args[0] )
-            new_args.append( stream_dump(run_session) )
-        if args and len(args) >= 2:
-            instance = KatapultInstanceProxy( args[1] )
-            new_args.append( stream_dump(instance) )
-        return new_args 
-
-    elif command == 'print_aborted' or command == 'print_aborted_logs':
-        new_args = []
-        if args and len(args) >= 1:
-            run_session = KatapultRunSessionProxy( args[0] )
-            new_args.append( stream_dump(run_session) )
-        if args and len(args) >= 2:
-            instance = KatapultInstanceProxy( args[1] )
-            new_args.append( stream_dump(instance) )
-        return new_args 
+    elif args.command == 'print_aborted_logs':
+        argsarr = []
+        if args.run_session:
+            argsarr.append( stream_dump( KatapultRunSessionProxy(args.run_session) ) )
+        if args.instance:
+            argsarr.append( stream_dump( KatapultInstanceProxy(args.instance) ) )
+        return argsarr
         
-    elif command == 'print_objects':
-        return args
+    elif args.command == 'print_objects':
+        return None
 
-    elif command == 'clear_results_dir':
-        return args
+    elif args.command == 'clear_results_dir':
+        return None
 
     # out_dir=None,run_session=None,use_cached=True,use_normal_output=False
-    elif command == 'fetch_results':
-
-        new_args = []
-        if args and len(args)>=1:
-            directory = args[0].strip()
-            if directory.lower() == 'none':
-                directory = None
-            new_args.append(directory)
-        if args and len(args)>=2:
-            run_session = KatapultRunSessionProxy( args[1] )
-            new_args.append( stream_dump(run_session) )
-        if args and len(args)>=3:
-            use_cached = args[2].lower().strip() == "true"
-            new_args.append( use_cached )
-        if args and len(args)>=4:
-            use_normal_output = args[3].lower().strip() == "true"
-            new_args.append( use_normal_output )
-        return new_args
+    elif args.command == 'fetch_results':
+        argsarr = []
+        if args.directory:
+            argsarr.append(args.directory)
+        if args.run_session:
+            argsarr.append( stream_dump( KatapultRunSessionProxy( args.run_session ) ) )
+        if args.use_cached:
+            argsarr.append( args.use_cached )
+        if args.use_normal_output:
+            argsarr.append( use_normal_output )
+        return argsarr
 
     elif command == 'finalize':
-        return args
+        return None
 
     elif command == 'shutdown':
-        return args
+        return None
 
     elif command == 'test':
-        return args
+        return None
     
     else:
         return None
@@ -255,24 +216,121 @@ def cli_translate(command,args):
 def main():
     multiprocessing.set_start_method('spawn')
 
-    if len(sys.argv)<2:
-        print("python3 -m katapult.cli CMD [ARGS]")
-        sys.exit()
+    argParser = argparse.ArgumentParser(prog = 'katapult.cli',description = 'run Katapult commands',epilog = '--Thanks!')  
+    
+    #argParser.add_argument('command')
+    subparsers = argParser.add_subparsers(dest='command')  
+    subparsers.required = True  
 
-    args = copy.deepcopy(sys.argv)
-    cmd_arg = args.pop(0) #trash
-    while 'cli' not in cmd_arg:
-        cmd_arg = args.pop(0)
-    command = args.pop(0)
+    parser_vscode  = subparsers.add_parser('vscode')
+    parser_vscode.add_argument("-p", "--profile", help="your aws profile name")
+    parser_vscode.add_argument("-t", "--type", help="the aws instance type")
+    parser_vscode.add_argument("-r", "--region", help="the aws region")
 
-    one_shot_command = command in [ 'vscode' , 'run_dir' ]
+    parser_run_dir = subparsers.add_parser('run_dir')
+    parser_run_dir.add_argument("script_file",help="the (entry) script to run")
+    parser_run_dir.add_argument("output_files",help="the output file(s)",default=None)
+    parser_run_dir.add_argument("-p", "--profile", help="your aws profile name")
+    parser_run_dir.add_argument("-t", "--type", help="the aws instance type")
+    parser_run_dir.add_argument("-r", "--region", help="the aws region")
+
+    parser_init = subparsers.add_parser('init')
+    parser_init.add_argument("config",help="config file path or config file json string")
+    
+    parser_wakeup = subparsers.add_parser('wakeup')
+
+    parser_start = subparsers.add_parser('start')
+    parser_start.add_argument("-r","--reset",help="reset option",nargs='?',type=bool,const=False)
+    
+    parser_cfg_add_instances = subparsers.add_parser('cfg_add_instances')
+    parser_cfg_add_instances.add_argument("config",help="config file path or config file json string")
+    parser_cfg_add_instances.add_argument("-kw","--kwargs",help="a json dictionnary of optional parameters")    
+
+    parser_cfg_add_envs = subparsers.add_parser('cfg_add_environments')
+    parser_cfg_add_envs.add_argument("config",help="config file path or config file json string")
+    parser_cfg_add_envs.add_argument("-kw","--kwargs",help="a json dictionnary of optional parameters")    
+
+    parser_cfg_add_jobs = subparsers.add_parser('cfg_add_jobs')
+    parser_cfg_add_jobs.add_argument("config",help="config file path or config file json string")
+    parser_cfg_add_jobs.add_argument("-kw","--kwargs",help="a json dictionnary of optional parameters")    
+
+    parser_cfg_add_config = subparsers.add_parser('cfg_add_config')
+    parser_cfg_add_config.add_argument("config",help="config file path or config file json string")
+    parser_cfg_add_config.add_argument("-kw","--kwargs",help="a json dictionnary of optional parameters")    
+
+    parser_cfg_reset = subparsers.add_parser('cfg_reset')
+    parser_cfg_reset.add_argument("config",help="config file path or config file json string")
+    parser_cfg_reset.add_argument("-kw","--kwargs",help="a json dictionnary of optional parameters")    
+
+    parser_deploy = subparsers.add_parser('deploy')
+    parser_deploy.add_argument("-kw","--kwargs",help="a json dictionnary of optional parameters")    
+
+    parser_run = subparsers.add_parser('run')
+    parser_run.add_argument("-c","--continue_session",nargs='?',const=False,type=bool,help="continue the current running session")    
+
+    parser_run = subparsers.add_parser('kill')
+    parser_run.add_argument("identifier",help="id of the object to kill (process, job, session)")    
+
+    parser_wait = subparsers.add_parser('wait')
+    parser_wait.add_argument("job_state",help="the value of the job state to wait for (bit to bit)")    
+    parser_wait.add_argument("-s","--run_session",help="the run-session's id to wait for")
+
+    parser_numproc = subparsers.add_parser('get_num_active_processes')
+    parser_numproc.add_argument("-s","--run_session",help="the run-session's id to wait for")
+
+    parser_numinst = subparsers.add_parser('get_num_instances')
+
+    parser_states = subparsers.add_parser('get_jobs_states')
+    parser_states.add_argument("-s","--run_session",help="the run-session's id to get the jobs states for")
+    parser_states.add_argument("-l","--last_running_processes",help="only the last running processes",nargs='?',type=bool,const=True)
+
+    parser_printsum = subparsers.add_parser('print_summary')
+    parser_printsum.add_argument("-s","--run_session",help="the run-session's to print")
+    parser_printsum.add_argument("-i","--instance",help="an instance filter")
+
+    parser_logs = subparsers.add_parser('print_aborted_logs')
+    parser_logs.add_argument("-s","--run_session",help="the run-session's to print the aborted logs")
+    parser_logs.add_argument("-i","--instance",help="an instance filter")
+
+    parser_printobjs = subparsers.add_parser('print_objects')
+
+    parser_cleardir = subparsers.add_parser('clear_result_dir')
+
+    parser_fetch = subparsers.add_parser('fetch_results')
+    parser_fetch.add_argument("-d","--directory",help="the root directory to download the files to")
+    parser_fetch.add_argument("-s","--run_session",help="the run-session's to print the aborted logs")
+    parser_fetch.add_argument("-c","--use_cached",help="whether to use the results cache or re-download")
+    parser_fetch.add_argument("-n","--use_normal_output",help="use original output file names or not")
+
+    parser_finalize = subparsers.add_parser('finalize')
+
+    parser_shutdown = subparsers.add_parser('shutdown')
+
+    parser_test = subparsers.add_parser('test')
+
+    args = argParser.parse_args()
+
+    # if len(sys.argv)<2:
+    #     print("python3 -m katapult.cli CMD [ARGS]")
+    #     sys.exit()
+    # args = copy.deepcopy(sys.argv)
+    # cmd_arg = args.pop(0) #trash
+    # while 'cli' not in cmd_arg:
+    #     cmd_arg = args.pop(0)
+    # command = args.pop(0)
+    #one_shot_command = command in [ 'vscode' , 'run_dir' ]
+    
+    one_shot_command = args.command in [ 'vscode' , 'run_dir' ]
 
     if one_shot_command:
-        asyncio.run( cli_one_shot() )
+        asyncio.run( cli_one_shot(args) )
+        #asyncio.run( cli_one_shot() )
     else:
-        ser_args = cli_translate(command,args)
+        ser_args = cli_translate(args)
+        #ser_args = cli_translate(command,args)
         # lets not escape the command, we're not sending it to a stream
-        the_command = make_client_command( command , ser_args , False)
+        #the_command = make_client_command( command , ser_args , False)
+        the_command = make_client_command( args.command , ser_args , False)
         cli(the_command)
 
 
