@@ -393,6 +393,30 @@ class ServerContext:
 
                 asyncio.get_event_loop().stop()
 
+            elif command == 'start_instance':
+
+                if args and len(args) >= 1:
+                    instance = self.get_instance("START_INSTANCE:",args[0])
+                    await self.kt_client.start_instance(instance)
+
+            elif command == 'stop_instance':
+
+                if args and len(args) >= 1:
+                    instance = self.get_instance("STOP_INSTANCE:",args[0])
+                    await self.kt_client.stop_instance(instance)
+
+            elif command == 'terminate_instance':
+
+                if args and len(args) >= 1:
+                    instance = self.get_instance("TERMINATE_INSTANCE:",args[0])
+                    await self.kt_client.terminate_instance(instance)
+
+            elif command == 'reboot_instance':
+
+                if args and len(args) >= 1:
+                    instance = self.get_instance("REBOOT_INSTANCE:",args[0])
+                    await self.kt_client.reboot_instance(instance)
+
             elif command == 'test':
 
                 print("TEST")

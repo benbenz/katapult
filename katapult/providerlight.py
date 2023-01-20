@@ -764,6 +764,18 @@ class KatapultLightProvider(KatapultProvider,ABC):
         except asyncssh.misc.ConnectionLost as cle:
             pass
 
+    # def start_instance(self,instance):
+    #     await self._exec_maestro_command("start_instance",instance)
+
+    # def stop_instance(self,instance):
+    #     await self._exec_maestro_command("stop_instance",instance)
+
+    # def terminate_instance(self,instance):
+    #     await self._exec_maestro_command("terminate_instance",instance)
+
+    # def reboot_instance(self,instance):
+    #     await self._exec_maestro_command("reboot_instance",instance)
+
     async def get_objects(self):
         # triggers maestro::get_objects
         return await self._exec_maestro_command("get_objects")

@@ -144,13 +144,13 @@ def cli_translate(args):
         return [ args.identifier ]
     
     elif args.command == 'wait':
-        if args.run_session:
+        if args.run_session is not None:
             return [ args.job_state , stream_dump( KatapultRunSessionProxy( args.run_session ) ) ]
         else:
             return [ args.job_state ]
 
     elif args.command == 'get_num_active_processes':
-        if args.run_session:
+        if args.run_session is not None:
             return [ stream_dump( KatapultRunSessionProxy( args.run_session ) ) ]
         else:
             return None
@@ -160,25 +160,25 @@ def cli_translate(args):
 
     elif args.command == 'get_jobs_states':
         argsarr = []
-        if args.run_session:
+        if args.run_session is not None:
             argsarr.append( stream_dump( KatapultRunSessionProxy(args.run_session) ) )
-        if args.last_running_processes:
+        if args.last_running_processes is not None:
             argsarr.append(args.last_running_processes)
         return argsarr
 
     elif args.command == 'print_summary':
         argsarr = []
-        if args.run_session:
+        if args.run_session is not None:
             argsarr.append( stream_dump( KatapultRunSessionProxy(args.run_session) ) )
-        if args.instance:
+        if args.instance is not None:
             argsarr.append( stream_dump( KatapultInstanceProxy(args.instance) ) )
         return argsarr
 
     elif args.command == 'print_aborted_logs':
         argsarr = []
-        if args.run_session:
+        if args.run_session is not None:
             argsarr.append( stream_dump( KatapultRunSessionProxy(args.run_session) ) )
-        if args.instance:
+        if args.instance is not None:
             argsarr.append( stream_dump( KatapultInstanceProxy(args.instance) ) )
         return argsarr
         
@@ -191,13 +191,13 @@ def cli_translate(args):
     # out_dir=None,run_session=None,use_cached=True,use_normal_output=False
     elif args.command == 'fetch_results':
         argsarr = []
-        if args.directory:
+        if args.directory is not None:
             argsarr.append(args.directory)
-        if args.run_session:
+        if args.run_session is not None:
             argsarr.append( stream_dump( KatapultRunSessionProxy( args.run_session ) ) )
-        if args.use_cached:
+        if args.use_cached is not None:
             argsarr.append( args.use_cached )
-        if args.use_normal_output:
+        if args.use_normal_output is not None:
             argsarr.append( use_normal_output )
         return argsarr
 
@@ -209,7 +209,19 @@ def cli_translate(args):
 
     elif command == 'test':
         return None
-    
+
+    elif args.command == 'start_instance':
+        return [ stream_dump( KatapultInstanceProxy(args.instance) ) ) ]
+
+    elif args.command == 'stop_instance':
+        return [ stream_dump( KatapultInstanceProxy(args.instance) ) ) ]
+
+    elif args.command == 'terminate_instance':
+        return [ stream_dump( KatapultInstanceProxy(args.instance) ) ) ]
+
+    elif args.command == 'reboot_instance':
+        return [ stream_dump( KatapultInstanceProxy(args.instance) ) ) ]
+
     else:
         return None
 
@@ -307,6 +319,18 @@ def main():
     parser_shutdown = subparsers.add_parser('shutdown')
 
     parser_test = subparsers.add_parser('test')
+
+    # parser_startinstance = subparsers.add_parser('start_instance')
+    # parser_startinstance.add_argument("instance",help="the instance to start")
+
+    # parser_stopinstance = subparsers.add_parser('stop_instance')
+    # parser_stopinstance.add_argument("instance",help="the instance to stop")
+
+    # parser_terminateinstance = subparsers.add_parser('terminate_instance')
+    # parser_terminateinstance.add_argument("instance",help="the instance to terminate")
+
+    # parser_rebootinstance = subparsers.add_parser('reboot_instance')
+    # parser_rebootinstance.add_argument("instance",help="the instance to reboot")
 
     args = argParser.parse_args()
 
