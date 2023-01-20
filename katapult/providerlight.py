@@ -766,7 +766,7 @@ class KatapultLightProvider(KatapultProvider,ABC):
 
     async def get_objects(self):
         # triggers maestro::get_objects
-        await self._exec_maestro_command("get_objects")
+        return await self._exec_maestro_command("get_objects")
 
     def _get_or_create_instance(self,instance):
         instance , created = super()._get_or_create_instance(instance)
