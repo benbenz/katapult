@@ -111,119 +111,95 @@ def start_server():
 
 def cli_translate(args):
     if args.command == 'init':
-        return [ args.config ]
+        return [ args.config ] , {}
 
     elif args.command == 'wakeup':
-        return None
+        return [] , {}
 
     elif args.command == 'start':
-        return [ args.reset ]
+        return [] , { 'reset' : args.reset == True }
 
     elif args.command == 'cfg_add_instances':
-        return [ args.config , json.loads(args.kwargs) if kwargs else {} ]
+        return [args.config] , json.loads(args.kwargs) if args.kwargs else {}
 
     elif args.command == 'cfg_add_environments':
-        return [ args.config , json.loads(args.kwargs) if kwargs else {} ]
+        return [args.config] , json.loads(args.kwargs) if args.kwargs else {} 
 
     elif args.command == 'cfg_add_jobs':
-        return [ args.config , json.loads(args.kwargs) if kwargs else {} ]
+        return [args.config] , json.loads(args.kwargs) if args.kwargs else {} 
 
     elif args.command == 'cfg_add_config':
-        return [ args.config , json.loads(args.kwargs) if kwargs else {} ]
+        return [args.config] , json.loads(args.kwargs) if args.kwargs else {}
 
     elif args.command == 'cfg_reset':
-        return [ args.config , json.loads(args.kwargs) if kwargs else {} ]
+        return [args.config] , json.loads(args.kwargs) if args.kwargs else {}
 
     elif args.command == 'deploy':
-        return [ json.loads(args.kwargs) if kwargs else {} ]
+        return [] , json.loads(args.kwargs) if args.kwargs else {}
 
     elif args.command == 'run':
-        return [ args.continue_session ]
+        return [] , { 'continue_session' : args.continue_session }
 
     elif args.command == 'kill':
-        return [ args.identifier ]
+        return [ args.identifier ] , {}
     
     elif args.command == 'wait':
-        if args.run_session is not None:
-            return [ args.job_state , stream_dump( KatapultRunSessionProxy( args.run_session ) ) ]
-        else:
-            return [ args.job_state ]
+        return [ args.job_state ] , { 'run_session' : KatapultRunSessionProxy(args.run_session) }
 
     elif args.command == 'get_num_active_processes':
-        if args.run_session is not None:
-            return [ stream_dump( KatapultRunSessionProxy( args.run_session ) ) ]
-        else:
-            return None
+        return [] , { 'run_session' : KatapultRunSessionProxy(args.run_session) }
 
     elif args.command == 'get_num_instances':
-        return None
+        return [] , {}
 
     elif args.command == 'get_jobs_states':
-        argsarr = []
-        if args.run_session is not None:
-            argsarr.append( stream_dump( KatapultRunSessionProxy(args.run_session) ) )
-        if args.last_running_processes is not None:
-            argsarr.append(args.last_running_processes)
-        return argsarr
+        return [] , { 'run_session' : KatapultRunSessionProxy(args.run_session) ,
+                        'last_running_processes' : args.last_running_processes }
 
     elif args.command == 'print_summary':
-        argsarr = []
-        if args.run_session is not None:
-            argsarr.append( stream_dump( KatapultRunSessionProxy(args.run_session) ) )
-        if args.instance is not None:
-            argsarr.append( stream_dump( KatapultInstanceProxy(args.instance) ) )
-        return argsarr
+        return [] , { 'run_session' : KatapultRunSessionProxy(args.run_session) ,
+                        'instance' : KatapultInstanceProxy(args.instance) }
 
     elif args.command == 'print_aborted_logs':
-        argsarr = []
-        if args.run_session is not None:
-            argsarr.append( stream_dump( KatapultRunSessionProxy(args.run_session) ) )
-        if args.instance is not None:
-            argsarr.append( stream_dump( KatapultInstanceProxy(args.instance) ) )
-        return argsarr
+        return [] , { 'run_session' : KatapultRunSessionProxy(args.run_session) ,
+                        'instance' : KatapultInstanceProxy(args.instance) }
         
     elif args.command == 'print_objects':
-        return None
+        return [] , {}
 
     elif args.command == 'clear_results_dir':
-        return None
+        return [] , {}
 
     # out_dir=None,run_session=None,use_cached=True,use_normal_output=False
     elif args.command == 'fetch_results':
-        argsarr = []
-        if args.directory is not None:
-            argsarr.append(args.directory)
-        if args.run_session is not None:
-            argsarr.append( stream_dump( KatapultRunSessionProxy( args.run_session ) ) )
-        if args.use_cached is not None:
-            argsarr.append( args.use_cached )
-        if args.use_normal_output is not None:
-            argsarr.append( use_normal_output )
-        return argsarr
+        return [] , {   'out_dir' : args.directory ,
+                        'run_session' : KatapultRunSessionProxy( args.run_session ) ,
+                        'use_cached' : args.use_cached ,
+                        'use_normal_output' : args.use_normal_output }
 
-    elif command == 'finalize':
-        return None
+    elif args.command == 'finalize':
+        return [] , {}
 
-    elif command == 'shutdown':
-        return None
+    elif args.command == 'shutdown':
+        return [] , {}
 
-    elif command == 'test':
-        return None
+    elif args.command == 'test':
+        return [] , {}
 
     elif args.command == 'start_instance':
-        return [ stream_dump( KatapultInstanceProxy(args.instance) ) ) ]
+        return [ KatapultInstanceProxy(args.instance) ] , {}
 
     elif args.command == 'stop_instance':
-        return [ stream_dump( KatapultInstanceProxy(args.instance) ) ) ]
+        return [ KatapultInstanceProxy(args.instance) ] , {}
 
     elif args.command == 'terminate_instance':
-        return [ stream_dump( KatapultInstanceProxy(args.instance) ) ) ]
+        return [ KatapultInstanceProxy(args.instance) ] , {}
 
     elif args.command == 'reboot_instance':
-        return [ stream_dump( KatapultInstanceProxy(args.instance) ) ) ]
-
+        return [ KatapultInstanceProxy(args.instance) ] , {}
+        
     else:
-        return None
+        return [] , {}
 
 def main():
     multiprocessing.set_start_method('spawn')
@@ -252,7 +228,7 @@ def main():
     parser_wakeup = subparsers.add_parser('wakeup')
 
     parser_start = subparsers.add_parser('start')
-    parser_start.add_argument("-r","--reset",help="reset option",nargs='?',type=bool,const=False)
+    parser_start.add_argument("-r","--reset",help="reset option",nargs='?',type=bool,const=True)
     
     parser_cfg_add_instances = subparsers.add_parser('cfg_add_instances')
     parser_cfg_add_instances.add_argument("config",help="config file path or config file json string")
@@ -334,27 +310,17 @@ def main():
 
     args = argParser.parse_args()
 
-    # if len(sys.argv)<2:
-    #     print("python3 -m katapult.cli CMD [ARGS]")
-    #     sys.exit()
-    # args = copy.deepcopy(sys.argv)
-    # cmd_arg = args.pop(0) #trash
-    # while 'cli' not in cmd_arg:
-    #     cmd_arg = args.pop(0)
-    # command = args.pop(0)
-    #one_shot_command = command in [ 'vscode' , 'run_dir' ]
-    
     one_shot_command = args.command in [ 'vscode' , 'run_dir' ]
 
     if one_shot_command:
         asyncio.run( cli_one_shot(args) )
         #asyncio.run( cli_one_shot() )
     else:
-        ser_args = cli_translate(args)
-        #ser_args = cli_translate(command,args)
+        ser_args , ser_kwargs = cli_translate(args)
+        ser_args   = stream_dump(ser_args)
+        ser_kwargs = stream_dump(ser_kwargs) 
         # lets not escape the command, we're not sending it to a stream
-        #the_command = make_client_command( command , ser_args , False)
-        the_command = make_client_command( args.command , ser_args , False)
+        the_command = make_client_command( args.command , False , *ser_args , **ser_kwargs )
         cli(the_command)
 
 

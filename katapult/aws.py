@@ -840,15 +840,18 @@ def aws_get_suggested_image(session,region):
         results = ec2_client.describe_images() 
         images = []
         for r in results['Images']:
-            name = r['Name'].lower()
-            desc = r['Description'].lower()
+            #print(r)
+            name   = r.get('Name','').lower()
+            detail = r.get('Description',r.get('PlatformDetails',''))
+            desc   = detail.lower()
             if 'linux' in name or 'linux' in desc or 'ubuntu' in name or 'ubuntu' in desc:
                 images.append(r)
 
     images = sorted(images, key=lambda d: d['Name']) 
 
     for image in images:
-        debug(2,image['Name'],image['Description'])
+        detail = r.get('Description',r.get('PlatformDetails',''))
+        debug(2,image.get('Name'),detail)
     
     images = sorted(images, key=lambda d: d['CreationDate']) 
 

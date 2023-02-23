@@ -435,7 +435,7 @@ class KatapultLightProvider(KatapultProvider,ABC):
                     break     
         return None,None,ssh_conn,ftp_client 
 
-    async def _exec_maestro_command(self,maestro_command,raw_args=None):
+    async def _exec_maestro_command(self,maestro_command,*args,**kwargs):
 
         # args = None
         # if maestro_command != "init":
@@ -451,9 +451,10 @@ class KatapultLightProvider(KatapultProvider,ABC):
         # else:
         #     args = raw_args
 
-        args = stream_dump(raw_args)
+        args   = stream_dump(args)
+        kwargs = stream_dump(kwargs) 
 
-        the_command = make_client_command(maestro_command,args)
+        the_command = make_client_command(maestro_command,True,*args,**kwargs)
 
         if self.ssh_conn is None:
             instanceid , self.ssh_conn , self.ftp_client = await self._wait_and_connect(self._maestro)
@@ -547,7 +548,7 @@ class KatapultLightProvider(KatapultProvider,ABC):
         # install maestro materials
         await self._install_maestro(reset)
         # triggers maestro::start
-        await self._exec_maestro_command("start",reset)
+        await self._exec_maestro_command("start",reset=reset)
 
     def _update_K_loaded(self,objs_result):
         for objs_key in K_OBJECTS:
@@ -574,8 +575,7 @@ class KatapultLightProvider(KatapultProvider,ABC):
         translated_config = await self._deploy_config(ssh_conn,ftp_client,config_name,True) #True = only new stuff
         # triggers maestro::add_* : use string dump or config file name (either way)
         #await self._exec_maestro_command(name,config_name)
-        args = [ translated_config , kwargs ]
-        objs = await self._exec_maestro_command(name,args)
+        objs = await self._exec_maestro_command(name,translated_config,**kwargs)
 
         # match loaded stuff in the light client config
         self._update_K_loaded(objs)
@@ -618,11 +618,11 @@ class KatapultLightProvider(KatapultProvider,ABC):
 
     async def deploy(self,**kwargs):
         # triggers maestro::deploy
-        await self._exec_maestro_command("deploy",kwargs) # use output - the deploy part will be skipped depending on option ...
+        await self._exec_maestro_command("deploy",**kwargs) # use output - the deploy part will be skipped depending on option ...
 
     async def run(self,continue_session=False):
         # triggers maestro::run
-        run_session = await self._exec_maestro_command("run",continue_session)
+        run_session = await self._exec_maestro_command("run",continue_session=continue_session)
         self._current_session = run_session
         return self._current_session
 
@@ -636,38 +636,20 @@ class KatapultLightProvider(KatapultProvider,ABC):
         await self._exec_maestro_command("wakeup")
 
     async def wait(self,job_state,run_session=None):
-        if run_session is not None:
-            args = [ int(job_state) , run_session ]
-        else:
-            args = [ int(job_state) ]
         # triggers maestro::wait
-        await self._exec_maestro_command("wait",args)
+        await self._exec_maestro_command("wait",int(job_state),run_session=run_session)
 
     async def get_jobs_states(self,run_session=None,only_ran_processes=False):
-        args = [ run_session , only_ran_processes ]
         # triggers maestro::get_jobs_states
-        return await self._exec_maestro_command("get_states",args)
+        return await self._exec_maestro_command("get_states",run_session=run_session,only_ran_processes=only_ran_processes)
 
     async def print_jobs_summary(self,run_session=None,instance=None):
-        if run_session is not None:
-            args = [ run_session ]
-        else:
-            args = []
-        if instance is not None:
-            args.append(instance.get_name())
-
         # triggers maestro::print_jobs_summary
-        await self._exec_maestro_command("print_summary",args)
+        await self._exec_maestro_command("print_summary",run_session=run_session,instance=instance)
 
     async def print_aborted_logs(self,run_session=None,instance=None):
-        if run_session is not None:
-            args = [ run_session ]
-        else:
-            args = []
-        if instance is not None:
-            args.append(instance.get_name())
         # triggers maestro::print_aborted_logs
-        await self._exec_maestro_command("print_aborted",args)
+        await self._exec_maestro_command("print_aborted",run_session=run_session,instance=instance)
 
     async def print_objects(self):
         # triggers maestro::print_objects
@@ -729,8 +711,7 @@ class KatapultLightProvider(KatapultProvider,ABC):
         session_out_dir_remote = self._get_session_out_dir(maestro_dir,run_session,self._maestro)
 
         # fetch the results on the maestro
-        args = [ maestro_dir , run_session , use_cached , use_normal_output ]
-        session_out_dir_remote = await self._exec_maestro_command("fetch_results",args)
+        session_out_dir_remote = await self._exec_maestro_command("fetch_results",out_dir=maestro_dir,run_session=run_session,use_cached=use_cached,use_normal_output=use_normal_output)
 
         # get the tar file of the results
         stdout , stderr , ssh_conn , ftp_client = await self._exec_maestro_command_simple(None,None,"cd " + session_out_dir_remote + " && tar -cvf "+maestro_tar_path+" .")
@@ -817,12 +798,7 @@ class KatapultLightProvider(KatapultProvider,ABC):
         return KatapultJobProxy( job_id , kwargs.get('config') )
 
     async def get_num_active_processes(self,run_session=None):
-        if run_session is None:
-            run_session = self._current_session
-        if not run_session:
-            return 0
-        args = [ run_session ]
-        num_processes = await self._exec_maestro_command("get_num_active_processes",args)
+        num_processes = await self._exec_maestro_command("get_num_active_processes",run_session=run_session)
         return int(num_processes)
 
     async def get_num_instances(self):

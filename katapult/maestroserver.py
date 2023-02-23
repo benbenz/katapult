@@ -87,10 +87,11 @@ class ServerContext:
                 cmd_json = json.loads(cmd_line)
                 # DO NOT UNCOMMENT ! THIS CAUSES A LOCKS
                 #print("JSON COMMAND",cmd_json)
-                cmd  = cmd_json['cmd']
-                args = cmd_json['args'] 
+                cmd    = cmd_json['cmd']
+                args   = cmd_json['args'] 
+                kwargs = cmd_json['kwargs'] 
 
-                await self.process_command(cmd,args,writer)
+                await self.process_command(writer,cmd,*args,**kwargs)
                 break # one-shot command
             except ConnectionResetError as cre:
                 try:
@@ -150,7 +151,7 @@ class ServerContext:
     def send_result(self,result):
         print(STREAM_RESULT+json.dumps(stream_dump(result)))
 
-    async def process_command(self,command,args,writer):
+    async def process_command(self,writer,command,*args,**kwargs):
         #sock = writer.transport.get_extra_info('socket')
         
         string_writer = ByteStreamWriter(writer)
@@ -162,20 +163,15 @@ class ServerContext:
                 print(bcolors.WARNING+"Server not ready. Run 'init CONFIG_FILE' or 'start' command first"+bcolors.ENDC)
                 await writer.drain()
                 return 
+
         try:
+            if self.kt_client:
+                args   = stream_load(self.kt_client,args)
+                kwargs = stream_load(self.kt_client,kwargs)
 
             if command == 'init':
-
-                if not args:
-                    config_ = None
-                elif len(args)==1:
-                    config_ = args[0].strip() 
-                else:
-                    config_ = None
-                self.kt_client  = kt.get_client(config_)
-
+                self.kt_client = kt.get_client(*args)
                 await self.wakeup() 
-
                 init_objects = await self.kt_client.get_objects() 
                 self.send_result(init_objects)    
 
@@ -190,73 +186,26 @@ class ServerContext:
 
             elif command == 'start':
 
-                if not args:
-                    reset = False
-                elif len(args)==1:
-                    reset = args[0]
-                else:
-                    reset = False
-
-                await self.kt_client.start(reset)
+                await self.kt_client.start(**kwargs)
 
             elif command == 'cfg_add_instances':
-                config = None
-                kwargs = dict()
-                if args and len(args)>=1:
-                    config = args[0]
-                elif args and len(args)>=2:
-                    config = args[0]
-                    kwargs = stream_load(self.kt_client,args[1])
-                else:
-                    print("Error: you need to send a JSON stream for config")
-                    await writer.drain()
-                    return
-                added_objects = await self.kt_client.cfg_add_instances(config,**kwargs)
+
+                added_objects = await self.kt_client.cfg_add_instances(*args,**kwargs)
                 self.send_result(added_objects)
 
             elif command == 'cfg_add_en((vironments':
-                config = None
-                kwargs = dict()
-                if args and len(args)>=1:
-                    config = args[0]
-                elif args and len(args)>=2:
-                    config = args[0]
-                    kwargs = stream_load(self.kt_client,args[1])
-                else:
-                    print("Error: you need to send a JSON stream for config")
-                    await writer.drain()
-                    return
-                added_objects = await self.kt_client.cfg_add_environments(config,**kwargs)
+
+                added_objects = await self.kt_client.cfg_add_environments(*args,**kwargs)
                 self.send_result(added_objects)
 
             elif command == 'cfg_add_jobs':
-                config = None
-                kwargs = dict()
-                if args and len(args)>=1:
-                    config = args[0]
-                elif args and len(args)>=2:
-                    config = args[0]
-                    kwargs = stream_load(self.kt_client,args[1])
-                else:
-                    print("Error: you need to send a JSON stream for config")
-                    await writer.drain()
-                    return
-                added_objects = await self.kt_client.cfg_add_jobs(config,**kwargs)
+
+                added_objects = await self.kt_client.cfg_add_jobs(*args,**kwargs)
                 self.send_result(added_objects)
 
             elif command == 'cfg_add_config':
-                config = None
-                kwargs = dict()
-                if args and len(args)>=1:
-                    config = args[0]
-                elif args and len(args)>=2:
-                    config = args[0]
-                    kwargs = stream_load(self.kt_client,args[1])
-                else:
-                    print("Error: you need to send a JSON stream for config")
-                    await writer.drain()
-                    return
-                added_objects = await self.kt_client.cfg_add_config(config,**kwargs)
+
+                added_objects = await self.kt_client.cfg_add_config(*args,**kwargs)
                 self.send_result(added_objects)
 
             elif command == 'cfg_reset':
@@ -264,10 +213,6 @@ class ServerContext:
                 await self.kt_client.cfg_reset()
 
             elif command == 'deploy':
-
-                kwargs = dict()
-                if args and len(args)>=1:
-                    kwargs = stream_load(self.kt_client,args[0])
 
                 await self.kt_client.deploy(**kwargs)
 

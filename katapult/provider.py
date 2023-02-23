@@ -706,7 +706,7 @@ class KatapultProvider(ABC):
         pass
 
     @abstractmethod
-    async def get_jobs_states(self,run_session=None):
+    async def get_jobs_states(self,run_session=None,last_running_processes=False):
         pass
 
     @abstractmethod
@@ -929,14 +929,14 @@ def guess_environment(envname,dir):
     return environment_obj , files_to_upload      
 
 
-def get_client(config_=None,**kwargs):
+def get_client(config=None,**kwargs):
 
     provider_config = kwargs.get('provider_config') or PROVIDER_CONFIG
 
-    if isinstance(config_,str): 
-        config = get_config(config_)
-    elif isinstance(config_,dict):
-        config = config_
+    if isinstance(config,str): 
+        config = get_config(config)
+    elif isinstance(config,dict):
+        config = config
     else: # get the auto-saved config
         config = get_config(provider_config)
 
@@ -1075,21 +1075,9 @@ def escape_arg_for_send(args):
         args_escaped.append(arg)
     return args_escaped  
 
-def make_client_command(maestro_command,args,escape=True):
+def make_client_command(maestro_command,escape,*args,**kwargs):
 
-    # OLD SERIALIZATION METHOD (cf. maestroserver.py too)
-
-    # if not args:
-    #     the_command = maestro_command
-    # else:
-    #     if not isinstance(args,list):
-    #         args = [ args ]
-    #     args = escape_arg_for_send(args)
-    #     the_command = COMMAND_ARGS_SEP.join( [ maestro_command , ARGS_SEP.join(args) ] )
-
-    if args and not isinstance(args,list):
-        args = [ args ]
-    the_command = json.dumps({'cmd':maestro_command,'args':args})
+    the_command = json.dumps({'cmd':maestro_command,'args':args,'kwargs':kwargs})
 
     # escape for stream
     # Note: especially if we have 'run_command' in the jobs description
