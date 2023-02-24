@@ -123,10 +123,10 @@ def cli_translate(args):
         return [args.config] , json.loads(args.kwargs) if args.kwargs else {}
 
     elif args.command == 'cfg_add_environments':
-        return [args.config] , json.loads(args.kwargs) if args.kwargs else {} 
+        return [args.config] , json.loads(args.kwargs) if args.kwargs else {}
 
     elif args.command == 'cfg_add_jobs':
-        return [args.config] , json.loads(args.kwargs) if args.kwargs else {} 
+        return [args.config] , json.loads(args.kwargs) if args.kwargs else {}
 
     elif args.command == 'cfg_add_config':
         return [args.config] , json.loads(args.kwargs) if args.kwargs else {}
