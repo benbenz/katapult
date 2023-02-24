@@ -218,38 +218,19 @@ class ServerContext:
 
             elif command == 'run':
 
-                if args and len(args)==1:
-                    continue_session = args[0]
-                    run_session = await self.kt_client.run(continue_session)
-                else:
-                    run_session = await self.kt_client.run()
-
+                run_session = await self.kt_client.run(**kwargs)
                 self.send_result(run_session)
             
             elif command == 'kill':
 
-                if args and len(args)==1:
-                    identifier = args[0].strip()
-                    await self.kt_client.kill(identifier)
+                await self.kt_client.kill(*args)
             
             elif command == 'wait':
-
-                job_state   = KatapultProcessState.DONE|KatapultProcessState.ABORTED
-                run_session = None
-                if args and len(args) >= 1:
-                    job_state = int(args[0])
-                if args and len(args) >= 2:
-                    run_session = self.get_run_session("WAIT:",args[1])
-
-                await self.kt_client.wait(job_state,run_session)
+                await self.kt_client.wait(*args,**kwargs)
 
             elif command == 'get_num_active_processes':
 
-                run_session = None
-                if args and len(args) >= 1:
-                    run_session = self.get_run_session("GET_NUM_ACTIVE_PROCESSES:",args[0])
-
-                result = await self.kt_client.get_num_active_processes(run_session)                
+                result = await self.kt_client.get_num_active_processes(**kwargs)                
                 self.send_result(result)
 
             elif command == 'get_num_instances':
@@ -259,42 +240,16 @@ class ServerContext:
 
             elif command == 'get_states' or command == 'get_jobs_states':
 
-                run_session = None
-                if args and len(args) == 1:
-                    run_session = self.get_run_session("GET STATES:",args[0])
-                    last_running_processes = False
-                elif args and len(args) == 2:
-                    run_session = self.get_run_session("GET STATES:",args[0]) 
-                    last_running_processes = args[1]
-
-                result = await self.kt_client.get_jobs_states(run_session,last_running_processes)
+                result = await self.kt_client.get_jobs_states(**kwargs)
                 self.send_result(result)
 
             elif command == 'print_summary' or command == 'print':
 
-                run_session = None
-                instance    = None
-                if args and len(args) >= 1:
-                    run_session = self.get_run_session("PRINT_SUMMARY:",args[0])
-                if args and len(args) >= 2:
-                    instance = self.get_instance("PRINT_SUMMARY:",args[1])
-
-                debug(2,run_session,instance)
-
-                await self.kt_client.print_jobs_summary(run_session,instance)
+                await self.kt_client.print_jobs_summary(**kwargs)
 
             elif command == 'print_aborted' or command == 'print_aborted_logs':
 
-                run_session = None
-                instance    = None
-                if args and len(args) >= 1:
-                    run_session = self.get_run_session("PRINT_SUMMARY:",args[0])
-                if args and len(args) >= 2:
-                    instance = self.get_instance("PRINT_SUMMARY:",args[1])
-
-                debug(2,run_session,instance)
-
-                await self.kt_client.print_aborted_logs(run_session,instance)
+                await self.kt_client.print_aborted_logs(**kwargs)
 
             elif command == 'print_objects':
 
@@ -315,18 +270,7 @@ class ServerContext:
                 use_cached  = True
                 use_normal_output = False
 
-                if args and len(args)>=1:
-                    directory = args[0].strip()
-                    if directory.lower() == 'none':
-                        directory = None
-                if args and len(args)>=2:
-                    run_session = self.get_run_session("FETCH_RESULTS",args[1],True) # allow shallow object return
-                if args and len(args)>=3:
-                    use_cached = args[2]
-                if args and len(args)>=4:
-                    use_normal_output = args[3]
-
-                out_dir = await self.kt_client.fetch_results(directory,run_session,use_cached,use_normal_output)
+                out_dir = await self.kt_client.fetch_results(**kwargs)
                 
                 self.send_result(out_dir)
 
@@ -340,27 +284,19 @@ class ServerContext:
 
             elif command == 'start_instance':
 
-                if args and len(args) >= 1:
-                    instance = self.get_instance("START_INSTANCE:",args[0])
-                    await self.kt_client.start_instance(instance)
+                await self.kt_client.start_instance(*args)
 
             elif command == 'stop_instance':
 
-                if args and len(args) >= 1:
-                    instance = self.get_instance("STOP_INSTANCE:",args[0])
-                    await self.kt_client.stop_instance(instance)
+                await self.kt_client.stop_instance(*args)
 
             elif command == 'terminate_instance':
 
-                if args and len(args) >= 1:
-                    instance = self.get_instance("TERMINATE_INSTANCE:",args[0])
-                    await self.kt_client.terminate_instance(instance)
+                await self.kt_client.terminate_instance(*args)
 
             elif command == 'reboot_instance':
 
-                if args and len(args) >= 1:
-                    instance = self.get_instance("REBOOT_INSTANCE:",args[0])
-                    await self.kt_client.reboot_instance(instance)
+                await self.kt_client.reboot_instance(*args)
 
             elif command == 'test':
 

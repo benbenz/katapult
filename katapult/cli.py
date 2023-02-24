@@ -12,7 +12,7 @@ import re
 from katapult.maestroserver import main as server_main
 from katapult.maestroclient import maestro_client
 from katapult.provider import make_client_command , stream_dump , get_client , get_vscode_client , get_rundir_client
-from katapult.core import KatapultProcessState
+from katapult.core import KatapultProcessState , KatapultInstanceProxy , KatapultJobProxy , KatapultRunSessionProxy
 
 # if [[ $(ps aux | grep "katapult.maestroserver" | grep -v 'grep') ]] ; then
 #     echo "Katapult server already running"
@@ -144,25 +144,25 @@ def cli_translate(args):
         return [ args.identifier ] , {}
     
     elif args.command == 'wait':
-        return [ args.job_state ] , { 'run_session' : KatapultRunSessionProxy(args.run_session) }
+        return [ int(args.job_state) ] , { 'run_session' : KatapultRunSessionProxy(args.run_session) if args.run_session else None }
 
     elif args.command == 'get_num_active_processes':
-        return [] , { 'run_session' : KatapultRunSessionProxy(args.run_session) }
+        return [] , { 'run_session' : KatapultRunSessionProxy(args.run_session) if args.run_session else None  }
 
     elif args.command == 'get_num_instances':
         return [] , {}
 
     elif args.command == 'get_jobs_states':
-        return [] , { 'run_session' : KatapultRunSessionProxy(args.run_session) ,
+        return [] , { 'run_session' : KatapultRunSessionProxy(args.run_session) if args.run_session else None ,
                         'last_running_processes' : args.last_running_processes }
 
     elif args.command == 'print_summary':
-        return [] , { 'run_session' : KatapultRunSessionProxy(args.run_session) ,
-                        'instance' : KatapultInstanceProxy(args.instance) }
+        return [] , { 'run_session' : KatapultRunSessionProxy(args.run_session) if args.run_session else None  ,
+                        'instance' : KatapultInstanceProxy(args.instance) if args.instance else None  }
 
     elif args.command == 'print_aborted_logs':
-        return [] , { 'run_session' : KatapultRunSessionProxy(args.run_session) ,
-                        'instance' : KatapultInstanceProxy(args.instance) }
+        return [] , { 'run_session' : KatapultRunSessionProxy(args.run_session) if args.run_session else None ,
+                        'instance' : KatapultInstanceProxy(args.instance) if args.instance else None  }
         
     elif args.command == 'print_objects':
         return [] , {}
@@ -173,7 +173,7 @@ def cli_translate(args):
     # out_dir=None,run_session=None,use_cached=True,use_normal_output=False
     elif args.command == 'fetch_results':
         return [] , {   'out_dir' : args.directory ,
-                        'run_session' : KatapultRunSessionProxy( args.run_session ) ,
+                        'run_session' : KatapultRunSessionProxy( args.run_session ) if args.run_session else None  ,
                         'use_cached' : args.use_cached ,
                         'use_normal_output' : args.use_normal_output }
 
@@ -187,16 +187,16 @@ def cli_translate(args):
         return [] , {}
 
     elif args.command == 'start_instance':
-        return [ KatapultInstanceProxy(args.instance) ] , {}
+        return [ KatapultInstanceProxy(args.instance) if args.instance else None ] , {}
 
     elif args.command == 'stop_instance':
-        return [ KatapultInstanceProxy(args.instance) ] , {}
+        return [ KatapultInstanceProxy(args.instance) if args.instance else None ] , {}
 
     elif args.command == 'terminate_instance':
-        return [ KatapultInstanceProxy(args.instance) ] , {}
+        return [ KatapultInstanceProxy(args.instance) if args.instance else None ] , {}
 
     elif args.command == 'reboot_instance':
-        return [ KatapultInstanceProxy(args.instance) ] , {}
+        return [ KatapultInstanceProxy(args.instance) if args.instance else None ] , {}
         
     else:
         return [] , {}
@@ -294,17 +294,17 @@ def main():
 
     parser_test = subparsers.add_parser('test')
 
-    # parser_startinstance = subparsers.add_parser('start_instance')
-    # parser_startinstance.add_argument("instance",help="the instance to start")
+    parser_startinstance = subparsers.add_parser('start_instance')
+    parser_startinstance.add_argument("instance",help="the instance to start")
 
-    # parser_stopinstance = subparsers.add_parser('stop_instance')
-    # parser_stopinstance.add_argument("instance",help="the instance to stop")
+    parser_stopinstance = subparsers.add_parser('stop_instance')
+    parser_stopinstance.add_argument("instance",help="the instance to stop")
 
-    # parser_terminateinstance = subparsers.add_parser('terminate_instance')
-    # parser_terminateinstance.add_argument("instance",help="the instance to terminate")
+    parser_terminateinstance = subparsers.add_parser('terminate_instance')
+    parser_terminateinstance.add_argument("instance",help="the instance to terminate")
 
-    # parser_rebootinstance = subparsers.add_parser('reboot_instance')
-    # parser_rebootinstance.add_argument("instance",help="the instance to reboot")
+    parser_rebootinstance = subparsers.add_parser('reboot_instance')
+    parser_rebootinstance.add_argument("instance",help="the instance to reboot")
 
     args = argParser.parse_args()
 
