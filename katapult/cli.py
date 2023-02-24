@@ -132,7 +132,7 @@ def cli_translate(args):
         return [args.config] , json.loads(args.kwargs) if args.kwargs else {}
 
     elif args.command == 'cfg_reset':
-        return [args.config] , json.loads(args.kwargs) if args.kwargs else {}
+        return [] , {}
 
     elif args.command == 'deploy':
         return [] , json.loads(args.kwargs) if args.kwargs else {}
@@ -247,8 +247,6 @@ def main():
     parser_cfg_add_config.add_argument("-kw","--kwargs",help="a json dictionnary of optional parameters")    
 
     parser_cfg_reset = subparsers.add_parser('cfg_reset')
-    parser_cfg_reset.add_argument("config",help="config file path or config file json string")
-    parser_cfg_reset.add_argument("-kw","--kwargs",help="a json dictionnary of optional parameters")    
 
     parser_deploy = subparsers.add_parser('deploy')
     parser_deploy.add_argument("-kw","--kwargs",help="a json dictionnary of optional parameters")    
